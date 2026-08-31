@@ -723,6 +723,8 @@ export function domainDurumu(rapor: OsintRapor): { durum: DomainDurum; etiket: s
   if (aktifForm && !parkGorsel) return { durum: "aktif-tuzak", etiket: "Aktif — bilgi/giriş formu içeriyor", ikon: "gpp_bad" };
   if (parkServis || parkGorsel || parkMetin) return { durum: "park", etiket: "Park edilmiş — şu an aktif tuzak değil (izlemede)", ikon: "inventory_2" };
   if (cozulmuyor) return { durum: "yayinda-degil", etiket: "Yayında değil / çözülmüyor", ikon: "cloud_off" };
+  // Kayıtlı ama şu an A kaydı yok → "canlı" DEĞİL ama "kaldırılmış" da değil (dürüst ara durum).
+  if (alan("dns durumu").includes("a kaydı yok")) return { durum: "yayinda-degil", etiket: "Şu an erişilemiyor — kayıtlı, A kaydı yok", ikon: "cloud_off" };
   return { durum: "canli", etiket: "Canlı — içerik yayında", ikon: "public" };
 }
 
@@ -856,7 +858,14 @@ export async function domainOsint(domain: string, tamUrl?: string): Promise<Osin
       }
     }
   } else {
-    r.bulgular.push("Domain bir sunucuya çözülmüyor — yayında değil veya kapatılmış olabilir.");
+    // A kaydı yok. AMA "kaldırılmış" demeden önce ayır: NXDOMAIN (Status=3, gerçekten
+    // yok) mu, yoksa domain KAYITLI ama şu an A kaydı yok mu (Status=0 → NS var, cert
+    // alabilir; ferganiuzay.com.tr gibi — geçici erişilemez, KALDIRILMIŞ DEĞİL).
+    if (dns?.Status === 3) {
+      r.bulgular.push("Domain DNS'te yok (NXDOMAIN) — tescilli değil ya da kaldırılmış.");
+    } else {
+      r.alanlar.push({ ad: "DNS durumu", deger: "Kayıtlı, şu an A kaydı yok (web sunucusu tanımlı değil / geçici erişilemez — kaldırılmış değil)" });
+    }
   }
 
   // ── DNS İSTİHBARATI (adım 2): CNAME/MX/NS/TXT — subdomain hangi servise bağlı, mail var mı ──
