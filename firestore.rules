@@ -1,0 +1,135 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Sorgu veritabanı (halka açık dolandırıcılık göstergeleri) ---
+    // Herkes OKUYABİLİR (sorgulama halka açık).
+    // Yazma: sadece geçerli şekilli gösterge (tip + deger string, makul boyut).
+    // NOT: Sahte oy/şişirmeye karşı asıl koruma App Check + rate limit ile gelir;
+    // bu kurallar temel şekil doğrulaması sağlar.
+    match /gostergeler/{doc} {
+      allow read: if true;
+      allow create, update: if request.resource.data.tip is string
+                            && request.resource.data.tip.size() < 20
+                            && request.resource.data.deger is string
+                            && request.resource.data.deger.size() < 300;
+      allow delete: if false;
+    }
+
+    // --- Bildirimler (ham ihbar kayıtları) ---
+    // Sadece oluşturulabilir; okuma/güncelleme/silme kapalı (gizlilik).
+    match /bildirimler/{doc} {
+      allow create: if request.resource.data.kategori is string
+                    && request.resource.data.kategori.size() < 60;
+      allow read, update, delete: if false;
+    }
+
+    // (OSINT önbelleği artık sunucu-içi bellekte tutulur — Firestore'da değil.)
+
+    // --- Paylaşılan içerik sayacı ("N kişi bu içeriği bildirdi") ---
+    match /paylasimlar/{doc} {
+      allow read: if true;
+      allow create, update: if request.resource.data.sayi is number
+                            || request.resource.data.bildirenler is list;
+      allow delete: if false;
+    }
+
+    // --- Kampanya imzaları (domainden bağımsız tuzak kalıpları) ---
+    // Herkes okuyabilir (eşleşme sorgusu); yazma geçerli şekle bağlı.
+    match /kampanyalar/{doc} {
+      allow read: if true;
+      allow create, update: if request.resource.data.sayi is number
+                            || request.resource.data.kaynaklar is list;
+      allow delete: if false;
+    }
+
+    // --- Marka Taklit Avcısı — sahte site adayları (herkese açık inceleme) ---
+    match /marka_adaylari/{doc} {
+      allow read: if true;
+      allow create, update: if request.resource.data.domain is string
+                            && request.resource.data.domain.size() < 200
+                            && request.resource.data.skor is number;
+      allow delete: if false;
+    }
+
+    // --- Günlük marka sayaçları (rapordaki gerçek sayılar) ---
+    match /gunluk_marka_stat/{doc} {
+      allow read: if true;
+      allow create, update: if request.resource.data.marka is string;
+      allow delete: if false;
+    }
+
+    // --- Marka Koruma günlük raporları (abone panosu) ---
+    match /raporlar/{doc} {
+      allow read: if true;
+      allow create, update: if request.resource.data.marka is string;
+      allow delete: if false;
+    }
+
+    // --- Marka abonelikleri (YALNIZ marka adı — e-posta burada DEĞİL) ---
+    match /aboneler/{doc} {
+      allow read: if true;
+      allow create, update: if request.resource.data.marka is string
+                            && request.resource.data.marka.size() < 40;
+      allow delete: if false;
+    }
+
+    // --- Abone iletişim (e-posta) — yalnız YAZILIR, OKUNMAZ (gizlilik) ---
+    match /abone_iletisim/{doc} {
+      allow create: if request.resource.data.email is string
+                    && request.resource.data.email.size() < 200;
+      allow read, update, delete: if false;
+    }
+
+    // --- E-posta sızıntı izleme abonelikleri — e-posta ŞİFRELİ saklanır ---
+    // (Okunsa bile emailEnc anahtarsız çözülemez; içerik anlamsız ciphertext.)
+    match /izleme_eposta/{doc} {
+      allow read: if true;
+      allow create, update: if request.resource.data.emailEnc is string
+                            && request.resource.data.emailEnc.size() < 500;
+      allow delete: if false;
+    }
+
+    // --- Kullanıcı markaları (self-servis: marka + resmî domainler allowlist) ---
+    // Herkes okuyabilir (dropdown/tarayıcı kullanır). Yazma: geçerli şekle bağlı.
+    match /kullanici_markalari/{doc} {
+      allow read: if true;
+      allow create, update: if request.resource.data.anahtar is string
+                            && request.resource.data.anahtar.size() < 40
+                            && request.resource.data.ad is string
+                            && request.resource.data.ad.size() < 80
+                            && request.resource.data.resmi is list
+                            && request.resource.data.resmi.size() <= 8;
+      allow delete: if false;
+    }
+
+    // --- Analiz sonuçları (KANIT DEPOSU: yakalanan link + analizimiz) ---
+    // Herkes okuyabilir (kanıt panosu). Yazma: geçerli şekle bağlı (domain + risk).
+    match /analizler/{doc} {
+      allow read: if true;
+      allow create, update: if request.resource.data.domain is string
+                            && request.resource.data.domain.size() < 200
+                            && request.resource.data.risk is number;
+      allow delete: if false;
+    }
+
+    // --- Marka hesapları (giriş → marka kilidi) ---
+    // Kullanıcı YALNIZ kendi eşlemesini okur (başkasının markasını göremez) ve
+    // yalnız kendi belgesini oluşturur. Güncelleme/silme kapalı → marka değiştirilip
+    // başka markanın verisi görülemez (operatör Admin/konsol ile yönetir).
+    match /marka_hesaplari/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+                    && request.resource.data.marka is string
+                    && request.resource.data.marka.size() < 40
+                    && request.resource.data.ad is string
+                    && request.resource.data.ad.size() < 80;
+      allow update, delete: if false;
+    }
+
+    // --- Güvenlik ağı: yukarıda eşleşmeyen her şey REDDEDİLİR ---
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

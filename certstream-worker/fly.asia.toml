@@ -1,0 +1,40 @@
+# SİTS Marka Taklit Avcısı — ASYA worker (yalnız TrustAsia).
+# TrustAsia log ucu Frankfurt'tan erişilemiyor (get-entries timeout); Singapur'dan okunur.
+# Frankfurt worker'ı (sits-marka-avci) TrustAsia'yı ATLAR (CT_SKIP_OP); bu app SADECE onu dinler.
+# Aynı /api/marka-aday'a yazar — server dedup çakışmayı yönetir.
+
+app = "sits-marka-avci-asia"
+primary_region = "sin"   # Singapur — TrustAsia (HK/Asya) endpoint'ine yakın
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  SITS_URL = "https://siber-bildir-web.vercel.app"
+  CT_ONLY_OP = "TrustAsia"   # yalnız TrustAsia operatörünün loglarını dinle
+  CT_MAX_LOG = "4"           # TrustAsia'nın tüm usable logları sığsın
+  PORT = "8080"
+  # MARKA_ADAY_SECRET → `fly secrets set` ile (Frankfurt ile AYNI sır olmalı).
+
+[http_service]
+  internal_port = 8080
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/health"
+
+# Kalıcı konum (Singapur bölgesinde ayrı volume):
+# fly volumes create ct_data_asia --region sin --size 1 -a sits-marka-avci-asia
+[mounts]
+  source = "ct_data_asia"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

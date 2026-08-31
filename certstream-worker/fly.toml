@@ -1,0 +1,42 @@
+# SİTS Marka Taklit Avcısı — CANLI CT dinleyici (Fly.io)
+# HTTP servisi YOK: hep-açık bir arka plan işi. CT loglarını DOĞRUDAN okur (aracısız).
+# Kurulum: bu klasörde `fly launch --no-deploy` → `fly secrets set MARKA_ADAY_SECRET=...` → `fly deploy`
+
+app = "sits-marka-avci"
+primary_region = "fra"   # Frankfurt — Türkiye'ye en yakın bölge
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  SITS_URL = "https://siber-bildir-web.vercel.app"
+  CT_MAX_LOG = "6"   # takip edilecek log sayısı (çok-operatör, yedeklilik)
+  PORT = "8080"
+  # MARKA_ADAY_SECRET burada DEĞİL — gizli olduğu için `fly secrets set` ile verilir.
+
+# Sağlık ucu: akış durursa (5 dk yanıt yok) Fly makineyi yeniden başlatır.
+# Arka plan işi hep açık kalmalı → otomatik durdurma KAPALI, en az 1 makine.
+[http_service]
+  internal_port = 8080
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/health"
+
+# Kalıcı konum: restart'ta CT okuma konumunu diskten sürdür → boşluk ~0.
+# Volume ÖNCE oluşturulmalı: fly volumes create ct_data --region fra --size 1
+[mounts]
+  source = "ct_data"
+  destination = "/data"
+
+# Tek makine yeter; bağlantı kesilince kod otomatik yeniden dener + watchdog toparlar.
+# 2 vCPU: 6 eşzamanlı CT log döngüsü + DER taraması throughput'u için (operatörlere yetiş).
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "1024mb"

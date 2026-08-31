@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/rapor-uret", "schedule": "0 6 * * *" },
+    { "path": "/api/izleme-cron", "schedule": "0 7 * * *" }
+  ]
+}

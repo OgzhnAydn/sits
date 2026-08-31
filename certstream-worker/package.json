@@ -1,0 +1,13 @@
+{
+  "name": "sits-certstream-worker",
+  "version": "2.0.0",
+  "private": true,
+  "description": "SİTS Marka Taklit Avcısı — CT loglarını DOĞRUDAN dinler (aracısız), yeni sertifikalarda marka taklitlerini yakalar.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
