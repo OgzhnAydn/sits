@@ -38,7 +38,7 @@ export const UYARILAR: Uyari[] = [
   },
   {
     etiket: "Ödül tuzağı",
-    baslik: "“Tebrikler, telefon kazandın!” 🎁",
+    baslik: "“Tebrikler, telefon kazandın!” ",
     metin:
       "Katılmadığın çekilişten ödül çıkmaz. 'Kargo ücreti' veya 'vergi' için para/kart bilgisi isteyen her mesaj tuzaktır.",
   },

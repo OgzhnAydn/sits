@@ -111,7 +111,7 @@ export default function SahteHesap() {
   async function paylasSonuc() {
     if (!s) return;
     const durum = s.yetersiz ? "değerlendirmek için yeterli veri yok" : `%${s.risk} ${s.seviye.toLowerCase()} risk`;
-    const metin = `SİTS ile @${s.kullanici} hesabını kontrol ettim: ${durum}. Sen de şüpheli hesap / link / IBAN'ı kontrol et 👇`;
+    const metin = `SİTS ile @${s.kullanici} hesabını kontrol ettim: ${durum}. Sen de şüpheli hesap / link / IBAN'ı kontrol et `;
     const url = "https://siber-bildir-web.vercel.app";
     try {
       if (typeof navigator !== "undefined" && navigator.share) {
@@ -259,7 +259,7 @@ export default function SahteHesap() {
 
           <button onClick={paylasSonuc} className="press mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-primary/30 bg-primary/5 py-2.5 text-sm font-semibold text-primary">
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>share</span>
-            {kopyalandi ? "Kopyalandı ✓" : "Sonucu paylaş"}
+            {kopyalandi ? "Kopyalandı " : "Sonucu paylaş"}
           </button>
 
           {/* Neden — minik Nazar */}

@@ -177,7 +177,7 @@ export default function Guvenlik() {
             {/* IPQS itibar — kullan-at / riskli e-posta uyarısı (ihlalden bağımsız) */}
             {eSonuc.itibar && (eSonuc.itibar.disposable || eSonuc.itibar.recentAbuse || eSonuc.itibar.fraudSkoru >= 85) && (
               <div className="mb-2 rounded-2xl border border-error/30 bg-error/5 p-3.5">
-                <p className="text-sm font-bold text-error">⚠️ Bu e-posta adresi riskli görünüyor</p>
+                <p className="text-sm font-bold text-error">Bu e-posta adresi riskli görünüyor</p>
                 <ul className="mt-1 list-disc pl-5 text-[13px] text-on-surface">
                   {eSonuc.itibar.disposable && <li><b>Kullan-at (geçici) e-posta</b> — dolandırıcılar kimliklerini gizlemek için sıkça kullanır.</li>}
                   {eSonuc.itibar.recentAbuse && <li>Yakın zamanda <b>kötüye kullanım</b> kayıtlarında görüldü.</li>}
@@ -202,7 +202,7 @@ export default function Guvenlik() {
             )}
             {eSonuc.bulundu ? (
               <div className="rounded-2xl bg-error-container p-3.5">
-                <p className="text-sm font-bold text-error">⚠️ Bu e-posta {eSonuc.adet} veri ihlalinde bulundu.</p>
+                <p className="text-sm font-bold text-error">Bu e-posta {eSonuc.adet} veri ihlalinde bulundu.</p>
                 {eSonuc.veriTurleri && eSonuc.veriTurleri.length > 0 && (
                   <p className="mt-1.5 text-[13px] text-on-surface">
                     <b>Sızan veri türleri:</b> {eSonuc.veriTurleri.join(", ")}
@@ -211,7 +211,7 @@ export default function Guvenlik() {
                 {/* ŞİFRE sızan ihlaller özel uyarı */}
                 {(eSonuc.sifreliSizinti ?? 0) > 0 && (
                   <p className="mt-2 rounded-xl bg-error/10 px-2.5 py-1.5 text-[12.5px] font-semibold text-error">
-                    🔑 Bunların {eSonuc.sifreliSizinti} tanesinde <b>şifren de</b> sızdı — aşağıda 🔑 işaretli siteleri <b>öncelikle</b> değiştir.
+                    Bunların {eSonuc.sifreliSizinti} tanesinde <b>şifren de</b> sızdı — aşağıda işaretli siteleri <b>öncelikle</b> değiştir.
                   </p>
                 )}
                 {/* DETAYLI LİSTE: hangi site, hangi yıl, ne sızdı */}
@@ -222,7 +222,7 @@ export default function Guvenlik() {
                         <div key={i} className="rounded-xl bg-surface-lowest px-2.5 py-2">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-[13px] font-bold text-on-surface">
-                              {d.sifreVar && "🔑 "}{d.ad}
+                              {d.sifreVar && ""}{d.ad}
                             </span>
                             {d.yil && <span className="shrink-0 text-[11px] font-medium text-on-surface-variant">{d.yil}</span>}
                           </div>
@@ -260,7 +260,7 @@ export default function Guvenlik() {
               </div>
             ) : (
               <div className="rounded-2xl bg-secondary-container p-3.5">
-                <p className="text-sm font-semibold text-on-surface">✓ Bilinen ihlallerde bu e-posta görünmüyor.</p>
+                <p className="text-sm font-semibold text-on-surface">Bilinen ihlallerde bu e-posta görünmüyor.</p>
                 <p className="mt-1 text-[13px] text-on-surface-variant">Yine de güçlü, benzersiz şifre + 2FA kullanmaya devam et.</p>
               </div>
             )}
@@ -330,12 +330,12 @@ export default function Guvenlik() {
           <div className="mt-3">
             {sSayi > 0 ? (
               <div className="rounded-2xl bg-error-container p-3.5">
-                <p className="text-sm font-bold text-error">⚠️ Bu şifre sızıntılarda {sSayi.toLocaleString("tr-TR")} kez görüldü.</p>
+                <p className="text-sm font-bold text-error">Bu şifre sızıntılarda {sSayi.toLocaleString("tr-TR")} kez görüldü.</p>
                 <p className="mt-1 text-[13px] text-on-surface">Bu şifreyi <b>hiçbir hesapta kullanma</b>. Kullandığın her yerde hemen değiştir.</p>
               </div>
             ) : (
               <div className="rounded-2xl bg-secondary-container p-3.5">
-                <p className="text-sm font-semibold text-on-surface">✓ Bu şifre bilinen sızıntılarda görünmüyor.</p>
+                <p className="text-sm font-semibold text-on-surface">Bu şifre bilinen sızıntılarda görünmüyor.</p>
                 <p className="mt-1 text-[13px] text-on-surface-variant">Yine de her hesapta farklı şifre + 2FA en güvenlisidir.</p>
               </div>
             )}
@@ -394,7 +394,7 @@ export default function Guvenlik() {
               </div>
             ) : (
               <div className="rounded-2xl bg-secondary-container p-3.5">
-                <p className="text-sm font-semibold text-on-surface">✓ Taranan platformlarda bu kullanıcı adı açık görünmüyor.</p>
+                <p className="text-sm font-semibold text-on-surface">Taranan platformlarda bu kullanıcı adı açık görünmüyor.</p>
               </div>
             )}
           </div>

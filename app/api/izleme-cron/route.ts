@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     if (!yeniSizinti && !zamaniGeldi) continue;
 
     const konu = yeniSizinti
-      ? "⚠️ E-postan yeni bir veri ihlalinde görüldü"
+      ? "E-postan yeni bir veri ihlalinde görüldü"
       : durum.sayi > 0
       ? "E-posta güvenlik raporu"
       : "E-posta güvenlik raporu — temiz";
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       ? `<p>E-postan bilinen <b>${durum.sayi}</b> veri ihlalinde görünüyor (yeni bir değişiklik yok).</p>
          <p><b>Sızıntılar:</b> ${durum.isimler.join(", ") || "-"}</p>
          <p>Güçlü, benzersiz şifre + 2FA kullanmaya devam et. Merak etme, seni izlemeye devam ediyoruz.</p>`
-      : `<p>İyi haber — izlediğimiz kaynaklarda e-postanla ilgili <b>yeni bir sızıntı yok</b>. Her şey yolunda görünüyor 🙂</p>
+      : `<p>İyi haber — izlediğimiz kaynaklarda e-postanla ilgili <b>yeni bir sızıntı yok</b>. Her şey yolunda görünüyor </p>
          <p>Seni izlemeye devam ediyoruz; bir şey çıkarsa hemen haber veririz.</p>`;
 
     const ok = await mailGonder(email, konu, mailSablon("E-posta sızıntı izleme", govde));

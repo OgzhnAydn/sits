@@ -111,7 +111,7 @@ export default function Kalibrasyon() {
           </div>
           {veri.ozet.fp > 0 && (
             <p className="rounded-xl bg-error/10 px-3 py-2 text-[12.5px] font-semibold text-error">
-              ⚠️ {veri.ozet.fp} meşru site yanlışlıkla tehlikeli gösterildi — aşağıda kırmızı satırlar. Düzeltilmeli.
+              {veri.ozet.fp} meşru site yanlışlıkla tehlikeli gösterildi — aşağıda kırmızı satırlar. Düzeltilmeli.
             </p>
           )}
           {veri.ozet.erisilemeyen > 0 && (

@@ -118,9 +118,9 @@ export default function Sorgula() {
   async function uyariPaylas() {
     if (!k || !k.birincil) return;
     const baslik =
-      k.genel === "tehlikeli" ? "⚠️ TEHLİKELİ — dolandırıcılık tuzağı" :
-      k.genel === "dikkat" ? "⚠️ DİKKAT — şüpheli görünüyor" :
-      "✅ Kontrol ettim";
+      k.genel === "tehlikeli" ? "TEHLİKELİ — dolandırıcılık tuzağı" :
+      k.genel === "dikkat" ? "DİKKAT — şüpheli görünüyor" :
+      "Kontrol ettim";
     const acik =
       k.genel === "tehlikeli"
         ? `Bu adrese/numaraya SAKIN tıklama, bilgi girme, ödeme yapma:\n${k.birincil}`
@@ -128,7 +128,7 @@ export default function Sorgula() {
         ? `Şüpheli işaretler var, dikkatli ol:\n${k.birincil}`
         : `Şunu kontrol ettim: ${k.birincil}`;
     const link = `https://siber-bildir-web.vercel.app/sorgula?q=${encodeURIComponent(k.birincil)}`;
-    const metin = `${baslik}\n\n${acik}\n\nSen de SİTS ile saniyede kontrol et 👇\n${link}`;
+    const metin = `${baslik}\n\n${acik}\n\nSen de SİTS ile saniyede kontrol et \n${link}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: "SİTS — Nazar uyarısı", text: metin });

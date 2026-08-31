@@ -299,7 +299,7 @@ export default function MarkaKoruma() {
             <div><div className="font-display text-xl font-bold text-error tabular-nums">{ozet.aktif}</div><div className="text-[10px] text-on-surface-variant">aktif tuzak</div></div>
             <div><div className="font-display text-xl font-bold text-primary tabular-nums">{ozet.park}</div><div className="text-[10px] text-on-surface-variant">park · izlemede</div></div>
           </div>
-          {ozet.operasyon > 0 && <p className="mt-2 text-[11px] font-medium text-error">🕸 {ozet.operasyon} tanesi organize bir dolandırıcılık operasyonunun parçası.</p>}
+          {ozet.operasyon > 0 && <p className="mt-2 text-[11px] font-medium text-error">{ozet.operasyon} tanesi organize bir dolandırıcılık operasyonunun parçası.</p>}
 
           {/* DETAYLARI GÖR — her tespitin ne olduğu, durumu, sinyalleri */}
           {ozet.sonlar && ozet.sonlar.length > 0 && (
@@ -330,7 +330,7 @@ export default function MarkaKoruma() {
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
                               {dr && <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-bold ${dr.sinif}`}><span className="material-symbols-outlined" style={{ fontSize: 11 }}>{dr.ikon}</span>{dr.et}</span>}
-                              {t.kampanya && t.kampanya.domainSayisi > 1 && <span className="inline-flex items-center gap-0.5 rounded-full bg-error/10 px-1.5 py-0.5 font-bold text-error">🕸 {t.kampanya.domainSayisi} domainli operasyon</span>}
+                              {t.kampanya && t.kampanya.domainSayisi > 1 && <span className="inline-flex items-center gap-0.5 rounded-full bg-error/10 px-1.5 py-0.5 font-bold text-error">{t.kampanya.domainSayisi} domainli operasyon</span>}
                               <span className="ml-auto text-on-surface-variant">{tespitZaman(t.zaman)}</span>
                             </div>
                             {t.sinyaller?.length > 0 && <p className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-on-surface-variant">{t.sinyaller[0]}</p>}
@@ -368,7 +368,7 @@ export default function MarkaKoruma() {
           </div>
           {erkenlik.usomdaYok > 0 && (
             <p className="mt-2.5 text-[11px] font-medium text-secondary">
-              🎯 Yakaladığımız <b>{erkenlik.usomdaYok}</b> tehdit ulusal listede bile yok — sizi <b>resmî radardan önce</b> koruyoruz.
+              Yakaladığımız <b>{erkenlik.usomdaYok}</b> tehdit ulusal listede bile yok — sizi <b>resmî radardan önce</b> koruyoruz.
             </p>
           )}
         </div>
@@ -468,7 +468,7 @@ export default function MarkaKoruma() {
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-error">🔴 Yüksek-riskli taklit adayları</p>
+                <p className="text-xs font-semibold text-error">Yüksek-riskli taklit adayları</p>
                 {rapor.yuksek.map((a) => (
                   <div key={a.domain} className="rounded-2xl bg-error-container/40 p-3">
                     <div className="flex items-center justify-between gap-2">

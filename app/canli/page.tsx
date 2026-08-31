@@ -133,7 +133,7 @@ export default function CanliPanel() {
                 <span className="text-[#3f5a7d] tabular-nums">{s.ts}</span>
                 <span className={s.marka ? "font-bold text-[#ff5c6c]" : "text-[#3ee08a]"}>[CT]</span>
                 <span className={`break-all ${s.marka ? "font-semibold text-[#ff8a95]" : "text-[#d3e2f5]"}`}>{s.domain}</span>
-                {s.marka && <span className="ml-auto rounded-full bg-[#ff5c6c]/15 px-1.5 text-[9px] font-bold text-[#ff8a95]">⚠ {s.marka}</span>}
+                {s.marka && <span className="ml-auto rounded-full bg-[#ff5c6c]/15 px-1.5 text-[9px] font-bold text-[#ff8a95]">{s.marka}</span>}
               </div>
             ))}
           </div>

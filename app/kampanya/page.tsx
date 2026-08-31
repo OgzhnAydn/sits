@@ -166,7 +166,7 @@ export default function KampanyaSayfa() {
           {/* İSTENEN BİLGİLER (metin olarak çıkarılabildiyse) */}
           {sonuc.istenenAlanlar.length > 0 && (
             <div className="rounded-2xl border border-error/30 bg-error/5 p-3.5">
-              <p className="text-[13px] font-bold text-error">🎣 Klon sayfa şu bilgileri çalmaya çalışıyor:</p>
+              <p className="text-[13px] font-bold text-error">Klon sayfa şu bilgileri çalmaya çalışıyor:</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {sonuc.istenenAlanlar.map((a, i) => (
                   <span key={i} className={`rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${kritikAlan(a) ? "bg-error/15 text-error" : "bg-surface-container text-on-surface-variant"}`}>{a}</span>
@@ -185,7 +185,7 @@ export default function KampanyaSayfa() {
               <p className="mt-0.5 text-[11.5px] text-on-surface-variant">Sahte sayfanın kendi ifşa ettiği kanallar (çalınan veri buraya gidebilir).</p>
               <div className="mt-2 space-y-1">
                 {sonuc.iletisimKanallari.map((t, i) => (
-                  <p key={i} className="break-all text-[12.5px] font-medium text-on-surface">🔗 {t}</p>
+                  <p key={i} className="break-all text-[12.5px] font-medium text-on-surface">{t}</p>
                 ))}
               </div>
             </div>

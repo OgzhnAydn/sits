@@ -294,7 +294,7 @@ function Investigation({ aday, rapor, yukleniyor, markaAdi }: { aday: Aday | nul
   if (!aday) return (
     <div className="miv-empty">
       {markaAdi
-        ? <><b style={{ color: "#31c8a0", display: "block", marginBottom: 6 }}>✓ {markaAdi} için tehdit yok</b>Şu an markanıza yönelik yakalanmış bir sahte site yok. Sistem 7/24 izlemeye devam ediyor — yeni bir tehdit çıkarsa burada görünür.</>
+        ? <><b style={{ color: "#31c8a0", display: "block", marginBottom: 6 }}>{markaAdi} için tehdit yok</b>Şu an markanıza yönelik yakalanmış bir sahte site yok. Sistem 7/24 izlemeye devam ediyor — yeni bir tehdit çıkarsa burada görünür.</>
         : "Soldaki listeden bir tehdit seç."}
     </div>
   );
@@ -324,14 +324,14 @@ function Investigation({ aday, rapor, yukleniyor, markaAdi }: { aday: Aday | nul
         </div>
       </div>
 
-      {engel && <div className={`engel ${/Zaten/.test(engel) ? "known" : "new"}`}>{/Zaten/.test(engel) ? "⛔ ZATEN ENGELLİ" : "◇ YENİ TEHDİT — açık listelerde yok"}<i>{engel}</i></div>}
+      {engel && <div className={`engel ${/Zaten/.test(engel) ? "known" : "new"}`}>{/Zaten/.test(engel) ? "ZATEN ENGELLİ" : "YENİ TEHDİT — açık listelerde yok"}<i>{engel}</i></div>}
 
       <div className="ivsect">
         <div className="lbl">Neden şüphelendik? {yukleniyor && <span className="ld">analiz…</span>}{why.length > 0 && <span className="n">{why.length} sinyal</span>}</div>
         {why.length === 0 && !yukleniyor && <div className="miv-empty sm">Bu varlık için güçlü sinyal yok — düşük öncelik.</div>}
         <div className="why">
           {why.map((w, i) => (
-            <div className="wrow" key={i}><span className="ck">✓</span><b>{w.t}</b>{w.m && <span className="m">{w.m}</span>}</div>
+            <div className="wrow" key={i}><span className="ck"></span><b>{w.t}</b>{w.m && <span className="m">{w.m}</span>}</div>
           ))}
         </div>
         {why.length >= 2 && <div className="consensus"><b>{why.length}</b> bağımsız sinyal aynı varlığı işaret ediyor</div>}

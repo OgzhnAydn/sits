@@ -57,7 +57,7 @@ export default function Home() {
       {/* Hero */}
       <section className="relative px-2 pt-4">
         <div className="relative z-10 max-w-[64%]">
-          <p className="text-base font-semibold text-on-surface-variant">Merhaba 👋</p>
+          <p className="text-base font-semibold text-on-surface-variant">Merhaba </p>
           <h2 className="mt-2 font-display text-[32px] font-extrabold leading-[1.08] text-on-surface">
             Bugün seni <span className="text-gradient">korumaya</span> hazırım.
           </h2>

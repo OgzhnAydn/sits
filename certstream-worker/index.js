@@ -239,7 +239,7 @@ async function adayGonder(domain, marka) {
     });
     if (!r.ok) throw new Error(`http ${r.status}`);
     const j = await r.json().catch(() => ({}));
-    if (j.kaydedildi) { sayac.aday++; console.log(`🎯 ADAY: ${key}  (${marka})  skor ${j.skor}`); }
+    if (j.kaydedildi) { sayac.aday++; console.log(`ADAY: ${key}  (${marka})  skor ${j.skor}`); }
   } catch (e) {
     gorulen.delete(key); // başarısız gönderim → dedup'a takılma, tekrar görülünce yeniden dene (aday kaçmasın)
     console.log(`[gönderim hatası] ${key}: ${e.message}`);
@@ -260,7 +260,7 @@ async function faviconGonder(domain) {
     });
     if (!r.ok) throw new Error(`http ${r.status}`);
     const j = await r.json().catch(() => ({}));
-    if (j.eslesme) { sayac.aday++; console.log(`🖼️  FAVICON-KOPYA: ${key}  (${j.marka})  skor ${j.skor}`); }
+    if (j.eslesme) { sayac.aday++; console.log(` FAVICON-KOPYA: ${key}  (${j.marka})  skor ${j.skor}`); }
   } catch { gorulen.delete(key); }
 }
 
@@ -363,8 +363,8 @@ async function logTakip(log) {
       // Google atlarsa çoklu-operatör telafisi var; GOOGLE-DIŞI atlama = gerçek kaçırma riski.
       if (boyut - pos > KOPMA_ESIK) {
         log.atlama++;
-        const ek = log.google ? "" : "  ‼️ GOOGLE-DIŞI OPERATÖR — GERÇEK KAÇIRMA RİSKİ (bu sertifikalar başka logda olmayabilir)";
-        console.log(`⚠️  [ct] ${log.ad} (${log.op}): ${boyut - pos} geride (uzun kesinti?) — uca resync, arası atlanıyor${ek}`);
+        const ek = log.google ? "" : "  GOOGLE-DIŞI OPERATÖR — GERÇEK KAÇIRMA RİSKİ (bu sertifikalar başka logda olmayabilir)";
+        console.log(` [ct] ${log.ad} (${log.op}): ${boyut - pos} geride (uzun kesinti?) — uca resync, arası atlanıyor${ek}`);
         pos = boyut - KEEPUP_TAVAN;
       }
 
@@ -440,7 +440,7 @@ setInterval(() => {
   const riskli = TAKIP_LOGLAR.filter((l) => !l.google && ((l.geride || 0) > 50000 || (l.atlama || 0) > 0 || l.hataUsteUste > 2));
   if (riskli.length) {
     console.error(
-      `‼️  [KAÇIRMA RİSKİ] Google-dışı operatör sorunlu → ${riskli
+      ` [KAÇIRMA RİSKİ] Google-dışı operatör sorunlu → ${riskli
         .map((l) => `${l.op}(${l.hataUsteUste > 2 ? "ERİŞİLEMİYOR" : `${l.geride} geride`}${l.atlama ? `, atla×${l.atlama}` : ""})`)
         .join(", ")} — bu sertifikalar başka logda olmayabilir, kaçmış olabilirler!`
     );

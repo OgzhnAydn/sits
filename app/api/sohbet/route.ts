@@ -78,7 +78,7 @@ async function yedekCevap(mesaj: string): Promise<string> {
   if (guven !== "yok" && kategori !== "diger") {
     return `Bu içerik ${KATEGORI_ADI[kategori]} gibi görünüyor (güven: ${guven}). Bir bağlantı, IBAN veya numara paylaşırsan onu da tek tek kontrol edebilirim. Acil bir durumsa 155/112.`;
   }
-  return "Merhaba, ben Nazar 🛡️ Şüpheli bir bağlantı, IBAN, telefon numarası ya da mesaj yapıştır — birlikte kontrol edelim. (Not: yapay zeka anahtarı tanımlı olmadığından şu an temel modda yanıt veriyorum.)";
+  return "Merhaba, ben Nazar Şüpheli bir bağlantı, IBAN, telefon numarası ya da mesaj yapıştır — birlikte kontrol edelim. (Not: yapay zeka anahtarı tanımlı olmadığından şu an temel modda yanıt veriyorum.)";
 }
 
 export async function POST(req: NextRequest) {

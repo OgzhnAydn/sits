@@ -490,7 +490,7 @@ function iceriktenBulgu(ham: string, r: OsintRapor) {
     if (sifreVar || kartVar) {
       r.risk += 35;
       r.bulgular.push(`Sayfadaki form/veri gönderimi BAŞKA bir adrese (${[...disHedefler][0]}) gidiyor — girdiğin şifre/kart bilgileri üçüncü bir tarafa aktarılıyor olabilir. Bu güçlü bir kimlik-avı işaretidir.`);
-      r.alanlar.push({ ad: "Veri gönderimi", deger: `⚠ Dış adrese: ${liste}` });
+      r.alanlar.push({ ad: "Veri gönderimi", deger: `Dış adrese: ${liste}` });
     } else {
       r.alanlar.push({ ad: "Dış veri hedefi", deger: liste });
     }

@@ -445,8 +445,8 @@ export default function OsintRaporu({ giris, onDurum }: { giris: string; onDurum
               <div className="p-4">
                 <div className="font-display text-[15px] font-bold text-on-surface">{rapor.dedektif.tur}</div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  <span className="rounded-full bg-surface-lowest px-2.5 py-1 text-[11px] text-on-surface-variant">🎯 Hedef: <b className="text-on-surface">{rapor.dedektif.hedef}</b></span>
-                  <span className="rounded-full bg-surface-lowest px-2.5 py-1 text-[11px] text-on-surface-variant">💰 Para: <b className="text-on-surface">{rapor.dedektif.paraYontemi}</b></span>
+                  <span className="rounded-full bg-surface-lowest px-2.5 py-1 text-[11px] text-on-surface-variant">Hedef: <b className="text-on-surface">{rapor.dedektif.hedef}</b></span>
+                  <span className="rounded-full bg-surface-lowest px-2.5 py-1 text-[11px] text-on-surface-variant">Para: <b className="text-on-surface">{rapor.dedektif.paraYontemi}</b></span>
                 </div>
                 {rapor.dedektif.operasyon && (
                   <p className="mt-2.5 text-[12px] leading-snug text-on-surface-variant"><b className="text-on-surface">Operasyon:</b> {rapor.dedektif.operasyon}</p>

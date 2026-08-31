@@ -104,7 +104,7 @@ export default function Bildir() {
       const okunan = (data.text || "").replace(/\s+\n/g, "\n").trim();
       if (okunan) {
         setMetin((m) => (m ? m.trim() + "\n" : "") + okunan);
-        setOcrDurum("Görsel okundu ✓ — metni kontrol edip gönderebilirsin.");
+        setOcrDurum("Görsel okundu — metni kontrol edip gönderebilirsin.");
       } else {
         setOcrDurum("Görselde okunacak metin bulunamadı.");
       }
@@ -238,7 +238,7 @@ export default function Bildir() {
                     bitti ? "border-secondary bg-secondary text-white" : "border-outline-variant text-transparent"
                   }`}
                 >
-                  ✓
+                  
                 </span>
                 <span>
                   <span className="block text-sm font-medium text-on-surface">{a.baslik}</span>
@@ -312,7 +312,7 @@ export default function Bildir() {
               <span className="text-sm font-semibold text-on-surface">Şikayet Dilekçesi</span>
               <div className="flex gap-2">
                 <button onClick={dilekceKopyala} className="press rounded-full border border-outline-variant px-3 py-1 text-xs font-medium text-on-surface">
-                  {kopyalandi ? "Kopyalandı ✓" : "Kopyala"}
+                  {kopyalandi ? "Kopyalandı " : "Kopyala"}
                 </button>
                 <button onClick={dilekceIndir} className="press rounded-full bg-primary px-3 py-1 text-xs font-medium text-on-primary">
                   İndir
