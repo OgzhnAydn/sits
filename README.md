@@ -108,12 +108,46 @@ firestore.rules # Firestore güvenlik kuralları
 
 ---
 
-## Kurulum & çalıştırma
+## Sıfırdan indir & çalıştır
 
+### 0. Gereksinimler (bir kez)
+- **Node.js 20+** — [nodejs.org](https://nodejs.org) (npm ile birlikte gelir)
+- **Git** — [git-scm.com](https://git-scm.com)
+
+Kurulu mu kontrol:
+```bash
+node -v    # v20.x veya üstü
+git --version
+```
+
+### 1. Projeyi indir (clone)
+```bash
+git clone https://github.com/OgzhnAydn/sits.git
+cd sits
+```
+
+### 2. Bağımlılıkları kur
 ```bash
 npm install
-npm run dev        # http://localhost:3000
 ```
+
+### 3. Çalıştır
+```bash
+npm run dev
+```
+Tarayıcıda aç: **http://localhost:3000**
+
+> **Anahtarsız da çalışır** (demo modu) — hiçbir ayar yapmadan `npm run dev` ile açılır, sayfaları gezebilirsin. Gerçek analiz/canlı veri için aşağıdaki anahtarları ekle.
+
+### 4. (İsteğe bağlı) Gerçek moda geç
+Proje kökünde **`.env.local`** dosyası oluştur ve anahtarları gir (aşağıya bak). Sonra dev sunucusunu **yeniden başlat** (`npm run dev`) — Next.js `.env`'i yalnız başlangıçta okur.
+
+### 5. (İsteğe bağlı) Canlı yayına çıkar
+`npm run build` ile üretim derlemesi yapılır; deploy komutları en altta.
+
+---
+
+## Anahtarlar (.env.local)
 
 **Anahtarsız da çalışır** (demo modu); `.env.local`'e anahtar girilince gerçeğe geçer:
 
