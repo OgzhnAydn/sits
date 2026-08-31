@@ -26,6 +26,7 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "turkcell", ad: "Turkcell", resmi: ["turkcell.com.tr"] },
   { anahtar: "vodafone", ad: "Vodafone", resmi: ["vodafone.com.tr"] },
   { anahtar: "turktelekom", ad: "Türk Telekom", resmi: ["turktelekom.com.tr"] },
+  { anahtar: "telefonica", ad: "Telefónica", resmi: ["telefonica.com", "telefonica.es"] },
   { anahtar: "pttavm", ad: "PTT AVM", resmi: ["pttavm.com"] },
   { anahtar: "edevlet", ad: "e-Devlet", resmi: ["turkiye.gov.tr"] },
   { anahtar: "tcmb", ad: "TCMB (Merkez Bankası)", resmi: ["tcmb.gov.tr"] },
