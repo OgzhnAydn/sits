@@ -33,7 +33,45 @@ type Filtre = "hepsi" | "yuksek" | "arastiriliyor" | "altyapi" | "yeni";
 
 const fmt = (n: number) => n.toLocaleString("tr-TR");
 const buyukHarf = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-const skorRenk = (s: number) => (s >= 60 ? "#f5222d" : s >= 30 ? "#faad14" : "#1677ff");
+// 4-seviye güven — "kırmızı=kesin sahte" değil; aday≠kesin ilkesiyle.
+function seviye(s: number): { renk: string; etiket: string; tag: string } {
+  if (s >= 60) return { renk: "#f5222d", etiket: "AKTİF TEHDİT", tag: "error" };
+  if (s >= 45) return { renk: "#fa8c16", etiket: "YÜKSEK GÜVEN", tag: "volcano" };
+  if (s >= 30) return { renk: "#faad14", etiket: "ŞÜPHELİ", tag: "warning" };
+  return { renk: "#8c8c8c", etiket: "İZLEMEDE", tag: "default" };
+}
+const skorRenk = (s: number) => seviye(s).renk;
+function hexRgba(hex: string, a: number): string {
+  const m = /#(..)(..)(..)/.exec(hex); if (!m) return hex;
+  return `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${a})`;
+}
+// Kenar etiketi: markayı NEDEN o siteyle ilişkilendirdik (ilişki türü). Yalnız analiz
+// edilmiş (seçili) varlıkta zengin; diğerlerinde isim/skor.
+function iliskiEtiket(r: Rapor): string {
+  const a = (x: string) => r.alanlar?.find((z) => z.ad === x)?.deger;
+  const mg = a("Marka taklidi güveni")?.match(/(\d+)/);
+  if (a("Logo taklidi (görsel)")) return "logo" + (mg ? " %" + mg[1] : "");
+  if (a("Klon kaynağı")) return "klon";
+  if (a("İçerikte kurum taklidi")) return "içerik taklidi";
+  const fav = a("Favicon"); if (fav && /aynı/i.test(fav)) return "favicon eş";
+  if (a("Görsel analiz (AI)") && mg) return "görsel %" + mg[1];
+  if (a("Yönlendirme zinciri")) return "yönlendirme";
+  return "%" + (r.risk || 0);
+}
+
+// Ekran görüntüsü al (pasif → yoksa aktif tarama poll). Gerçek-vs-sahte karşılaştırma için.
+async function ekranAl(domain: string): Promise<string | null> {
+  try {
+    let j = await (await fetch(`/api/ekran?domain=${encodeURIComponent(domain)}`)).json();
+    if (j.durum === "hazir") return j.screenshot;
+    for (let i = 0; i < 7 && j.uuid; i++) {
+      await new Promise((r) => setTimeout(r, 4000));
+      j = await (await fetch(`/api/ekran?uuid=${j.uuid}`)).json();
+      if (j.durum === "hazir") return j.screenshot;
+    }
+  } catch { /* */ }
+  return null;
+}
 
 export default function MercekKokpit() {
   return (
@@ -70,9 +108,19 @@ function Kokpit() {
   const [markaFiltre, setMarkaFiltre] = useState("");
   const [hesapAdi, setHesapAdi] = useState("");
   const [oturum, setOturum] = useState<boolean | null>(null);
+  const [resmiMap, setResmiMap] = useState<Record<string, string>>({});
   const gorulen = useRef<Set<number>>(new Set());
   const yeniSet = useRef<Set<string>>(new Set());
   const router = useRouter();
+
+  // marka anahtarı → resmî domain (gerçek-vs-sahte görüntü karşılaştırması için)
+  useEffect(() => {
+    fetch("/api/markalar").then((r) => r.json()).then((j) => {
+      const m: Record<string, string> = {};
+      for (const x of j.markalar || []) if (x.anahtar && x.resmi?.[0]) m[x.anahtar] = x.resmi[0];
+      setResmiMap(m);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => markaDinle((user, hesap) => {
     if (!user) { setOturum(false); router.replace("/marka-giris"); return; }
@@ -215,11 +263,12 @@ function Kokpit() {
             <Card
               size="small" style={{ height: "100%" }} styles={{ body: { height: "calc(100% - 46px)", padding: 8 } }}
               title={baslik(3, "THREAT UNIVERSE GRAFİĞİ", (
-                <Space size={12}>
-                  <Efsane renk="#f5222d" t="Yüksek Güvenli Taklit" />
-                  <Efsane renk="#faad14" halka t="Araştırılıyor" />
-                  <Efsane renk="#8b7de0" t="Altyapı / İlişkili" />
-                  <Efsane renk="#39bdf8" t="Resmi Varlık" />
+                <Space size={11}>
+                  <Efsane renk="#f5222d" t="Aktif Tehdit" />
+                  <Efsane renk="#fa8c16" t="Yüksek Güven" />
+                  <Efsane renk="#faad14" halka t="Şüpheli" />
+                  <Efsane renk="#8b7de0" t="Altyapı" />
+                  <Efsane renk="#39bdf8" t="Resmi Marka" />
                 </Space>
               ))}
             >
@@ -230,7 +279,7 @@ function Kokpit() {
           {/* SAĞ: 4 varlık detayı */}
           <Col xs={24} lg={6}>
             <Card size="small" style={{ height: "100%" }} title={baslik(4, "SEÇİLEN VARLIK DETAYI")}>
-              <EntityDetail aday={secili} rapor={rapor} yukleniyor={yukleniyor} markaAdi={markaAdi} />
+              <EntityDetail aday={secili} rapor={rapor} yukleniyor={yukleniyor} markaAdi={markaAdi} resmiDom={secili ? resmiMap[secili.marka] : undefined} />
             </Card>
           </Col>
 
@@ -322,12 +371,15 @@ function nedenTehdit(r: Rapor | null) {
   return out.slice(0, 6);
 }
 
-function EntityDetail({ aday, rapor, yukleniyor, markaAdi }: { aday: Aday | null; rapor: Rapor | null; yukleniyor: boolean; markaAdi: string }) {
+function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom }: { aday: Aday | null; rapor: Rapor | null; yukleniyor: boolean; markaAdi: string; resmiDom?: string }) {
   if (!aday) return <Empty description={<span style={{ color: "#8fa6bd" }}><b style={{ color: "#31c8a0" }}>{markaAdi} için tehdit yok</b><br />Sistem izlemeye devam ediyor.</span>} />;
   const risk = rapor?.risk ?? aday.skor;
-  const renk = skorRenk(risk);
-  const sev = risk >= 60 ? { t: "YÜKSEK GÜVEN", c: "error" } : risk >= 30 ? { t: "ARAŞTIRILIYOR", c: "warning" } : { t: "İZLEMEDE", c: "processing" };
+  const sv = seviye(risk);
+  const renk = sv.renk;
+  const sev = { t: sv.etiket, c: sv.tag };
   const neden = nedenTehdit(rapor);
+  const mgv = rapor?.alanlar?.find((a) => a.ad === "Marka taklidi güveni")?.deger?.match(/(\d+)\s*\/\s*100/);
+  const benzerlik = mgv ? Number(mgv[1]) : undefined;
   const alan = (ad: string) => rapor?.alanlar?.find((a) => a.ad.startsWith(ad))?.deger;
   const zmn = (t?: number) => t ? new Date(t).toLocaleString("tr-TR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
   const ilk = rapor?.gecmis?.[0]?.t, son = rapor?.gecmis?.[rapor.gecmis.length - 1]?.t;
@@ -367,11 +419,62 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi }: { aday: Aday | null
         labelStyle={{ color: "#5c748b", fontSize: 11.5 }}
         contentStyle={{ color: "#cfe0ef", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, justifyContent: "flex-end", textAlign: "right" }}
       />
+      <KarsilastirGorsel resmiDom={resmiDom} fakeDom={aday.domain} fakeShot={rapor?.ekranGoruntusu} benzerlik={benzerlik} markaAdi={markaAdi} />
+
       <Flex vertical gap={8}>
         <Button danger type="primary" icon={<ExportOutlined />} href={`http://${aday.domain}`} target="_blank" rel="noopener noreferrer nofollow">Siteyi Ziyaret Et</Button>
         <Button icon={<FileSearchOutlined />} href={`/sorgula?q=${encodeURIComponent(aday.domain)}`}>Tam Raporu Aç</Button>
       </Flex>
     </Flex>
+  );
+}
+
+// GERÇEK vs SAHTE — resmî markanın ekran görüntüsü yanında sahtenin görüntüsü + benzerlik.
+function KarsilastirGorsel({ resmiDom, fakeDom, fakeShot, benzerlik, markaAdi }: { resmiDom?: string; fakeDom: string; fakeShot?: string; benzerlik?: number; markaAdi: string }) {
+  const [gercek, setGercek] = useState<string | null>(null);
+  const [sahte, setSahte] = useState<string | null>(fakeShot || null);
+  const [gYuk, setGYuk] = useState(false);
+  const [sYuk, setSYuk] = useState(false);
+  useEffect(() => {
+    let iptal = false; setGercek(null);
+    if (resmiDom) { setGYuk(true); ekranAl(resmiDom).then((s) => { if (!iptal) { setGercek(s); setGYuk(false); } }); }
+    return () => { iptal = true; };
+  }, [resmiDom]);
+  useEffect(() => {
+    let iptal = false;
+    if (fakeShot) { setSahte(fakeShot); return; }
+    setSahte(null); setSYuk(true);
+    ekranAl(fakeDom).then((s) => { if (!iptal) { setSahte(s); setSYuk(false); } });
+    return () => { iptal = true; };
+  }, [fakeDom, fakeShot]);
+
+  const kutu = (baslik: string, alt: string, src: string | null, yuk: boolean, kenar: string) => (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ fontSize: 9, letterSpacing: ".06em", color: "#8fa6bd", marginBottom: 4, textTransform: "uppercase" }}>{baslik}</div>
+      <div style={{ aspectRatio: "16/10", borderRadius: 8, border: `1px solid ${kenar}`, overflow: "hidden", background: "#0a1420", display: "grid", placeItems: "center" }}>
+        {yuk ? <Spin size="small" /> : src
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={src} alt={alt} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          : <span style={{ fontSize: 10, color: "#5c748b" }}>görüntü yok</span>}
+      </div>
+      <div style={{ fontSize: 9.5, color: "#8fa6bd", marginTop: 3, fontFamily: "'IBM Plex Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{alt}</div>
+    </div>
+  );
+
+  return (
+    <div style={{ borderTop: "1px solid #17293c", paddingTop: 12 }}>
+      <Text strong style={{ fontSize: 11, letterSpacing: ".05em" }}>Gerçek vs Sahte</Text>
+      <Flex gap={10} style={{ marginTop: 8 }}>
+        {kutu("GERÇEK MARKA", resmiDom || markaAdi, gercek, gYuk, "#1f4b78")}
+        {kutu("ŞÜPHELİ SİTE", fakeDom, sahte, sYuk, "#5a2226")}
+      </Flex>
+      {typeof benzerlik === "number" && (
+        <Flex align="center" gap={8} style={{ marginTop: 10 }}>
+          <Text style={{ fontSize: 10.5, color: "#8fa6bd" }}>GÖRSEL BENZERLİK</Text>
+          <Progress percent={benzerlik} size="small" strokeColor={seviye(benzerlik).renk} style={{ flex: 1, margin: 0 }} format={(p) => <span style={{ color: "#e9f2fa", fontFamily: "'IBM Plex Mono',monospace" }}>%{p}</span>} />
+        </Flex>
+      )}
+    </div>
   );
 }
 
@@ -433,14 +536,16 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect }: { marka: st
         n.vx *= 0.8; n.vy *= 0.8; n.x += n.vx; n.y += n.vy;
       }
       ctx.clearRect(0, 0, W, H);
+      const sel = selRef.current, rap = rapRef.current;
       for (const n of nodes) {
-        const yuksek = n.aday.skor >= 60; const c = yuksek ? "#f5222d" : "#faad14";
+        const c = seviye(n.aday.skor).renk; const aktif = n.aday.skor >= 45;
         ctx.beginPath(); ctx.moveTo(merkez.x, merkez.y); ctx.lineTo(n.x, n.y);
-        if (yuksek) { ctx.strokeStyle = "rgba(245,34,45,.5)"; ctx.lineWidth = 1.4; ctx.setLineDash([]); }
-        else { ctx.strokeStyle = "rgba(250,173,20,.35)"; ctx.lineWidth = 1; ctx.setLineDash([4, 4]); }
+        ctx.strokeStyle = hexRgba(c, aktif ? 0.5 : 0.32); ctx.lineWidth = aktif ? 1.4 : 1; ctx.setLineDash(aktif ? [] : [4, 4]);
         ctx.stroke(); ctx.setLineDash([]);
         const mx = merkez.x + (n.x - merkez.x) * 0.5, my = merkez.y + (n.y - merkez.y) * 0.5;
-        ctx.font = "600 10px 'IBM Plex Mono',monospace"; ctx.fillStyle = c; ctx.textAlign = "center"; ctx.fillText("%" + n.aday.skor, mx, my);
+        // kenar etiketi = ilişki türü (seçili varlıkta zengin; diğerinde skor)
+        const et = (sel && rap && sel.domain === n.aday.domain) ? iliskiEtiket(rap) : "%" + n.aday.skor;
+        ctx.font = "600 10px 'IBM Plex Mono',monospace"; ctx.fillStyle = c; ctx.textAlign = "center"; ctx.fillText(et, mx, my - 2);
       }
       for (const a of altyapi) if (a.bagli) { ctx.beginPath(); ctx.moveTo(a.bagli.x, a.bagli.y); ctx.lineTo(a.x, a.y); ctx.strokeStyle = "rgba(139,125,224,.4)"; ctx.lineWidth = 1; ctx.stroke(); }
       if (altyapi[0]) { ctx.beginPath(); ctx.moveTo(merkez.x, merkez.y); ctx.lineTo(altyapi[0].x, altyapi[0].y); ctx.strokeStyle = "rgba(139,125,224,.25)"; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]); }
@@ -449,10 +554,10 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect }: { marka: st
       ctx.font = "700 12px 'IBM Plex Sans',sans-serif"; ctx.fillStyle = "#e9f2fa"; ctx.textAlign = "center"; ctx.fillText(markaRef.current.toUpperCase().slice(0, 12), merkez.x, merkez.y + 3);
       ctx.font = "600 7px 'IBM Plex Mono',monospace"; ctx.fillStyle = "#5aa9e0"; ctx.fillText("KORUNAN MARKA", merkez.x, merkez.y + 15);
       for (const n of nodes) {
-        const yuksek = n.aday.skor >= 60; const c = yuksek ? "#f5222d" : "#faad14";
+        const c = seviye(n.aday.skor).renk;
         const isSel = selRef.current && selRef.current.domain === n.aday.domain;
         const gl = (Math.sin(t * 3 + n.x) + 1) / 2;
-        ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 5 + gl * 3, 0, 6.28); ctx.fillStyle = (yuksek ? "rgba(245,34,45," : "rgba(250,173,20,") + (0.05 + gl * 0.06) + ")"; ctx.fill();
+        ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 5 + gl * 3, 0, 6.28); ctx.fillStyle = hexRgba(c, 0.05 + gl * 0.06); ctx.fill();
         if (isSel) { ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 6, 0, 6.28); ctx.strokeStyle = "#e9f2fa"; ctx.lineWidth = 2; ctx.stroke(); }
         ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 6.28); ctx.fillStyle = "#12202e"; ctx.fill(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.stroke();
         ctx.fillStyle = c; ctx.fillRect(n.x - 5, n.y - 4, 10, 8); ctx.fillStyle = "#12202e"; ctx.fillRect(n.x - 5, n.y - 4, 10, 2.2);
