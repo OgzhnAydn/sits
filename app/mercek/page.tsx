@@ -7,11 +7,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
   ConfigProvider, theme, Row, Col, Card, Statistic, Progress, Table, Tag, Segmented,
-  Button, Descriptions, Avatar, Flex, Badge, Empty, Spin, Typography, Space,
+  Button, Descriptions, Avatar, Flex, Badge, Empty, Spin, Typography, Space, Timeline, Alert,
 } from "antd";
 import {
   EyeOutlined, SafetyCertificateOutlined, SearchOutlined, ClusterOutlined, ThunderboltOutlined,
   ExportOutlined, FileSearchOutlined, LogoutOutlined, BellOutlined, GlobalOutlined,
+  WarningOutlined, ClockCircleOutlined,
 } from "@ant-design/icons";
 import { markaDinle, cikis } from "@/lib/markaAuth";
 
@@ -393,6 +394,9 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom }: { aday: A
         <Statistic title="Güven Skoru" value={yukleniyor && !rapor ? "…" : risk} suffix="/100" valueStyle={{ color: renk, fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600 }} />
         <Progress type="dashboard" percent={Math.min(100, risk)} size={70} strokeColor={renk} format={() => ""} />
       </Flex>
+
+      <SaldiriGelisimi rapor={rapor} />
+
       <div>
         <Text strong style={{ fontSize: 11, letterSpacing: ".05em" }}>Neden Tehdit? {yukleniyor && <Spin size="small" />}</Text>
         {neden.length === 0 && !yukleniyor && <div><Text type="secondary" style={{ fontSize: 11 }}>Güçlü sinyal yok — düşük öncelik.</Text></div>}
@@ -426,6 +430,59 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom }: { aday: A
         <Button icon={<FileSearchOutlined />} href={`/sorgula?q=${encodeURIComponent(aday.domain)}`}>Tam Raporu Aç</Button>
       </Flex>
     </Flex>
+  );
+}
+
+// SALDIRI GELİŞİMİ — "saldırıyı doğmadan yakala": olgunlaşma aşaması + gerçek zaman
+// damgaları + durum bannerı ("SALDIRI GELİŞİYOR") + risk tırmanış çizgisi.
+function SaldiriGelisimi({ rapor }: { rapor: Rapor | null }) {
+  if (!rapor || !rapor.asamalar?.length) return null;
+  const asamalar = rapor.asamalar; const asama = rapor.asama ?? 0;
+  const alan = (x: string) => rapor.alanlar?.find((a) => a.ad.startsWith(x))?.deger;
+  const durum = asama >= 6
+    ? { t: "AKTİF SALDIRI", d: "Kimlik/kart toplama aşamasında — canlı tehdit.", type: "error" as const, ikon: <WarningOutlined /> }
+    : asama >= 3
+      ? { t: "SALDIRI GELİŞİYOR", d: "Site yayında, marka/form ekleniyor — olaya dönüşmeden yakalandı.", type: "warning" as const, ikon: <ThunderboltOutlined /> }
+      : { t: "HAZIRLIK AŞAMASI", d: "Domain/sertifika hazırlanıyor, içerik henüz yok.", type: "info" as const, ikon: <ClockCircleOutlined /> };
+  const kayit = alan("Kayıt tarihi");
+  const certGecmis = alan("Sertifika geçmişi");
+  const certIlk = certGecmis?.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || alan("En yeni sertifika")?.match(/(\d{4}-\d{2}-\d{2})/)?.[1];
+  const zaman = (i: number) => (i === 0 ? kayit : i === 2 ? certIlk : undefined);
+  return (
+    <div>
+      <Alert showIcon icon={durum.ikon} type={durum.type} banner message={<b>{durum.t}</b>} description={<span style={{ fontSize: 11.5 }}>{durum.d}</span>} style={{ marginBottom: 10, borderRadius: 8 }} />
+      <Text strong style={{ fontSize: 11, letterSpacing: ".05em" }}>Saldırı Olgunlaşması</Text>
+      <Timeline
+        style={{ marginTop: 12, marginBottom: 0 }}
+        items={asamalar.map((s, i) => ({
+          color: i < asama ? "green" : i === asama ? (asama >= 6 ? "red" : "orange") : "gray",
+          dot: i === asama ? <ThunderboltOutlined style={{ fontSize: 12 }} /> : undefined,
+          children: (
+            <Flex justify="space-between" gap={8}>
+              <Text style={{ fontSize: 12, color: i <= asama ? "#cfe0ef" : "#5c748b", fontWeight: i === asama ? 600 : 400 }}>{s}{i === asama ? " · şu an burada" : ""}</Text>
+              {zaman(i) && <Text style={{ fontSize: 10, color: "#8fa6bd", fontFamily: "'IBM Plex Mono',monospace", whiteSpace: "nowrap" }}>{zaman(i)}</Text>}
+            </Flex>
+          ),
+        }))}
+      />
+      {rapor.gecmis && rapor.gecmis.length >= 2 && <RiskCizgi gecmis={rapor.gecmis} />}
+    </div>
+  );
+}
+function RiskCizgi({ gecmis }: { gecmis: Gecmis[] }) {
+  const w = 260, h = 42, pad = 3, n = gecmis.length;
+  const pts = gecmis.map((g, i) => [pad + (i * (w - 2 * pad)) / Math.max(1, n - 1), h - pad - (Math.min(100, g.risk) / 100) * (h - 2 * pad)] as [number, number]);
+  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  const renk = seviye(gecmis[n - 1].risk).renk;
+  return (
+    <div style={{ marginTop: 4 }}>
+      <Text style={{ fontSize: 10, color: "#8fa6bd" }}>Risk gelişimi · {gecmis[0].risk} → {gecmis[n - 1].risk} ({n} gözlem)</Text>
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 42, display: "block" }} preserveAspectRatio="none">
+        <path d={`${line} L${pts[n - 1][0].toFixed(1)} ${h} L${pad} ${h} Z`} fill={hexRgba(renk, 0.15)} />
+        <path d={line} fill="none" stroke={renk} strokeWidth="2" strokeLinejoin="round" />
+        <circle cx={pts[n - 1][0]} cy={pts[n - 1][1]} r="3" fill={renk} />
+      </svg>
+    </div>
   );
 }
 
