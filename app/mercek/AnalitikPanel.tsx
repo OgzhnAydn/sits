@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Row, Col, Card, Statistic, Tag, Empty, Spin, Typography, Flex, Progress } from "antd";
 import {
   EyeOutlined, ThunderboltOutlined, SafetyCertificateOutlined, GlobalOutlined, ClusterOutlined,
-  RiseOutlined, ClockCircleOutlined, DashboardOutlined,
+  RiseOutlined, ClockCircleOutlined, DashboardOutlined, AppleOutlined, CheckCircleOutlined, WarningOutlined, NotificationOutlined, GoogleOutlined,
 } from "@ant-design/icons";
 
 const { Text } = Typography;
@@ -109,9 +109,17 @@ function SaatIsi({ veri }: { veri: number[] }) {
   );
 }
 
+type AppBulgu = { platform: string; ad: string; gelistirici: string; paket: string; url: string; ikon?: string; puan?: number; sayi?: number; ulke: string; resmiMi: boolean; durum: string };
+type AppSonuc = { markaAdi: string; sonuc: AppBulgu[]; toplam: number; resmi: number; incele: number; not?: string };
+type Reklam = { reklamveren: string; baslik?: string; metin?: string; hedefAlan?: string; snapshot?: string; baslangic?: string; platformlar?: string[]; supheli: boolean };
+type ReklamSonuc = { yapilandirildi: boolean; reklamlar: Reklam[]; supheli: number; not: string };
+type GReklam = { reklamveren: string; yasal?: string; konum?: string; dogrulama: string; url?: string; supheli: boolean };
+type GReklamSonuc = { yapilandirildi: boolean; reklamlar: GReklam[]; supheli: number; guncelleme: number; not: string };
+
 export default function AnalitikPanel({ marka }: { marka: string }) {
   const [veri, setVeri] = useState<Panel | null>(null);
   const [yuk, setYuk] = useState(true);
+  const [app, setApp] = useState<AppSonuc | null>(null);
   useEffect(() => {
     if (!marka) { setYuk(false); return; }
     let durdu = false;
@@ -121,6 +129,23 @@ export default function AnalitikPanel({ marka }: { marka: string }) {
     }
     cek(); const t = setInterval(cek, 60000); return () => { durdu = true; clearInterval(t); };
   }, [marka]);
+  const [reklam, setReklam] = useState<ReklamSonuc | null>(null);
+  // Mobil uygulama + reklam taraması — bir kez çek.
+  useEffect(() => {
+    if (!marka) return;
+    let durdu = false;
+    (async () => {
+      try { const j = await (await fetch(`/api/app-tara?marka=${encodeURIComponent(marka)}`, { cache: "no-store" })).json(); if (!durdu && !j.hata) setApp(j); } catch { /* sessiz */ }
+    })();
+    (async () => {
+      try { const j = await (await fetch(`/api/reklam-tara?marka=${encodeURIComponent(marka)}`, { cache: "no-store" })).json(); if (!durdu && !j.hata) setReklam(j); } catch { /* sessiz */ }
+    })();
+    (async () => {
+      try { const j = await (await fetch(`/api/google-reklam?marka=${encodeURIComponent(marka)}`, { cache: "no-store" })).json(); if (!durdu && !j.hata) setGreklam(j); } catch { /* sessiz */ }
+    })();
+    return () => { durdu = true; };
+  }, [marka]);
+  const [greklam, setGreklam] = useState<GReklamSonuc | null>(null);
 
   if (!marka) return <Card style={KART}><Empty description={<Text style={{ color: "#8fa6bd" }}>Analitik panel marka-kilitli bir hesap gerektirir.</Text>} /></Card>;
   if (yuk && !veri) return <Flex align="center" justify="center" style={{ minHeight: 300 }}><Spin tip="Panel yükleniyor…"><div style={{ padding: 40 }} /></Spin></Flex>;
@@ -194,6 +219,112 @@ export default function AnalitikPanel({ marka }: { marka: string }) {
         <Col xs={24} sm={12} lg={8}><Card style={KART} styles={{ body: { padding: 18 } }}><Text strong style={{ color: "#8fa6bd", fontSize: 12 }}>En çok kötüye kullanılan uzantı</Text><div style={{ height: 10 }} /><YatayBar veri={veri.tld} renk="#7c5cff" /></Card></Col>
         <Col xs={24} sm={12} lg={8}><Card style={KART} styles={{ body: { padding: 18 } }}><Text strong style={{ color: "#8fa6bd", fontSize: 12 }}>Ortak takip kimliği (operatör)</Text><div style={{ height: 10 }} /><YatayBar veri={veri.ortak.takip} renk="#eb2f96" bos="Henüz takip kimliği eşleşmesi yok (yeni taramalarla dolar)" /></Card></Col>
       </Row>
+
+      {/* Mobil uygulama taraması (iOS App Store) */}
+      {app && (
+        <Card style={KART} styles={{ body: { padding: 18 } }}>
+          <Flex align="center" justify="space-between" style={{ marginBottom: 14 }}>
+            <Baslik ikon={<AppleOutlined />}>Mobil uygulama taraması — iOS + Android</Baslik>
+            <Flex gap={8}>
+              <Tag color={app.incele ? "error" : "default"} style={{ margin: 0 }}>{app.incele} incelenecek</Tag>
+              <Tag color="success" style={{ margin: 0 }}>{app.resmi} resmî</Tag>
+            </Flex>
+          </Flex>
+          {app.toplam === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<Text style={{ color: "#5b6b7d", fontSize: 12 }}>App Store’da bu markayı taşıyan uygulama bulunmadı.</Text>} />
+          ) : (
+            <Flex vertical gap={8}>
+              {app.sonuc.slice(0, 10).map((a) => (
+                <a key={a.paket} href={a.url} target="_blank" rel="noreferrer"
+                  className="app-satir" style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", border: "1px solid #17293c", borderRadius: 10, borderLeft: `3px solid ${a.resmiMi ? "#3ee08a" : "#f5222d"}`, textDecoration: "none" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {a.ikon ? <img src={a.ikon} alt="" style={{ width: 34, height: 34, borderRadius: 8 }} /> : <span style={{ width: 34, height: 34, borderRadius: 8, background: "#12283f" }} />}
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <Text style={{ color: "#e6eef7", fontSize: 13, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.ad}</Text>
+                    <Text style={{ color: "#8fb0d4", fontSize: 11 }}><span style={{ color: a.platform === "ios" ? "#c7d6e6" : "#3ee08a", fontWeight: 600 }}>{a.platform === "ios" ? "iOS" : "Android"}</span> · {a.gelistirici}</Text>
+                  </div>
+                  {a.puan ? <Text style={{ color: "#f2a33c", fontSize: 12, fontWeight: 600 }}>★ {a.puan.toFixed(1)}</Text> : null}
+                  {a.resmiMi
+                    ? <Tag icon={<CheckCircleOutlined />} color="success" style={{ margin: 0 }}>resmî</Tag>
+                    : <Tag icon={<WarningOutlined />} color="error" style={{ margin: 0 }}>incele</Tag>}
+                </a>
+              ))}
+            </Flex>
+          )}
+          <Text style={{ display: "block", marginTop: 10, fontSize: 11, color: "#5b6b7d" }}>{app.not} “İncele”, marka adını taşıyan ama resmî geliştiriciden olmayan uygulamadır — taklit olabilir, doğrulanmalı.</Text>
+        </Card>
+      )}
+
+      {/* Reklam izleme (Meta Ad Library) */}
+      {reklam && (
+        <Card style={KART} styles={{ body: { padding: 18 } }}>
+          <Flex align="center" justify="space-between" style={{ marginBottom: reklam.yapilandirildi ? 14 : 0 }}>
+            <Baslik ikon={<NotificationOutlined />}>Reklam izleme — Meta (Facebook / Instagram)</Baslik>
+            {reklam.yapilandirildi
+              ? <Tag color={reklam.supheli ? "error" : "success"} style={{ margin: 0 }}>{reklam.supheli} şüpheli reklam</Tag>
+              : <Tag style={{ margin: 0 }}>yapılandırılmadı</Tag>}
+          </Flex>
+          {!reklam.yapilandirildi ? (
+            <Text style={{ fontSize: 12, color: "#8fb0d4" }}>{reklam.not}</Text>
+          ) : reklam.reklamlar.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<Text style={{ color: "#5b6b7d", fontSize: 12 }}>{reklam.not}</Text>} />
+          ) : (
+            <Flex vertical gap={8}>
+              {reklam.reklamlar.slice(0, 10).map((r, i) => (
+                <a key={i} href={r.snapshot || "#"} target="_blank" rel="noreferrer"
+                  style={{ display: "block", padding: "9px 12px", border: "1px solid #17293c", borderRadius: 10, borderLeft: `3px solid ${r.supheli ? "#f5222d" : "#3ee08a"}`, textDecoration: "none" }}>
+                  <Flex align="center" justify="space-between" gap={8}>
+                    <Text style={{ color: "#e6eef7", fontSize: 13, fontWeight: 600 }}>{r.reklamveren || "—"}</Text>
+                    {r.supheli
+                      ? <Tag icon={<WarningOutlined />} color="error" style={{ margin: 0 }}>şüpheli</Tag>
+                      : <Tag icon={<CheckCircleOutlined />} color="success" style={{ margin: 0 }}>resmî</Tag>}
+                  </Flex>
+                  {r.baslik && <Text style={{ display: "block", color: "#c7d6e6", fontSize: 12, marginTop: 2 }}>{r.baslik}</Text>}
+                  <Flex align="center" gap={8} style={{ marginTop: 3 }}>
+                    {r.hedefAlan && <Text style={{ color: r.supheli ? "#ff9aa4" : "#8fb0d4", fontSize: 11, fontFamily: "monospace" }}>→ {r.hedefAlan}</Text>}
+                    {r.platformlar?.length ? <Text style={{ color: "#5b6b7d", fontSize: 10 }}>{r.platformlar.join(", ")}</Text> : null}
+                  </Flex>
+                </a>
+              ))}
+            </Flex>
+          )}
+        </Card>
+      )}
+
+      {/* Reklam izleme (Google Ads Transparency) */}
+      {greklam && (
+        <Card style={KART} styles={{ body: { padding: 18 } }}>
+          <Flex align="center" justify="space-between" style={{ marginBottom: greklam.yapilandirildi && greklam.reklamlar.length ? 14 : 0 }}>
+            <Baslik ikon={<GoogleOutlined />}>Reklam izleme — Google Ads</Baslik>
+            {greklam.yapilandirildi
+              ? <Tag color={greklam.supheli ? "error" : "success"} style={{ margin: 0 }}>{greklam.supheli} doğrulanmamış reklamveren</Tag>
+              : <Tag style={{ margin: 0 }}>yapılandırılmadı</Tag>}
+          </Flex>
+          {!greklam.yapilandirildi ? (
+            <Text style={{ fontSize: 12, color: "#8fb0d4" }}>{greklam.not}</Text>
+          ) : greklam.reklamlar.length === 0 ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<Text style={{ color: "#5b6b7d", fontSize: 12 }}>{greklam.not}</Text>} />
+          ) : (
+            <Flex vertical gap={8}>
+              {greklam.reklamlar.slice(0, 12).map((r, i) => (
+                <div key={i} style={{ padding: "9px 12px", border: "1px solid #17293c", borderRadius: 10, borderLeft: `3px solid ${r.supheli ? "#f5222d" : "#3ee08a"}` }}>
+                  <Flex align="center" justify="space-between" gap={8}>
+                    <Text style={{ color: "#e6eef7", fontSize: 13, fontWeight: 600 }}>{r.reklamveren || "—"}</Text>
+                    {r.supheli
+                      ? <Tag icon={<WarningOutlined />} color="error" style={{ margin: 0 }}>doğrulanmamış</Tag>
+                      : <Tag icon={<CheckCircleOutlined />} color="success" style={{ margin: 0 }}>doğrulanmış</Tag>}
+                  </Flex>
+                  <Flex align="center" gap={8} style={{ marginTop: 3 }}>
+                    {r.yasal ? <Text style={{ color: "#8fb0d4", fontSize: 11 }}>{r.yasal}</Text> : null}
+                    {r.konum ? <Text style={{ color: "#5b6b7d", fontSize: 11 }}>· {r.konum}</Text> : null}
+                    {r.url ? <a href={r.url} target="_blank" rel="noreferrer" style={{ color: "#4d9fe0", fontSize: 11, marginLeft: "auto" }}>reklamı gör →</a> : null}
+                  </Flex>
+                </div>
+              ))}
+            </Flex>
+          )}
+        </Card>
+      )}
 
       {/* Yükselmeler + USOM öndelik */}
       <Row gutter={[12, 12]}>

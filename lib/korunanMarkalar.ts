@@ -93,6 +93,7 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "ern", ad: "ERN Holding", resmi: ["ern.com.tr"] },
   { anahtar: "uyap", ad: "UYAP (Ulusal Yargı Ağı)", resmi: ["uyap.gov.tr", "vatandas.uyap.gov.tr", "adalet.gov.tr"] },
   { anahtar: "orphion", ad: "Orphion Pharma", resmi: ["orphionpharma.com"] },
+  { anahtar: "etimaden", ad: "Eti Maden", resmi: ["etimaden.gov.tr"] },
 ];
 
 // ── KAMU KURUMLARI — içerik/logo taklidi tespiti için (özellikle sahte turizm/teşvik/

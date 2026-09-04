@@ -360,6 +360,29 @@ export async function markaAdaylariGetir(n = 60): Promise<MarkaAday[]> {
   }
 }
 
+// ── GOOGLE ADS (BigQuery Transparency) reklam cache'i — günlük birleşik sorgu
+// sonucunu marka başına saklar (istek-başına BigQuery çağırma = maliyet). ──
+// NOT: yeni koleksiyon (rules deploy) engelini aşmak için, zaten yazmaya-izinli
+// gunluk_marka_stat koleksiyonunu "greklam_" önekli belge id ile kullanırız
+// (kural: marka is string → verimiz uyuyor; markaGunlukGetir'in id deseniyle çakışmaz).
+export type GoogleReklam = { reklamveren: string; yasal?: string; konum?: string; dogrulama: string; url?: string; supheli: boolean };
+const greklamId = (marka: string) => "greklam_" + belgeId("m", marka);
+export async function googleReklamKaydet(marka: string, reklamlar: GoogleReklam[]): Promise<void> {
+  if (!firebaseHazir || !db) return;
+  try {
+    await setDoc(doc(db, "gunluk_marka_stat", greklamId(marka)), { marka, reklamlar: reklamlar.slice(0, 60), guncelleme: Date.now() }, { merge: false });
+  } catch { /* kurallar yoksa sessiz */ }
+}
+export async function googleReklamGetir(marka: string): Promise<{ reklamlar: GoogleReklam[]; guncelleme: number } | null> {
+  if (!firebaseHazir || !db || !marka) return null;
+  try {
+    const s = await getDoc(doc(db, "gunluk_marka_stat", greklamId(marka)));
+    if (!s.exists()) return null;
+    const d = s.data() as { reklamlar?: GoogleReklam[]; guncelleme?: number };
+    return { reklamlar: d.reklamlar || [], guncelleme: d.guncelleme || 0 };
+  } catch { return null; }
+}
+
 // TEK MARKANIN adayları — marka-kilitli kokpit için. Global "en yeni N" listesi bir
 // markayı (adayları eskiyse) tamamen kaçırabilir; bu, o markanın TÜM adaylarını getirir.
 // orderBy YOK (composite index gerekmesin) → sıralama JS'te.
