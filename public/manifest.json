@@ -1,6 +1,6 @@
 {
-  "name": "SİTS — Nazar",
-  "short_name": "SİTS",
+  "name": "MirLeon — Nazar",
+  "short_name": "MirLeon",
   "description": "Şüpheli link, mesaj, IBAN ya da paylaşımı Nazar'a sor; riskleri tespit et, tuzaklardan korun.",
   "start_url": "/",
   "scope": "/",

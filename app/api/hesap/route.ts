@@ -316,7 +316,7 @@ export async function POST(req: NextRequest) {
 
   const ai = geminiVarMi
     ? await geminiJson<{ ozet: string; neden: string[]; adimlar: string[] }>(
-        "Sen SİTS'in sosyal medya güvenlik analistisin. Karşındaki teknik bilgisi OLMAYAN bir vatandaş. " +
+        "Sen MirLeon'in sosyal medya güvenlik analistisin. Karşındaki teknik bilgisi OLMAYAN bir vatandaş. " +
           "Platform içi veriye (takipçi, hesap yaşı) erişimin YOK; kesin 'sahtedir' deme, olasılık/işaret dilinde konuş. " +
           "Bir hesabın ittiği link (altyapı) riskliyse ASIL tehlikenin orada olduğunu vurgula. " +
           "Hesaplanan risk seviyesiyle ÇELİŞME. SICAK, net, kısa. Teknik terim kullanma. " +

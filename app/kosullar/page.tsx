@@ -27,7 +27,7 @@ export default function Kosullar() {
 
       <Bolum baslik="1. Hizmetin Niteliği">
         <p>
-          SİTS; siber olaylarda kullanıcılara yol gösteren, topluluk destekli bir
+          MirLeon; siber olaylarda kullanıcılara yol gösteren, topluluk destekli bir
           bilgilendirme ve sorgulama aracıdır. <b>Resmi bir kurum değildir</b>,
           hukuki tavsiye vermez ve bir sonucu garanti etmez.
         </p>

@@ -28,6 +28,18 @@ function tespitZaman(ms: number): string {
   if (s < 24) return `${s} saat önce`;
   return `${Math.floor(s / 24)} gün önce`;
 }
+// Kartta gösterilecek EN AYIRT EDİCİ gerekçe — hep sinyaller[0] (genelde jenerik SSL/urlscan) yerine
+// en spesifik sinyali seç ki liste tekdüze görünmesin.
+const GEREKCE_ONCELIK = [
+  /klon|kopyas|kaz[ıi]n|birebir/i, /logo|amblem/i, /y[öo]nlendir|forsale|godaddy/i,
+  /homograf|xn--|g[öo]z.?aldat/i, /[şs]ifre|kart|kimlik bilgisi|[İi]ST[İi]YOR/i,
+  /HTTPS.*kullanm[ıi]yor/i, /ge[çc]ersiz|kendinden imzal/i,
+];
+function enGerekce(sinyaller?: string[]): string {
+  if (!sinyaller?.length) return "";
+  for (const re of GEREKCE_ONCELIK) { const s = sinyaller.find((x) => re.test(x)); if (s) return s; }
+  return sinyaller[0];
+}
 type Rapor = {
   marka: string; markaAdi: string; tarih: string;
   eslesme: number; analiz: number;
@@ -56,10 +68,11 @@ export default function MarkaKoruma() {
   const [raporYuk, setRaporYuk] = useState(false);
   const [tarama, setTarama] = useState<Tarama | null>(null);
   const [taramaYuk, setTaramaYuk] = useState(false);
-  const [ozet, setOzet] = useState<{ markaAdi: string; toplam: number; aktif: number; park: number; yuksek: number; operasyon: number; sonlar?: TespitDetay[] } | null>(null);
+  const [ozet, setOzet] = useState<{ markaAdi: string; toplam: number; aktif: number; park: number; yuksek: number; operasyon: number; canli?: number; kumeTld?: string; kumeAdet?: number; ayri?: number; sonlar?: TespitDetay[] } | null>(null);
   const [erkenlik, setErkenlik] = useState<{ toplam: number; bizOnce: number; usomdaYok: number; usomOnce: number; ortGun: number } | null>(null);
   const [detayAcik, setDetayAcik] = useState(false);
   const [detayFiltre, setDetayFiltre] = useState<"hepsi" | "aktif-tuzak" | "park" | "yuksek">("hepsi");
+  const [phAcik, setPhAcik] = useState(false); // .ph benzer-isim kümesini aç/kapa
   // Self-servis marka kaydı (kendi markan + resmî domainler)
   const [kayitAcik, setKayitAcik] = useState(false);
   const [kAd, setKAd] = useState("");
@@ -290,16 +303,37 @@ export default function MarkaKoruma() {
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>verified_user</span>
             {ozet.markaAdi} için sizi koruyoruz
           </div>
-          <p className="mt-1 text-[12px] text-on-surface-variant">
-            Bugüne kadar markanız adına açılmış <b className="text-on-surface">{ozet.toplam}</b> sahte/şüpheli adres tespit ettik.
-          </p>
+          {ozet.kumeAdet && ozet.kumeAdet > 0 ? (
+            <p className="mt-1 text-[12px] text-on-surface-variant">
+              Markanız adına <b className="text-on-surface">{ozet.ayri}</b> ayrı şüpheli adres + <b className="text-on-surface">{ozet.kumeAdet} domainlik tek bir .{ozet.kumeTld} park kümesi</b> (aynı operasyon) tespit ettik.
+            </p>
+          ) : (
+            <p className="mt-1 text-[12px] text-on-surface-variant">
+              Bugüne kadar markanız adına açılmış <b className="text-on-surface">{ozet.toplam}</b> sahte/şüpheli adres tespit ettik.
+            </p>
+          )}
           <div className="mt-3 grid grid-cols-4 gap-2 text-center">
-            <div><div className="font-display text-xl font-bold text-on-surface tabular-nums">{ozet.toplam}</div><div className="text-[10px] text-on-surface-variant">toplam</div></div>
-            <div><div className="font-display text-xl font-bold text-error tabular-nums">{ozet.yuksek}</div><div className="text-[10px] text-on-surface-variant">yüksek risk</div></div>
-            <div><div className="font-display text-xl font-bold text-error tabular-nums">{ozet.aktif}</div><div className="text-[10px] text-on-surface-variant">aktif tuzak</div></div>
-            <div><div className="font-display text-xl font-bold text-primary tabular-nums">{ozet.park}</div><div className="text-[10px] text-on-surface-variant">park · izlemede</div></div>
+            {ozet.kumeAdet && ozet.kumeAdet > 0 ? (
+              <>
+                <div><div className="font-display text-xl font-bold text-on-surface tabular-nums">{ozet.ayri}</div><div className="text-[10px] text-on-surface-variant">ayrı adres</div></div>
+                <div><div className="font-display text-xl font-bold text-secondary tabular-nums">{ozet.canli ?? 0}</div><div className="text-[10px] text-on-surface-variant">canlı</div></div>
+                <div><div className="font-display text-xl font-bold text-error tabular-nums">{ozet.aktif}</div><div className="text-[10px] text-on-surface-variant">aktif tuzak</div></div>
+                <div><div className="font-display text-xl font-bold text-primary tabular-nums">{ozet.kumeAdet}</div><div className="text-[10px] text-on-surface-variant">.{ozet.kumeTld} park kümesi</div></div>
+              </>
+            ) : (
+              <>
+                <div><div className="font-display text-xl font-bold text-on-surface tabular-nums">{ozet.toplam}</div><div className="text-[10px] text-on-surface-variant">toplam</div></div>
+                <div><div className="font-display text-xl font-bold text-error tabular-nums">{ozet.yuksek}</div><div className="text-[10px] text-on-surface-variant">yüksek risk</div></div>
+                <div><div className="font-display text-xl font-bold text-error tabular-nums">{ozet.aktif}</div><div className="text-[10px] text-on-surface-variant">aktif tuzak</div></div>
+                <div><div className="font-display text-xl font-bold text-primary tabular-nums">{ozet.park}</div><div className="text-[10px] text-on-surface-variant">park · izlemede</div></div>
+              </>
+            )}
           </div>
-          {ozet.operasyon > 0 && <p className="mt-2 text-[11px] font-medium text-error">{ozet.operasyon} tanesi organize bir dolandırıcılık operasyonunun parçası.</p>}
+          {ozet.kumeAdet && ozet.kumeAdet > 0 ? (
+            <p className="mt-2 text-[11px] text-on-surface-variant">Not: .{ozet.kumeTld} kümesinin tamamı aynı altyapıda, park/yönlendirme hâlinde — tek operasyonun toplu kaydı. Sayı, tekil tehdit değil <b>tek küme</b> olarak değerlendirilir.</p>
+          ) : (
+            ozet.operasyon > 0 && <p className="mt-2 text-[11px] font-medium text-error">{ozet.operasyon} tanesi organize bir dolandırıcılık operasyonunun parçası.</p>
+          )}
 
           {/* DETAYLARI GÖR — her tespitin ne olduğu, durumu, sinyalleri */}
           {ozet.sonlar && ozet.sonlar.length > 0 && (
@@ -318,10 +352,14 @@ export default function MarkaKoruma() {
                     ))}
                   </div>
                   <div className="space-y-2">
-                    {ozet.sonlar
-                      .filter((t) => detayFiltre === "hepsi" || (detayFiltre === "yuksek" ? t.skor >= 60 : t.durum === detayFiltre))
-                      .map((t, i) => {
+                    {(() => {
+                      const liste = (ozet.sonlar ?? []).filter((t) => detayFiltre === "hepsi" || (detayFiltre === "yuksek" ? t.skor >= 60 : t.durum === detayFiltre));
+                      const ph = liste.filter((t) => t.domain.toLowerCase().endsWith(".ph"));
+                      const diger = liste.filter((t) => !t.domain.toLowerCase().endsWith(".ph"));
+                      const phEnYuksek = ph.reduce((m, t) => Math.max(m, t.skor), 0);
+                      const kart = (t: TespitDetay, i: number) => {
                         const dr = t.durum ? DURUM_ETIKET[t.durum] : null;
+                        const gk = enGerekce(t.sinyaller);
                         return (
                           <a key={t.domain + i} href={`/sorgula?q=${encodeURIComponent(t.domain)}`} className="press block rounded-2xl border border-outline-variant/30 bg-surface-lowest p-3">
                             <div className="flex items-center justify-between gap-2">
@@ -333,7 +371,7 @@ export default function MarkaKoruma() {
                               {t.kampanya && t.kampanya.domainSayisi > 1 && <span className="inline-flex items-center gap-0.5 rounded-full bg-error/10 px-1.5 py-0.5 font-bold text-error">{t.kampanya.domainSayisi} domainli operasyon</span>}
                               <span className="ml-auto text-on-surface-variant">{tespitZaman(t.zaman)}</span>
                             </div>
-                            {t.sinyaller?.length > 0 && <p className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-on-surface-variant">{t.sinyaller[0]}</p>}
+                            {gk && <p className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-on-surface-variant">{gk}</p>}
                             {t.kampanya && (t.kampanya.iletisimKanallari.length > 0 || t.kampanya.exfilVar) && (
                               <p className="mt-1 text-[10.5px] font-medium text-error">
                                 {t.kampanya.iletisimKanallari.length > 0 && `Dolandırıcı kanalı: ${t.kampanya.iletisimKanallari.join(", ")}`}
@@ -342,7 +380,30 @@ export default function MarkaKoruma() {
                             )}
                           </a>
                         );
-                      })}
+                      };
+                      return (
+                        <>
+                          {diger.map(kart)}
+                          {ph.length > 3 ? (
+                            <div className="rounded-2xl border border-outline-variant/30 bg-surface-lowest">
+                              <button onClick={() => setPhAcik((v) => !v)} className="press flex w-full items-center justify-between gap-2 p-3 text-left">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 text-[13px] font-semibold text-on-surface">
+                                    <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>hub</span>
+                                    {ph.length} adet <span className="font-mono">.ph</span> benzer-isim kümesi
+                                  </div>
+                                  <div className="mt-0.5 text-[11px] text-on-surface-variant">Aynı altyapı · park/izlemede · tek operasyon deseni (en yükseği %{phEnYuksek})</div>
+                                </div>
+                                <span className="material-symbols-outlined shrink-0 text-on-surface-variant" style={{ fontSize: 20 }}>{phAcik ? "expand_less" : "expand_more"}</span>
+                              </button>
+                              {phAcik && <div className="space-y-2 p-2 pt-0">{ph.map(kart)}</div>}
+                            </div>
+                          ) : (
+                            ph.map(kart)
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               )}

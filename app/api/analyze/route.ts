@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 function referansUret(): string {
   const yil = new Date().getFullYear();
   const rnd = Math.floor(10000 + Math.random() * 89999);
-  return `SITS-${yil}-${rnd}`;
+  return `MRL-${yil}-${rnd}`;
 }
 
 export async function POST(req: NextRequest) {

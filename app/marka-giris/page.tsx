@@ -94,9 +94,13 @@ function MgStyle() {
   return (
     <style>{`
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@500&display=swap');
-    .mg{position:fixed;inset:0;display:grid;place-items:center;padding:20px;font-family:'IBM Plex Sans',system-ui,sans-serif;
+    body{overflow-x:hidden}
+    .mg,.mg *,.mg *::before,.mg *::after{box-sizing:border-box}
+    .mg{min-height:100vh;min-height:100dvh;width:100%;max-width:100%;overflow-x:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      padding:24px 20px calc(104px + env(safe-area-inset-bottom, 0px));font-family:'IBM Plex Sans',system-ui,sans-serif;
       background:radial-gradient(900px 500px at 55% -10%,#0f2740 0,transparent 60%),linear-gradient(#070e16,#081019);color:#e9f2fa}
     .mg-card{width:100%;max-width:400px;background:linear-gradient(180deg,#0f2033,#0b1622);border:1px solid #234561;border-radius:18px;padding:28px;box-shadow:0 30px 80px -30px rgba(0,0,0,.8)}
+    @media (max-width:420px){.mg{padding:16px 14px calc(100px + env(safe-area-inset-bottom, 0px))}.mg-card{padding:22px 18px}}
     .mg-brand{display:flex;align-items:center;gap:11px;margin-bottom:14px}
     .mg-brand b{font-family:'IBM Plex Serif',serif;font-weight:500;font-size:17px;display:block;line-height:1}
     .mg-brand i{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#5c748b;letter-spacing:.12em;text-transform:uppercase;font-style:normal}

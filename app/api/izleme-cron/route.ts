@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   }
   // Günlük YENİDEN TARAMA: aktif adayların bir batch'ini yeniden analiz et → risk
   // yörüngesine nokta ekle (mail servisinden bağımsız çalışır). Ayrı cron limiti yemez.
-  const yorunge = await yenidenTaraBatch(6).catch(() => ({ taranan: 0, kaydedilen: 0, aktif: 0 }));
+  const yorunge = await yenidenTaraBatch(6).catch(() => ({ taranan: 0, kaydedilen: 0, aktif: 0, yukselen: 0 }));
 
   if (!mailVar()) return NextResponse.json({ ok: true, gonderilen: 0, yorunge, not: "mail servisi kapalı" });
 

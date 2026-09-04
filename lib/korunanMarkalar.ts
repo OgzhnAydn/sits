@@ -91,7 +91,8 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "araskargo", ad: "Aras Kargo", resmi: ["araskargo.com.tr"] },
   { anahtar: "yurticikargo", ad: "Yurtiçi Kargo", resmi: ["yurticikargo.com"] },
   { anahtar: "ern", ad: "ERN Holding", resmi: ["ern.com.tr"] },
-  { anahtar: "uyap", ad: "UYAP (Ulusal Yargı Ağı)", resmi: ["uyap.gov.tr", "vatandas.uyap.gov.tr"] },
+  { anahtar: "uyap", ad: "UYAP (Ulusal Yargı Ağı)", resmi: ["uyap.gov.tr", "vatandas.uyap.gov.tr", "adalet.gov.tr"] },
+  { anahtar: "orphion", ad: "Orphion Pharma", resmi: ["orphionpharma.com"] },
 ];
 
 // ── KAMU KURUMLARI — içerik/logo taklidi tespiti için (özellikle sahte turizm/teşvik/
@@ -118,7 +119,7 @@ export const KAMU_KURUMLARI: KamuKurumu[] = [
   { ad: "USOM / Siber Güvenlik Başkanlığı", kelimeler: ["usom", "siber güvenlik başkanlığı", "ulusal siber"], resmi: "usom.gov.tr" },
   { ad: "TÜBİTAK", kelimeler: ["tübitak", "tubitak"], resmi: "tubitak.gov.tr" },
   { ad: "Cumhurbaşkanlığı", kelimeler: ["cumhurbaşkanlığı", "cumhurbaskanligi", "t.c. cumhurbaşkanlığı"], resmi: "tccb.gov.tr" },
-  { ad: "UYAP / Adalet Bakanlığı", kelimeler: ["uyap", "ulusal yargı ağı", "e-uyap", "adalet bakanlığı", "adalet bakanligi"], resmi: "uyap.gov.tr" },
+  { ad: "UYAP / Adalet Bakanlığı", kelimeler: ["uyap", "ulusal yargı ağı", "ulusal yargi agi", "e-uyap", "adalet bakanlığı", "adalet bakanligi", "e-duruşma", "e-durusma"], resmi: "uyap.gov.tr" },
   { ad: "Savunma Sanayii Başkanlığı (SSB)", kelimeler: ["savunma sanayii başkanlığı", "savunma sanayi baskanligi", "ssb.gov.tr"], resmi: "ssb.gov.tr" },
   { ad: "Millî Savunma Bakanlığı", kelimeler: ["millî savunma bakanlığı", "milli savunma bakanligi", "msb.gov.tr", "genelkurmay"], resmi: "msb.gov.tr" },
 ];

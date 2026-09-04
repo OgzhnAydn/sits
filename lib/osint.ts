@@ -396,6 +396,35 @@ function sayfaBilgiCikar(html: string): SayfaBilgi {
 // (dış-adres = oltalama SANMA). recaptcha/analytics de dahil (üçüncü-taraf ama zararsız).
 const GUVENLI_HEDEF = /(google|gstatic|recaptcha|hcaptcha|facebook|fbcdn|apple|microsoft(online)?|live\.com|okta|auth0|stripe|paypal|adyen|braintree|iyzico|paytr|payu|cloudflare|cognito|firebaseapp|googleapis|doubleclick|analytics|sentry|hotjar|cloudfront)/i;
 
+// ── REKLAM / PARA-KAZANMA TESPİTİ ──────────────────────────────────────────
+// "Bu sayfanın amacı ne? İçinde reklam var mı?" sorusunun cevabı. İki sınıf:
+//  YAYGIN — AdSense/media.net/Taboola gibi ağlar; MEŞRU haber/blog sitelerinde de
+//    olur, tek başına suç DEĞİL (yanlış-pozitif tuzağı burada).
+//  AGRESİF — popads/adsterra/propellerads gibi pop-up/zorla-yönlendirme ağları;
+//    meşru bir markada NEREDEYSE hiç görülmez, tipik typosquat/warez para-kazanması.
+const REKLAM_YAYGIN = /(pagead2\.googlesyndication|adsbygoogle|data-ad-client|ca-pub-|securepubads|googletag(services|\.cmd)|contextual\.media\.net|\bmedia\.net\b|taboola|outbrain|amazon-adsystem|adnxs\.com|criteo|pubmatic|\bmgid\b|revcontent|yieldmo|sharethrough)/i;
+const REKLAM_AGRESIF = /(popads|popcash|propellerads|propeller-tracking|adsterra|hilltopads|\badcash\b|clickadu|ad-maven|admaven|onclickads|exoclick|juicyads|adnium|clicksor|popmyads)/i;
+function reklamAglari(ham: string): { yaygin: boolean; agresif: boolean } {
+  return { yaygin: REKLAM_YAYGIN.test(ham), agresif: REKLAM_AGRESIF.test(ham) };
+}
+
+// ── TAKİP KİMLİĞİ PİVOTU ────────────────────────────────────────────────────
+// Sayfaya gömülü analytics/reklam hesap kimlikleri (Google Analytics, GTM, AdSense
+// yayıncı, Yandex Metrica, Facebook Pixel). Değeri: aynı kimliği taşıyan iki farklı
+// domain NEREDEYSE KESİN aynı kişiye/operasyona aittir — altyapı (IP/NS) değişse bile
+// saldırgan aynı ölçümleme hesabını yeniden kullanır. En güçlü tekil atıf sinyali.
+function takipKimlikleri(ham: string): string[] {
+  const set = new Set<string>();
+  const ekle = (re: RegExp, on: string) => { for (const m of ham.matchAll(re)) set.add(on + m[1]); };
+  ekle(/\b(UA-\d{4,10}-\d{1,4})\b/g, "");                       // Universal Analytics
+  ekle(/\b(G-[A-Z0-9]{6,12})\b/g, "");                          // GA4
+  ekle(/\b(GTM-[A-Z0-9]{5,9})\b/g, "");                         // Google Tag Manager
+  ekle(/\b(?:ca-)?pub-(\d{15,17})\b/g, "AdSense pub-");         // AdSense yayıncı
+  ekle(/ym\(\s*(\d{5,10})\s*,/g, "Yandex ");                    // Yandex Metrica
+  ekle(/fbq\(\s*['"]init['"]\s*,\s*['"](\d{10,17})['"]/g, "FB Pixel "); // Facebook Pixel
+  return [...set].slice(0, 6);
+}
+
 function iceriktenBulgu(ham: string, r: OsintRapor) {
   const t = ham.toLowerCase();
   // Diğer sinyaller şüpheli mi? (yeni domain, taklit, IDN, geçersiz SSL, riskli TLD…)
@@ -493,6 +522,32 @@ function iceriktenBulgu(ham: string, r: OsintRapor) {
       r.alanlar.push({ ad: "Veri gönderimi", deger: `Dış adrese: ${liste}` });
     } else {
       r.alanlar.push({ ad: "Dış veri hedefi", deger: liste });
+    }
+  }
+
+  // ── TAKİP KİMLİĞİ (pivot): sayfaya gömülü analytics/reklam hesap kimliği ──
+  // Risk EKLEMEZ (meşru sitede de olur); yalnız atıf/kümeleme için kaydeder. Aynı
+  // kimliği taşıyan başka bir taklit domain = aynı operatör (altyapiDna kullanır).
+  const takip = takipKimlikleri(ham);
+  if (takip.length) r.alanlar.push({ ad: "Takip kimliği", deger: takip.join(", ") });
+
+  // ── REKLAM / PARA-KAZANMA (adım 9): sayfanın amacı reklam geliri mi? ──
+  // Değer: markayı taşıyan bir sayfa aktif kimlik-avı DEĞİL ama reklam geliri için
+  // markayı sömürüyorsa bunu AYRI bir kategori olarak (marka-istismarı: reklam) doğru
+  // etiketleriz. Böylece (1) "içinde reklam var mı, amacı ne" sorusu cevaplanır,
+  // (2) kimlik-avı riski şişmez, (3) meşru haber/blog sitesi SUÇLANMAZ (yalnız betimleyici).
+  const reklam = reklamAglari(ham);
+  if (reklam.yaygin || reklam.agresif) {
+    const tur = reklam.agresif ? "agresif reklam ağı (pop-up / zorla yönlendirme)" : "reklam ağı (AdSense / benzeri)";
+    r.alanlar.push({ ad: "Para kazanma", deger: `Sayfada ${tur} — reklam geliri amaçlı` });
+    // Meşru sitede reklam NORMALDİR → yalnız BAŞKA şüphe varken kategoriye yaz.
+    // Agresif ağlar meşru markada görülmez; şüphe olmasa bile tek başına işarettir.
+    if (reklam.agresif || supheli) {
+      r.risk += reklam.agresif ? 16 : 8;
+      r.bulgular.push(reklam.agresif
+        ? "Marka adını taşıyan sayfa agresif reklam ağıyla para kazanıyor — kimlik-avı değil ama markayı izinsiz reklam gelirine sömüren bir istismar."
+        : "Sayfa markayı taşıyıp reklam geliri elde ediyor olabilir — aktif tuzak değil, marka-istismarı (reklam) kategorisinde değerlendirilmeli.");
+      if (!r.alanlar.some((x) => x.ad === "Site durumu")) r.alanlar.push({ ad: "Site durumu", deger: "Marka-istismarı: reklam / para kazanma" });
     }
   }
 }
@@ -628,6 +683,14 @@ export function altyapiDna(r: OsintRapor): { imza: string; parcalar: { k: string
   const mx = ad("E-posta (MX)"); const mxh = mx.match(/·\s*([a-z0-9.-]+\.[a-z]{2,})/i); if (mxh) parcalar.push({ k: "MX", v: kok(mxh[1]) });
   if (parcalar.length < 2) return null;
   return { imza: parcalar.map((p) => p.k + ":" + p.v).join("|").toLowerCase(), parcalar };
+}
+
+// Rapordaki birincil takip kimliği (GA/GTM/AdSense/Pixel) — operatör pivotu için.
+// altyapiDna'dan AYRI: altyapı değişse de bu tek başına aynı operatörü işaret eder.
+export function takipIdBirincil(r: OsintRapor): string | undefined {
+  const v = r.alanlar.find((a) => a.ad === "Takip kimliği")?.deger || "";
+  const ilk = v.split(",")[0].trim().toLowerCase();
+  return ilk ? ilk.slice(0, 40) : undefined;
 }
 
 // ── SALDIRI OLGUNLAŞMA AŞAMASI ──────────────────────────────────────────────

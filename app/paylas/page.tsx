@@ -189,7 +189,7 @@ export default function Paylas() {
 
       {hazir && !k && !yukleniyor && !icerik && (
         <p className="mt-4 text-xs text-on-surface-variant">
-          İpucu: Bir link, mesaj ya da <b>sosyal medya hesabında</b> <b>Paylaş → SİTS</b> dediğinde içerik buraya düşer. Hesap paylaşırsan doğrudan <b>gerçek mi / sahte mi + OSINT</b> analizine gider.
+          İpucu: Bir link, mesaj ya da <b>sosyal medya hesabında</b> <b>Paylaş → MirLeon</b> dediğinde içerik buraya düşer. Hesap paylaşırsan doğrudan <b>gerçek mi / sahte mi + OSINT</b> analizine gider.
         </p>
       )}
     </div>

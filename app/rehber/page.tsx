@@ -15,7 +15,7 @@ export default function Rehber() {
       <div className="flex items-center gap-3">
         <div className="h-16 w-16 shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/casper-wave.webp" alt="SİTS maskotu" className="h-full w-full object-contain" />
+          <img src="/casper-wave.webp" alt="MirLeon maskotu" className="h-full w-full object-contain" />
         </div>
         <div>
           <h1 className="font-display text-2xl font-semibold text-on-surface">Rehber</h1>

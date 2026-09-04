@@ -8,7 +8,7 @@ export const maxDuration = 30;
 function refUret(): string {
   const yil = new Date().getFullYear();
   const rnd = Math.floor(100000 + Math.random() * 899999);
-  return `SITS-${yil}-${rnd}`;
+  return `MRL-${yil}-${rnd}`;
 }
 
 export async function POST(req: NextRequest) {

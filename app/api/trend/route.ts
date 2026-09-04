@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     model: AI_HIZLI,
     maxTokens: 500,
     system:
-      "Sen SİTS'in dolandırıcılık istihbarat analistisin. Verilen topluluk bildirim istatistiklerinden kısa bir 'haftalık nabız' çıkar. " +
+      "Sen MirLeon'in dolandırıcılık istihbarat analistisin. Verilen topluluk bildirim istatistiklerinden kısa bir 'haftalık nabız' çıkar. " +
       'SADECE JSON: {"ozet":"1-2 cümle genel durum","maddeler":["dikkat çeken 2-4 kısa gözlem"]}. Türkçe, abartma, kişi/marka itham etme.',
     icerik: `Toplam gösterge: ${veri.length}. Doğrulanmış: ${dogrulanan.length}. Site: ${sayilar.site}, IBAN: ${sayilar.iban}, Telefon: ${sayilar.telefon}. Kategoriler: ${katMetin || "yok"}.`,
   });

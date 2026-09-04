@@ -11,8 +11,15 @@ const ITEMS = [
   { href: "/servisler", label: "Servisler", icon: "grid_view" },
 ];
 
+// Tam-ekran immersive rotalar (kendi kabuğu var) — global nav/başlık gizlenir.
+const IMMERSIVE = ["/canli", "/mercek", "/panel"];
+export function immersiveMi(path: string | null): boolean {
+  return !!path && IMMERSIVE.some((r) => path === r || path.startsWith(r + "/"));
+}
+
 export default function BottomNav() {
   const path = usePathname();
+  if (immersiveMi(path)) return null;
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-[440px] px-4 pb-4">
       <div className="relative flex items-end justify-between rounded-[28px] bg-surface-lowest/90 px-6 py-3 shadow-float backdrop-blur-xl">

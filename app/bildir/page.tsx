@@ -155,7 +155,7 @@ export default function Bildir() {
         <div className="mb-4 flex items-start gap-3">
           <div className="animate-float h-20 w-20 shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/casper-wave.webp" alt="SİTS maskotu" className="h-full w-full object-contain" />
+            <img src="/casper-wave.webp" alt="MirLeon maskotu" className="h-full w-full object-contain" />
           </div>
           <div className="relative flex-1 rounded-2xl rounded-tl-sm bg-primary-container/15 p-3">
             <span className="absolute -left-1.5 top-3 h-3 w-3 rotate-45 bg-primary-container/15" />

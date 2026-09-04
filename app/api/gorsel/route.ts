@@ -21,7 +21,7 @@ type GorselYorum = {
 async function gorselYorumla(b64: string, mime: string): Promise<GorselYorum | null> {
   if (!geminiVarMi) return null;
   const system =
-    "Sen SİTS'in kıdemli siber güvenlik analistisin. Sana bir ekran görüntüsü ya da görsel verilir " +
+    "Sen MirLeon'in kıdemli siber güvenlik analistisin. Sana bir ekran görüntüsü ya da görsel verilir " +
     "(SMS, WhatsApp/DM, sosyal medya paylaşımı, e-posta, site vb.). Teknik bilgisi olmayan bir vatandaş için değerlendir. " +
     "Görseldeki METNİ oku; dolandırıcılık, oltalama, tehdit, taciz, sahte hesap açısından incele; kullanılan manipülasyon taktiğini (aciliyet, otorite taklidi, korkutma, ödül) tespit et. Logo/arayüz taklidi varsa belirt. " +
     'SADECE şu JSON: {"tur":"kısa etiket (ör. Kargo dolandırıcılığı/Banka oltalaması/Tehdit/Temiz)","risk":0-100 sayı,"ozet":"1-2 cümle sıcak, net sonuç","taktik":["kullanılan taktikler"],"gostergeler":{"iban":[],"telefon":[],"url":[]},"adimlar":["somut adım"]}. ' +

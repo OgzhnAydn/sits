@@ -111,11 +111,11 @@ export default function SahteHesap() {
   async function paylasSonuc() {
     if (!s) return;
     const durum = s.yetersiz ? "değerlendirmek için yeterli veri yok" : `%${s.risk} ${s.seviye.toLowerCase()} risk`;
-    const metin = `SİTS ile @${s.kullanici} hesabını kontrol ettim: ${durum}. Sen de şüpheli hesap / link / IBAN'ı kontrol et `;
+    const metin = `MirLeon ile @${s.kullanici} hesabını kontrol ettim: ${durum}. Sen de şüpheli hesap / link / IBAN'ı kontrol et `;
     const url = "https://siber-bildir-web.vercel.app";
     try {
       if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: "SİTS — Nazar", text: metin, url });
+        await navigator.share({ title: "MirLeon — Nazar", text: metin, url });
       } else {
         await navigator.clipboard.writeText(`${metin} ${url}`);
         setKopyalandi(true);

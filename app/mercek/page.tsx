@@ -12,9 +12,10 @@ import {
 import {
   EyeOutlined, SafetyCertificateOutlined, SearchOutlined, ClusterOutlined, ThunderboltOutlined,
   ExportOutlined, FileSearchOutlined, LogoutOutlined, BellOutlined, GlobalOutlined,
-  WarningOutlined, ClockCircleOutlined,
+  WarningOutlined, ClockCircleOutlined, BarChartOutlined,
 } from "@ant-design/icons";
 import { markaDinle, cikis } from "@/lib/markaAuth";
+import AnalitikPanel from "./AnalitikPanel";
 
 const { Text, Title } = Typography;
 
@@ -108,6 +109,7 @@ function Kokpit() {
   const [filtre, setFiltre] = useState<Filtre>("hepsi");
   const [markaFiltre, setMarkaFiltre] = useState("");
   const [hesapAdi, setHesapAdi] = useState("");
+  const [gorunum, setGorunum] = useState<"evren" | "panel">("evren"); // kokpit içi görünüm
   const [oturum, setOturum] = useState<boolean | null>(null);
   const [resmiMap, setResmiMap] = useState<Record<string, string>>({});
   const gorulen = useRef<Set<number>>(new Set());
@@ -152,15 +154,18 @@ function Kokpit() {
     let durdu = false;
     async function cek() {
       try {
-        const j = await (await fetch("/api/marka-adaylari", { cache: "no-store" })).json();
+        // Marka-kilitli hesapta O MARKANIN adaylarını çek (global "en yeni" listesi
+        // markayı kaçırabilir). Serbest/analist hesapta global liste.
+        const url = markaFiltre ? `/api/marka-adaylari?marka=${encodeURIComponent(markaFiltre)}` : "/api/marka-adaylari";
+        const j = await (await fetch(url, { cache: "no-store" })).json();
         if (durdu) return;
-        const a: Aday[] = (j.adaylar || []).slice(0, 80);
+        const a: Aday[] = (j.adaylar || []).slice(0, 300);
         setAdaylar(a); a.slice(0, 10).forEach((x) => yeniSet.current.add(x.domain));
       } catch { /* sessiz */ }
     }
     cek(); const t = setInterval(cek, 30000);
     return () => { durdu = true; clearInterval(t); };
-  }, []);
+  }, [markaFiltre]);
 
   const analizEt = useCallback(async (a: Aday) => {
     setSecili(a); setRapor(null); setYukleniyor(true);
@@ -208,15 +213,18 @@ function Kokpit() {
     <div style={{ position: "fixed", inset: 0, background: "#080f1a", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "'IBM Plex Sans',sans-serif" }}>
       {/* ÜST ÇUBUK */}
       <Flex align="center" gap={16} style={{ padding: "10px 18px", borderBottom: "1px solid #17293c", background: "#0a1420" }}>
-        <Flex align="center" gap={9}>
-          <Avatar size={28} style={{ background: "linear-gradient(135deg,#f2a33c,#e5772f)", color: "#0a1420" }} icon={<GlobalOutlined />} />
-          <Text strong style={{ fontSize: 15, letterSpacing: ".06em" }}>SİBER MERCEK</Text>
+        <Flex align="center" gap={10}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/mirleon-white.svg" alt="MirLeon" style={{ height: 20, width: "auto" }} />
+          <span style={{ width: 1, height: 18, background: "#1f3652" }} />
+          <Text style={{ fontSize: 12, letterSpacing: ".08em", color: "#5f7c9c", textTransform: "uppercase" }}>Siber Mercek</Text>
         </Flex>
         <Badge status="processing" color="#31c8b0" text={<Text style={{ color: "#31c8b0", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11 }}>LIVE</Text>} />
         <Text style={{ color: "#8fa6bd", fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 }}>{toplamCT ? `${(toplamCT / 1e9).toFixed(2)}B sertifika` : "—"}</Text>
         <div style={{ flex: 1 }} />
         <Clock />
         <Badge count={sayim.yuksek} size="small" color="#f5222d"><BellOutlined style={{ color: "#8fa6bd", fontSize: 17 }} /></Badge>
+        <Button size="small" icon={gorunum === "panel" ? <GlobalOutlined /> : <BarChartOutlined />} onClick={() => setGorunum(gorunum === "panel" ? "evren" : "panel")} style={{ color: gorunum === "panel" ? "#4d9fe0" : "#8fa6bd" }}>{gorunum === "panel" ? "Tehdit Evreni" : "Analitik Panel"}</Button>
         <Button size="small" icon={<LogoutOutlined />} onClick={() => { cikis(); router.replace("/marka-giris"); }} style={{ color: "#8fa6bd" }}>
           <Avatar size={20} style={{ background: "#1f4b78", fontSize: 10 }}>{(hesapAdi || "A").charAt(0)}</Avatar> {hesapAdi}
         </Button>
@@ -242,6 +250,11 @@ function Kokpit() {
                   <StatSatir ikon={<ClusterOutlined style={{ color: "#8b7de0" }} />} t="Altyapı Bağlantılı" n={sayim.altyapi} />
                   <StatSatir ikon={<ThunderboltOutlined style={{ color: "#31c8b0" }} />} t="Yeni Gözlem" n={sayim.yeni} son />
                 </div>
+                <Button block type={gorunum === "panel" ? "primary" : "default"} icon={gorunum === "panel" ? <GlobalOutlined /> : <BarChartOutlined />}
+                  onClick={() => setGorunum(gorunum === "panel" ? "evren" : "panel")}
+                  style={{ marginTop: 12, height: 40, ...(gorunum === "panel" ? {} : { background: "linear-gradient(135deg,#12283f,#0e2036)", borderColor: "#1f4b78", color: "#cfe3f5" }), fontWeight: 600 }}>
+                  {gorunum === "panel" ? "← Tehdit Evrenine dön" : "Analitik Panel — tempo, ortak nokta, ülke"}
+                </Button>
               </Card>
 
               <Card size="small" title={baslik(2, "HIZLI FİLTRELER")}>
@@ -259,6 +272,9 @@ function Kokpit() {
             </Flex>
           </Col>
 
+          {gorunum === "panel" ? (
+            <Col xs={24} lg={19}><AnalitikPanel marka={markaFiltre} /></Col>
+          ) : (<>
           {/* MERKEZ: 3 grafik */}
           <Col xs={24} lg={13}>
             <Card
@@ -313,6 +329,7 @@ function Kokpit() {
               </Row>
             </Card>
           </Col>
+          </>)}
         </Row>
       </div>
     </div>

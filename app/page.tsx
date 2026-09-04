@@ -76,7 +76,7 @@ export default function Home() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/casper-hero.webp"
-          alt="Nazar — SİTS'in siber koruyucusu"
+          alt="Nazar — MirLeon'in siber koruyucusu"
           className="animate-float-soft pointer-events-none absolute -right-4 top-0 z-0 w-[54%] drop-shadow-[0_26px_36px_oklch(0.35_0.14_265_/_0.35)]"
         />
         <div className="relative z-10 mt-3 ml-auto w-fit rounded-2xl rounded-br-md bg-surface-lowest px-4 py-2.5 text-sm font-medium shadow-[var(--shadow-card)]">

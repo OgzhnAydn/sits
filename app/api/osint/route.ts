@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { geminiVarMi, geminiJson } from "@/lib/gemini";
 import { normalize } from "@/lib/demoVeri";
-import { domainOsint, telefonOsint, ibanOsint, typosquatDurustlukCap, kategoriKarti, kSeviye, domainDurumu, saldiriAsamasi, SALDIRI_ASAMALARI, altyapiDna, type OsintRapor } from "@/lib/osint";
+import { domainOsint, telefonOsint, ibanOsint, typosquatDurustlukCap, kategoriKarti, kSeviye, domainDurumu, saldiriAsamasi, SALDIRI_ASAMALARI, altyapiDna, takipIdBirincil, type OsintRapor } from "@/lib/osint";
 import { kriptoOsint } from "@/lib/kripto";
 import { itibarliMi } from "@/lib/itibarli";
-import { gostergeSorgula, baglantilariGetir, analizKaydet, delilCikar, riskGecmisiEkle, riskGecmisiGetir, dnaEslesenler } from "@/lib/store";
+import { gostergeSorgula, baglantilariGetir, analizKaydet, delilCikar, riskGecmisiEkle, riskGecmisiGetir, dnaEslesenler, takipEslesenler } from "@/lib/store";
 import { cacheOku, cacheYaz } from "@/lib/osintCache";
 import { seedKontrol } from "@/lib/seed";
 import { ESIK, GOSTER_ESIK } from "@/lib/esik";
@@ -53,7 +53,7 @@ async function aiAnlati(rapor: OsintRapor, riskSeviye: string): Promise<Anlati> 
     : "";
 
   const system =
-    `Sen SİTS'in kıdemli siber güvenlik analistisin. Karşındaki teknik bilgisi OLMAYAN bir vatandaş. ` +
+    `Sen MirLeon'in kıdemli siber güvenlik analistisin. Karşındaki teknik bilgisi OLMAYAN bir vatandaş. ` +
     `Görevin İKİ yönlü: (1) bu adres/sayfa NE — hangi tür site, ne hakkında; (2) güvenlik değerlendirmesi. ` +
     `SICAK, SEMPATİK, güven veren ve arkadaşça bir dille konuş — sanki kullanıcının yanında duran, onu sakinleştiren bir dost gibi ("merak etme", "birlikte bakalım", "yanındayım", "rahat ol" tonunda). Yine de NET ol; korkutma, abartma, garanti verme. Teknik terim (RDAP, TLD, DNS) kullanma. ` +
     `SAYFA İÇERİĞİ verildiyse "yorum" alanında ÖNCE sitenin ne olduğunu ve ne hakkında olduğunu 1-2 cümleyle anlat, SONRA güvenliğini değerlendir. ` +
@@ -115,7 +115,7 @@ async function dedektifHukmu(
   const s = rapor.sayfa;
   const icerik = s ? ` | Sayfa: ${s.baslik || ""} ${(s.ozetMetin || "").slice(0, 300)}` : "";
   const system =
-    `Sen SİTS'in kıdemli dolandırıcılık istihbarat analistisin — bir insan dedektif gibi düşün. ` +
+    `Sen MirLeon'in kıdemli dolandırıcılık istihbarat analistisin — bir insan dedektif gibi düşün. ` +
     `Sana bir adres hakkında toplanan HAM SİNYALLER veriliyor; sen bunlardan MANTIK YÜRÜTEREK bir hüküm çıkaracaksın. UYDURMA — yalnız verilen sinyallere dayan. ` +
     `Hesaplanan risk (${riskSeviye}) ile çelişme. SADECE şu JSON'u döndür: ` +
     `{"tur":"dolandırıcılık türü (ör. Kamu kurumu taklidi kimlik-avı | Sahte yatırım/kripto | Marka taklidi phishing | Yasadışı bahis | Sahte e-ticaret | Zararlı yazılım | Belirsiz/temiz)",` +
@@ -265,19 +265,30 @@ export async function POST(req: NextRequest) {
   let asama = 0;
   let gecmis: { t: number; risk: number; asama: number }[] = [];
   let dna: { imza: string; parcalar: { k: string; v: string }[]; eslesenler: string[] } | undefined;
+  let takip: { id: string; eslesenler: string[] } | undefined;
   if (tip === "url") {
     asama = saldiriAsamasi(rapor);
     const d = altyapiDna(rapor);
-    await riskGecmisiEkle(deger, rapor.risk, asama, d?.imza).catch(() => {});
+    const takipId = takipIdBirincil(rapor);
+    await riskGecmisiEkle(deger, rapor.risk, asama, d?.imza, takipId).catch(() => {});
     gecmis = await riskGecmisiGetir(deger).catch(() => []);
+    // Takip kimliği pivotu: aynı analytics/reklam hesabını taşıyan diğer domainler.
+    // Altyapı (IP/NS) farklı olsa BİLE aynı operatör → grafiğe ekle.
+    const takipEs = takipId ? await takipEslesenler(takipId, deger).catch(() => []) : [];
+    if (takipId && takipEs.length) takip = { id: takipId, eslesenler: takipEs };
     if (d) {
-      const eslesenler = await dnaEslesenler(d.imza, deger).catch(() => []);
+      const infraEs = await dnaEslesenler(d.imza, deger).catch(() => []);
+      // Birleşik ilişki kümesi: altyapı VEYA takip kimliği eşleşen tüm domainler.
+      const eslesenler = [...new Set([...infraEs, ...takipEs])];
       dna = { ...d, eslesenler };
+    } else if (takipEs.length) {
+      // Altyapı DNA çıkmasa bile takip pivotu tek başına ilişki kümesi üretir.
+      dna = { imza: "", parcalar: [], eslesenler: takipEs };
     }
   }
 
   return NextResponse.json({ ...rapor, riskSeviye, analiz, baglantilar, kategoriler, durum, dedektif,
-    asama, asamalar: tip === "url" ? SALDIRI_ASAMALARI : undefined, gecmis, dna });
+    asama, asamalar: tip === "url" ? SALDIRI_ASAMALARI : undefined, gecmis, dna, takip });
   } catch (e: unknown) {
     // Güvenlik ağı: tek bir enricher (site fetch, whois, VT…) beklenmedik hata verse bile
     // tüm analiz 500 ile çökmesin — temiz mesaj dön, ayrıntıyı sunucu loguna yaz.

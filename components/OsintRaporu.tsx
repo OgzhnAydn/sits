@@ -238,7 +238,7 @@ export default function OsintRaporu({ giris, onDurum }: { giris: string; onDurum
       const ad = (rapor.deger || "rapor").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `SITS-OSINT-${ad}.pdf`;
+      a.download = `MirLeon-OSINT-${ad}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();

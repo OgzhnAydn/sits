@@ -128,10 +128,10 @@ export default function Sorgula() {
         ? `Şüpheli işaretler var, dikkatli ol:\n${k.birincil}`
         : `Şunu kontrol ettim: ${k.birincil}`;
     const link = `https://siber-bildir-web.vercel.app/sorgula?q=${encodeURIComponent(k.birincil)}`;
-    const metin = `${baslik}\n\n${acik}\n\nSen de SİTS ile saniyede kontrol et \n${link}`;
+    const metin = `${baslik}\n\n${acik}\n\nSen de MirLeon ile saniyede kontrol et \n${link}`;
     try {
       if (navigator.share) {
-        await navigator.share({ title: "SİTS — Nazar uyarısı", text: metin });
+        await navigator.share({ title: "MirLeon — Nazar uyarısı", text: metin });
       } else {
         await navigator.clipboard.writeText(metin);
         setPaylasildi(true);

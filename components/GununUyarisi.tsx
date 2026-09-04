@@ -50,7 +50,7 @@ export default function GununUyarisi() {
       <div className="flex items-start gap-3">
         <div className="animate-float h-20 w-20 shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/casper-wave.webp" alt="SİTS maskotu" className="h-full w-full object-contain" />
+          <img src="/casper-wave.webp" alt="MirLeon maskotu" className="h-full w-full object-contain" />
         </div>
 
         <div className="relative flex-1 rounded-2xl rounded-tl-sm bg-primary-container/15 p-3">

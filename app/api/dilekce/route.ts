@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (ai && ai.length > 120) {
-    const metin = `${ai}\n\n------------------------------------------------------------\nBu dilekçe SİTS ile hazırlanmıştır (Referans: ${g.referansNo}). İhbarınızı https://ihbarweb.org.tr üzerinden de yapabilirsiniz. Acil durumlarda 155.`;
+    const metin = `${ai}\n\n------------------------------------------------------------\nBu dilekçe MirLeon ile hazırlanmıştır (Referans: ${g.referansNo}). İhbarınızı https://ihbarweb.org.tr üzerinden de yapabilirsiniz. Acil durumlarda 155.`;
     return NextResponse.json({ kurum: sablon.kurum, metin, ai: true });
   }
   return NextResponse.json({ ...sablon, ai: false });

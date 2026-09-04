@@ -29,7 +29,7 @@ export default function Gizlilik() {
 
       <Bolum baslik="1. Veri Sorumlusu">
         <p>
-          SİTS (&quot;Uygulama&quot;), [Şirket/Kişi Adı] tarafından işletilir.
+          MirLeon (&quot;Uygulama&quot;), [Şirket/Kişi Adı] tarafından işletilir.
           İletişim: [e-posta] · [adres].
         </p>
       </Bolum>
@@ -88,7 +88,7 @@ export default function Gizlilik() {
 
       <Bolum baslik="8. Resmi Kurum Değiliz">
         <p>
-          SİTS resmi bir devlet uygulaması değildir. Suç ihbarı için resmi kanallar
+          MirLeon resmi bir devlet uygulaması değildir. Suç ihbarı için resmi kanallar
           (155, ihbarweb.org.tr, Cumhuriyet Savcılığı) kullanılmalıdır.
         </p>
       </Bolum>
