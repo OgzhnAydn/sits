@@ -12,6 +12,7 @@ const BIREYSEL: Servis[] = [
 ];
 
 const KURUMSAL: Servis[] = [
+  { href: "/kontrol", ikon: "admin_panel_settings", baslik: "Kontrol Odası", alt: "Sistem-geneli operatör paneli: tüm markalar, sistem sağlığı, kanal durumu (iOS/Android/Google/Meta) ve son tespitler — tek ekranda.", rozet: "admin" },
   { href: "/mercek", ikon: "satellite_alt", baslik: "Siber Mercek — Operasyon Merkezi", alt: "Canlı tehdit evreni + yakalanan sahteleri tek ekranda incele: risk, neden şüphelendik, saldırı aşaması, altyapı DNA'sı ve kardeş kampanyalar.", rozet: "operatör" },
   { href: "/marka-koruma", ikon: "verified_user", baslik: "Marka Koruma", alt: "Markanı taklit eden sahte siteleri tara + her gün rapor al.", rozet: "kurumsal" },
   { href: "/kampanya", ikon: "hub", baslik: "Kampanya Çözümleme", alt: "Bir sahte siteden tüm operasyonu çıkar: kardeş domainler, IP/ASN, ne topluyor.", rozet: "yeni" },
