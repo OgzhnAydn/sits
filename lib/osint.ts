@@ -11,6 +11,7 @@ export type OsintRapor = {
   bulgular: string[]; // risk artıran gözlemler
   risk: number; // 0-100 (crowd/seed sinyalleri API'de eklenir)
   ekranGoruntusu?: string; // urlscan.io ekran görüntüsü URL'i
+  ekranNotu?: string; // ekran görüntüsü yanıltıcıysa (varsayılan/boş sayfa) dürüst not
   sayfa?: SayfaBilgi; // paylaşılan sayfanın içerik özeti (başlık/tür/açıklama)
 };
 
@@ -408,6 +409,15 @@ function reklamAglari(ham: string): { yaygin: boolean; agresif: boolean } {
   return { yaygin: REKLAM_YAYGIN.test(ham), agresif: REKLAM_AGRESIF.test(ham) };
 }
 
+// ── VARSAYILAN / BOŞ KURULUM SAYFASI TESPİTİ ─────────────────────────────────
+// urlscan görüntüsü bazen sahte içeriği DEĞİL, hosting'in varsayılan sayfasını
+// gösterir (CyberPanel/nginx/Apache…). Sebep: zararlı içerik kaldırılmış YA DA
+// tarayıcıya gizleniyor (cloaking). Bunu "kanıt" gibi sunmayalım — dürüst not düşelim.
+const VARSAYILAN_SAYFA = /(successfully installed cyberpanel|please remove this page and upload|welcome to nginx|apache2? (ubuntu |debian )?default page|<title>\s*it works!|index of \/<|default web (page|site)|site not (yet )?configured|litespeed web server|this is the default (index|welcome)|hosting.{0,20}default page|domain (default|park))/i;
+function varsayilanSayfaMi(ham: string): boolean {
+  return VARSAYILAN_SAYFA.test(ham);
+}
+
 // ── TAKİP KİMLİĞİ PİVOTU ────────────────────────────────────────────────────
 // Sayfaya gömülü analytics/reklam hesap kimlikleri (Google Analytics, GTM, AdSense
 // yayıncı, Yandex Metrica, Facebook Pixel). Değeri: aynı kimliği taşıyan iki farklı
@@ -523,6 +533,12 @@ function iceriktenBulgu(ham: string, r: OsintRapor) {
     } else {
       r.alanlar.push({ ad: "Dış veri hedefi", deger: liste });
     }
+  }
+
+  // ── VARSAYILAN/BOŞ SAYFA: ekran görüntüsü yanıltıcı olabilir → dürüst not ──
+  if (varsayilanSayfaMi(ham)) {
+    r.ekranNotu = "Bu görüntü sitenin varsayılan/boş kurulum sayfası (hosting default) — zararlı içeriğin kendisi değil. Tehdit büyük olasılıkla kaldırıldı ya da tarayıcıdan gizleniyor (cloaking); tehlike kararı bu görüntüye değil, diğer resmî/teknik sinyallere dayanır.";
+    if (!r.alanlar.some((x) => x.ad === "Sayfa içeriği" || x.ad === "Site durumu")) r.alanlar.push({ ad: "Sayfa içeriği", deger: "Varsayılan/boş kurulum sayfası (hosting default)" });
   }
 
   // ── TAKİP KİMLİĞİ (pivot): sayfaya gömülü analytics/reklam hesap kimliği ──
@@ -1471,6 +1487,10 @@ export async function domainOsint(domain: string, tamUrl?: string): Promise<Osin
           r.alanlar.push({ ad: "Görsel analiz (AI)", deger: gj.tur });
           if (hataEkrani) {
             r.alanlar.push({ ad: "Görsel notu", deger: "Ekran görüntüsü hata/challenge sayfası — görsel içerik güvenilir değil, logo/form bulgusu uygulanmadı" });
+            // Kullanıcının GÖRDÜĞÜ ekran görüntüsünün ALTINA dürüst not: bu görüntü
+            // sitenin gerçek içeriği değil (boş/varsayılan kurulum · hata · challenge ·
+            // cloaking). Karar bu görüntüye değil resmî/teknik sinyallere dayanır.
+            if (!r.ekranNotu) r.ekranNotu = "Bu görüntü sitenin gerçek içeriği değil — boş/varsayılan kurulum, hata ya da erişim-engeli (challenge/gizleme) sayfası. Zararlı içerik kaldırılmış veya tarayıcıdan gizleniyor olabilir; tehlike kararı bu görüntüye değil, resmî ve teknik sinyallere (USOM, sertifika, altyapı…) dayanır.";
           }
           // Görsel doğrulandı → honesty-gate "içeriği görmedik" diye Orta'ya çekmesin.
           // (Hata ekranı gerçek içerik değil → r.sayfa'yı ondan besleme.)

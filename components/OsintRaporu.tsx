@@ -42,6 +42,7 @@ type Rapor = {
   analiz: { ozet: string; yorum: string; neden?: string[]; adimlar: string[]; icerikTuru?: string; ai: boolean };
   baglantilar?: { deger: string; tip: string; sayi: number }[];
   ekranGoruntusu?: string;
+  ekranNotu?: string;
   kategoriler?: { ad: string; ikon: string; skor: number; seviye: "Yok" | "Belirsiz" | "Şüpheli" | "Yüksek" }[];
   durum?: { durum: "aktif-tuzak" | "park" | "yayinda-degil" | "canli"; etiket: string; ikon: string };
   dedektif?: { tur: string; hedef: string; paraYontemi: string; operasyon: string; gerekce: string[]; guven: "Yüksek" | "Orta" | "Düşük"; ai: boolean };
@@ -198,7 +199,7 @@ function EkranYakala({ domain }: { domain: string }) {
 
 // Kayıtlı urlscan görüntüsünü gösterir; dosya 404 ise (eski/başarısız tarama) kırık
 // <img> yerine CANLI ÇEKİM'e (aktif tarama) düşer.
-function EkranGoruntu({ url, domain }: { url: string; domain: string }) {
+function EkranGoruntu({ url, domain, not }: { url: string; domain: string; not?: string }) {
   const [kirik, setKirik] = useState(false);
   if (kirik) return <EkranYakala domain={domain} />;
   return (
@@ -209,6 +210,12 @@ function EkranGoruntu({ url, domain }: { url: string; domain: string }) {
       </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={url} alt="Sitenin ekran görüntüsü" loading="lazy" onError={() => setKirik(true)} className="w-full rounded-2xl border border-outline-variant/30" />
+      {not && (
+        <div className="mt-2 flex items-start gap-2 rounded-xl px-3 py-2 text-[12px] leading-snug" style={{ border: "1px solid #f2c66433", background: "#f8ecd422", color: "#9a6b12" }}>
+          <span className="material-symbols-outlined shrink-0" style={{ fontSize: 16, color: "#c8912a" }}>info</span>
+          <span>{not}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -470,7 +477,7 @@ export default function OsintRaporu({ giris, onDurum }: { giris: string; onDurum
           )}
 
           {rapor.ekranGoruntusu ? (
-            <EkranGoruntu url={rapor.ekranGoruntusu} domain={rapor.deger} />
+            <EkranGoruntu url={rapor.ekranGoruntusu} domain={rapor.deger} not={rapor.ekranNotu} />
           ) : rapor.tip === "url" ? (
             <EkranYakala domain={rapor.deger} />
           ) : null}
