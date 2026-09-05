@@ -128,7 +128,7 @@ export default function KontrolOdasi() {
                   size="small" pagination={false} rowKey="marka" dataSource={veri.markalar}
                   scroll={{ x: "max-content", y: 360 }}
                   columns={[
-                    { title: "Marka", dataIndex: "markaAdi", render: (v: string, r: MarkaSat) => <a onClick={() => router.push("/mercek")} style={{ color: "#cfe3f5" }}>{v || r.marka}</a> },
+                    { title: "Marka", dataIndex: "markaAdi", render: (v: string, r: MarkaSat) => <a onClick={() => router.push(`/mercek?marka=${encodeURIComponent(r.marka)}`)} style={{ color: "#cfe3f5" }}>{v || r.marka}</a> },
                     { title: "Toplam", dataIndex: "toplam", width: 80, align: "center", render: (v: number) => <Text strong style={{ color: "#e6eef7" }}>{v}</Text> },
                     { title: "Aktif", dataIndex: "aktif", width: 70, align: "center", render: (v: number) => v ? <Tag color="error" style={{ margin: 0 }}>{v}</Tag> : <Text type="secondary">–</Text> },
                     { title: "Canlı", dataIndex: "canli", width: 70, align: "center", render: (v: number) => <Text style={{ color: "#4d9fe0" }}>{v}</Text> },

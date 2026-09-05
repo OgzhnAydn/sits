@@ -7,12 +7,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
   ConfigProvider, theme, Row, Col, Card, Statistic, Progress, Table, Tag, Segmented,
-  Button, Descriptions, Avatar, Flex, Badge, Empty, Spin, Typography, Space, Timeline, Alert,
+  Button, Descriptions, Avatar, Flex, Badge, Empty, Spin, Typography, Space, Timeline, Alert, Select,
 } from "antd";
 import {
   EyeOutlined, SafetyCertificateOutlined, SearchOutlined, ClusterOutlined, ThunderboltOutlined,
   ExportOutlined, FileSearchOutlined, LogoutOutlined, BellOutlined, GlobalOutlined,
-  WarningOutlined, ClockCircleOutlined, BarChartOutlined,
+  WarningOutlined, ClockCircleOutlined, BarChartOutlined, AppstoreOutlined,
 } from "@ant-design/icons";
 import { markaDinle, cikis } from "@/lib/markaAuth";
 import AnalitikPanel from "./AnalitikPanel";
@@ -111,25 +111,45 @@ function Kokpit() {
   const [hesapAdi, setHesapAdi] = useState("");
   const [gorunum, setGorunum] = useState<"evren" | "panel">("evren"); // kokpit içi görünüm
   const [oturum, setOturum] = useState<boolean | null>(null);
+  const [operator, setOperator] = useState(false); // marka="*" → tüm markalara dalabilir
   const [resmiMap, setResmiMap] = useState<Record<string, string>>({});
+  const [markaListe, setMarkaListe] = useState<{ anahtar: string; ad: string }[]>([]);
   const gorulen = useRef<Set<number>>(new Set());
   const yeniSet = useRef<Set<string>>(new Set());
   const router = useRouter();
 
-  // marka anahtarı → resmî domain (gerçek-vs-sahte görüntü karşılaştırması için)
+  // marka anahtarı → resmî domain (gerçek-vs-sahte görüntü karşılaştırması için) + marka listesi (operatör değiştirici)
   useEffect(() => {
     fetch("/api/markalar").then((r) => r.json()).then((j) => {
       const m: Record<string, string> = {};
-      for (const x of j.markalar || []) if (x.anahtar && x.resmi?.[0]) m[x.anahtar] = x.resmi[0];
-      setResmiMap(m);
+      const liste: { anahtar: string; ad: string }[] = [];
+      for (const x of j.markalar || []) {
+        if (x.anahtar && x.resmi?.[0]) m[x.anahtar] = x.resmi[0];
+        if (x.anahtar) liste.push({ anahtar: String(x.anahtar).toLowerCase(), ad: x.ad || x.anahtar });
+      }
+      liste.sort((a, b) => a.ad.localeCompare(b.ad, "tr"));
+      setResmiMap(m); setMarkaListe(liste);
     }).catch(() => {});
+  }, []);
+
+  // Operatör bir markaya geçince/temizleyince URL'i de güncelle (paylaşılabilir + geri tutarlı).
+  const markaSec = useCallback((anahtar: string) => {
+    setMarkaFiltre(anahtar);
+    const yeni = anahtar ? `/mercek?marka=${encodeURIComponent(anahtar)}` : "/mercek";
+    window.history.replaceState(null, "", yeni);
   }, []);
 
   useEffect(() => markaDinle((user, hesap) => {
     if (!user) { setOturum(false); router.replace("/marka-giris"); return; }
     setOturum(true);
-    if (hesap?.marka && hesap.marka !== "*") { setMarkaFiltre(hesap.marka.toLowerCase()); setHesapAdi(hesap.ad || hesap.marka); }
-    else setHesapAdi(hesap?.ad || "Analist");
+    const dalinan = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("marka") : null;
+    // Kontrol Odası (operatör bağlamı) bir markaya ?marka= ile dalabilir. Faz-2'de bu
+    // yalnız operatör (marka="*") hesaplarıyla sınırlanacak (sunucu-tarafı izolasyon).
+    // Operatör bağlamı: gerçek operatör (marka="*") VEYA Kontrol'den bir markaya dalınmış →
+    // marka değiştirici + "Kontrol'e dön" göster. (Faz-2 sunucu izolasyonunda daraltılacak.)
+    setOperator(hesap?.marka === "*" || !!dalinan);
+    if (hesap?.marka && hesap.marka !== "*") { setMarkaFiltre((dalinan || hesap.marka).toLowerCase()); setHesapAdi(hesap.ad || hesap.marka); }
+    else { if (dalinan) setMarkaFiltre(dalinan.toLowerCase()); setHesapAdi(hesap?.ad || "Analist"); }
   }), [router]);
 
   useEffect(() => {
@@ -221,6 +241,15 @@ function Kokpit() {
         </Flex>
         <Badge status="processing" color="#31c8b0" text={<Text style={{ color: "#31c8b0", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11 }}>LIVE</Text>} />
         <Text style={{ color: "#8fa6bd", fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 }}>{toplamCT ? `${(toplamCT / 1e9).toFixed(2)}B sertifika` : "—"}</Text>
+        {operator && (<>
+          <span style={{ width: 1, height: 18, background: "#1f3652" }} />
+          <Button size="small" icon={<AppstoreOutlined />} onClick={() => router.push("/kontrol")} style={{ color: "#8fa6bd" }}>Kontrol</Button>
+          <Select
+            size="small" value={markaFiltre} onChange={markaSec} showSearch optionFilterProp="label"
+            style={{ minWidth: 168 }} placeholder="Marka seç"
+            options={[{ value: "", label: "Tüm markalar" }, ...markaListe.map((m) => ({ value: m.anahtar, label: m.ad }))]}
+          />
+        </>)}
         <div style={{ flex: 1 }} />
         <Clock />
         <Badge count={sayim.yuksek} size="small" color="#f5222d"><BellOutlined style={{ color: "#8fa6bd", fontSize: 17 }} /></Badge>
