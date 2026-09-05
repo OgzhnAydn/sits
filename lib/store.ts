@@ -262,6 +262,7 @@ export type MarkaAday = {
   zaman: number;
   durum?: "aktif-tuzak" | "park" | "yayinda-degil" | "canli"; // canlı durum (park'lar ayrı takip)
   kampanya?: { domainSayisi: number; ipler: string[]; asnler: string[]; iletisimKanallari: string[]; exfilVar: boolean; ozet: string }; // operasyon haritası özeti
+  cikisAni?: number; // sahte adresin DOĞUŞ anı (ms, en eski sertifika). zaman = TESPİT anı. Gecikme = zaman − cikisAni.
 };
 
 export async function markaAdayKaydet(a: MarkaAday): Promise<void> {
@@ -525,11 +526,12 @@ export async function riskGecmisiGetir(domain: string): Promise<GecmisNokta[]> {
 // somut çıktısı: müşteri paneline düşen alarm akışı. Mevcut marka_adaylari belgesine
 // yazılır → yeni koleksiyon/rule gerekmez, durum da tazelenir.
 export type Yukselme = { t: number; sebep: string[]; oncekiRisk: number; simdikiRisk: number; oncekiDurum?: string; simdikiDurum?: string };
-export async function adayDurumGuncelle(domain: string, durum: string, skor: number, yukselme?: Yukselme): Promise<void> {
+export async function adayDurumGuncelle(domain: string, durum: string, skor: number, yukselme?: Yukselme, cikisAni?: number): Promise<void> {
   if (!firebaseHazir || !db) return;
   try {
     const veri: Record<string, unknown> = { durum, skor: Math.round(skor) || 0, sonTarama: Date.now() };
     if (yukselme) veri.sonYukselme = yukselme;
+    if (typeof cikisAni === "number" && cikisAni > 0) veri.cikisAni = cikisAni; // doğuş anı (sabit)
     await setDoc(doc(db, "marka_adaylari", belgeId("dom", domain)), veri, { merge: true });
   } catch { /* kurallar yoksa sessiz */ }
 }

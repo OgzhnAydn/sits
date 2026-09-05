@@ -38,7 +38,7 @@ export async function yenidenTaraBatch(n = 8, offset?: number): Promise<{ tarana
       // ── GEÇİŞ TESPİTİ: önceki duruma göre eyleme geçtiyse ayrı olay + durumu tazele ──
       const yeniDurum = domainDurumu(r).durum;
       const yukselme = yukselmeCikar(a, r.risk, yeniDurum);
-      await adayDurumGuncelle(a.domain, yeniDurum, r.risk, yukselme);
+      await adayDurumGuncelle(a.domain, yeniDurum, r.risk, yukselme, r.cikisAni);
       if (yukselme) yukselen++;
       kaydedilen++;
     } catch { /* tek domain başarısız → diğerlerini etkileme */ }

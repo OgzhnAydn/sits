@@ -22,6 +22,15 @@ type Panel = {
   yukselmeler: { domain: string; sebep: string[]; t: number; simdikiRisk: number }[];
   saglik: { sonTespit: number; buGun: number; intelKapsam: number };
   erkenlik: { toplam: number; bizOnce: number; usomdaYok: number; usomOnce: number };
+  tespitHizi: { adet: number; enHizli: number; gunIci: number } | null;
+};
+// ms → insanca süre (dk/saat/gün)
+const sure = (ms: number) => {
+  const dk = ms / 60000;
+  if (dk < 60) return Math.round(dk) + " dk";
+  const sa = dk / 60;
+  if (sa < 48) return sa.toFixed(sa < 10 ? 1 : 0) + " saat";
+  return Math.round(sa / 24) + " gün";
 };
 
 const DURUM_RENK: Record<string, string> = { "aktif-tuzak": "#f5222d", "canli": "#4d9fe0", "park": "#8c8c8c", "yayinda-degil": "#495a6e", "belirsiz": "#5b6b7d" };
@@ -323,6 +332,26 @@ export default function AnalitikPanel({ marka }: { marka: string }) {
               ))}
             </Flex>
           )}
+        </Card>
+      )}
+
+      {/* Tespit hızı — çıkış (ilk sertifika) → bizim tespit gecikmesi */}
+      {veri.tespitHizi && (
+        <Card style={{ ...KART, borderColor: "#123a2a", background: "#0a1a14" }} styles={{ body: { padding: 18 } }}>
+          <Baslik ikon={<ClockCircleOutlined />}>Tespit hızı — sahte adres doğduktan ne kadar sonra yakaladık</Baslik>
+          <Flex gap={28} wrap align="flex-end">
+            <div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: "#3ee08a", lineHeight: 1 }}>{sure(veri.tespitHizi.enHizli)}</div>
+              <div style={{ fontSize: 11, color: "#8fb0d4", marginTop: 3 }}>en hızlı yakalama</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: "#c7d6e6", lineHeight: 1 }}>{veri.tespitHizi.gunIci}<span style={{ fontSize: 14, color: "#5b6b7d" }}>/{veri.tespitHizi.adet}</span></div>
+              <div style={{ fontSize: 11, color: "#8fb0d4", marginTop: 3 }}>aynı gün (24 saat içinde) yakalandı</div>
+            </div>
+            <Text style={{ fontSize: 12, color: "#7d9cbf", flex: 1, minWidth: 200 }}>
+              {veri.tespitHizi.adet} gerçek-zamanlı (CertStream) tespitte, sertifikanın alındığı an (çıkış) ile bizim ilk yakaladığımız an arasındaki süre. Sahte adres yayına çıktığı an — çoğu zaman kurbana ulaşmadan — yakalıyoruz.
+            </Text>
+          </Flex>
         </Card>
       )}
 

@@ -29,13 +29,14 @@ export type PanelVeri = {
   yukselmeler: { domain: string; sebep: string[]; t: number; simdikiRisk: number }[];
   saglik: { sonTespit: number; buGun: number; intelKapsam: number }; // sistem canlılığı
   erkenlik: MarkaErkenlik;                             // USOM'dan öndelik
+  tespitHizi: { adet: number; enHizli: number; gunIci: number } | null; // çıkış→tespit: en hızlı + aynı-gün sayısı
 };
 
 export async function markaPanel(marka: string): Promise<PanelVeri> {
   const bos: PanelVeri = {
     marka, toplam: 0, gunluk: 0, haftalik: 0, aylik: 0, tempo: [], saatDagilim: Array(24).fill(0),
     durum: {}, riskHist: [], kaynak: {}, tld: [], ortak: { ip: [], asn: [], ca: [], ulke: [], takip: [] },
-    kume: null, yukselmeler: [], saglik: { sonTespit: 0, buGun: 0, intelKapsam: 0 }, erkenlik: { toplam: 0, bizOnce: 0, usomdaYok: 0, usomOnce: 0, ortGun: 0, ornekler: [] },
+    kume: null, yukselmeler: [], saglik: { sonTespit: 0, buGun: 0, intelKapsam: 0 }, erkenlik: { toplam: 0, bizOnce: 0, usomdaYok: 0, usomOnce: 0, ortGun: 0, ornekler: [] }, tespitHizi: null,
   };
   if (!marka) return bos;
   const ham = await markaAdaylariMarka(marka, 500);
@@ -123,10 +124,25 @@ export async function markaPanel(marka: string): Promise<PanelVeri> {
   const erkenlik = await markaErkenlik(marka).catch(() => bos.erkenlik);
   const sonTespit = Math.max(0, ...adaylar.map((a) => a.zaman || 0));
 
+  // ── TESPİT HIZI: çıkış (ilk sertifika) → GERÇEK-ZAMANLI tespit gecikmesi ──
+  // Yalnız CertStream (canlı akış) tespitleri: gerçek "yakalama hızı" budur. Scan'le
+  // (sahte-bul/urlscan) sonradan bulunanlar "hız" değil "arama" → medyanı bozmasın.
+  const gecikmeler = adaylar
+    .filter((a) => a.kaynak === "certstream")
+    .map((a) => (a.cikisAni && a.zaman && a.zaman > a.cikisAni ? a.zaman - a.cikisAni : null))
+    .filter((x): x is number => x !== null && x < 400 * GUN)
+    .sort((x, y) => x - y);
+  // "Aynı gün" (24s içinde) yakalananlar = gerçek hız kanıtı. Medyan, biz izlemeye
+  // başlamadan önce doğmuş eski domainlerle bozulduğu için KULLANILMAZ.
+  const gunIci = gecikmeler.filter((g) => g < 24 * 3600000).length;
+  const tespitHizi = gecikmeler.length
+    ? { adet: gecikmeler.length, enHizli: gecikmeler[0], gunIci }
+    : null;
+
   return {
     marka, toplam: adaylar.length, gunluk, haftalik, aylik, tempo, saatDagilim,
     durum, riskHist, kaynak, tld, ortak, kume, yukselmeler,
     saglik: { sonTespit, buGun, intelKapsam: Math.round((intelVar / adaylar.length) * 100) },
-    erkenlik,
+    erkenlik, tespitHizi,
   };
 }

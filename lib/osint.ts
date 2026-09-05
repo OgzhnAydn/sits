@@ -12,6 +12,7 @@ export type OsintRapor = {
   risk: number; // 0-100 (crowd/seed sinyalleri API'de eklenir)
   ekranGoruntusu?: string; // urlscan.io ekran görüntüsü URL'i
   ekranNotu?: string; // ekran görüntüsü yanıltıcıysa (varsayılan/boş sayfa) dürüst not
+  cikisAni?: number; // sahte adresin DOĞUŞ anı (ms) — en eski sertifika notBefore'u (tespit hızı için)
   sayfa?: SayfaBilgi; // paylaşılan sayfanın içerik özeti (başlık/tür/açıklama)
 };
 
@@ -573,7 +574,7 @@ function iceriktenBulgu(ham: string, r: OsintRapor) {
 // görünmeyen login./panel./secure. gibi phishing altyapısı; (2) sertifikanın
 // gerçekte ne zaman/hangi CA tarafından çıkarıldığı. CT'de kayıt = güvenli DEMEK
 // DEĞİL; yalnızca diğer sinyallerle birlikte kullanılır.
-type CtBilgi = { sayi: number; enYeni?: string; enEski?: string; ca?: string; subdomainler: string[]; yeniMi: boolean };
+type CtBilgi = { sayi: number; enYeni?: string; enEski?: string; enEskiMs?: number; enYeniMs?: number; ca?: string; subdomainler: string[]; yeniMi: boolean };
 
 function caCikar(issuer?: string): string | undefined {
   if (!issuer) return undefined;
@@ -606,6 +607,8 @@ function ctTopla(
   return {
     sayi: kayitlar.length,
     enYeni, enEski, ca,
+    enEskiMs: isFinite(enEskiMs) ? enEskiMs : undefined,
+    enYeniMs: enYeniMs || undefined,
     subdomainler: [...names].sort().slice(0, 15),
     yeniMi: enYeniMs > 0 && Date.now() - enYeniMs < 7 * 86400000,
   };
@@ -1028,6 +1031,7 @@ export async function domainOsint(domain: string, tamUrl?: string): Promise<Osin
         const d = Date.parse(ssl.notBefore);
         if (!isNaN(d)) {
           r.alanlar.push({ ad: "Sertifika başlangıcı", deger: new Date(d).toISOString().slice(0, 10) });
+          if (r.cikisAni === undefined || d < r.cikisAni) r.cikisAni = d; // çıkış anı adayı (canlı cert)
           // NOT: TLS sertifikasının "yeni" olması domain yaşı DEĞİLDİR — Let's Encrypt
           // her ~60-90 günde yeniler, yani her HTTPS sitenin sertifikası "yeni"dir.
           // Bunu "yeni kurulmuş" sinyali olarak KULLANMA (RDAP başarısız olunca 18.9
@@ -1053,6 +1057,8 @@ export async function domainOsint(domain: string, tamUrl?: string): Promise<Osin
   if (!itibarliMi(domain)) {
     const ct = await certTransparency(domain);
     if (ct) {
+      // ÇIKIŞ ANI = en eski sertifika (domain ilk ne zaman canlıya çıktı) — tespit hızı için.
+      if (ct.enEskiMs && (r.cikisAni === undefined || ct.enEskiMs < r.cikisAni)) r.cikisAni = ct.enEskiMs;
       if (ct.enYeni) r.alanlar.push({ ad: "En yeni sertifika (CT)", deger: ct.ca ? `${ct.enYeni} · ${ct.ca}` : ct.enYeni });
       if (ct.sayi) r.alanlar.push({ ad: "CT kayıt sayısı", deger: String(ct.sayi) });
       // ── SERTİFİKA ZAMAN ÇİZELGESİ (adım 5): ilk→son sertifika, ne kadar süredir aktif ──
