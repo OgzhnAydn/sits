@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build)",
+      "Bash(npm run dev)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx:*)",
+      "Bash(vercel:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git checkout:*)",
+      "Bash(node:*)",
+      "Bash(curl:*)",
+      "Bash(grep:*)",
+      "Bash(sed:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(echo:*)",
+      "Bash(rm:*)",
+      "Bash(taskkill:*)",
+      "Bash(pkill:*)",
+      "Bash(cd:*)",
+      "Bash(mkdir:*)",
+      "Bash(for:*)",
+      "Bash(printf:*)",
+      "Bash(sleep:*)",
+      "Bash(find:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)"
+    ]
+  }
+}

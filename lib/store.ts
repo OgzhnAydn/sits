@@ -267,8 +267,20 @@ export type MarkaAday = {
 export async function markaAdayKaydet(a: MarkaAday): Promise<void> {
   if (!firebaseHazir || !db) return;
   try {
-    // Aynı domain tekrar gelirse günceller (mükerrer belge olmaz).
-    await setDoc(doc(db, "marka_adaylari", belgeId("dom", a.domain)), { ...a, olusturma: serverTimestamp() }, { merge: true });
+    const ref = doc(db, "marka_adaylari", belgeId("dom", a.domain));
+    // İLK-BULUNMA zamanını KORU: aynı domain yeniden tespit edilince (sahte-bul,
+    // certstream re-hit, vercel-tarama) `zaman`/`olusturma` ÜZERİNE YAZMA — yoksa
+    // eski bulgu "yeni bulundu" gibi görünür. Re-tespit yalnız sonTarama'yı günceller.
+    const mevcut = await getDoc(ref);
+    const veri: Record<string, unknown> = { ...a, sonTarama: Date.now() };
+    if (mevcut.exists()) {
+      const d = mevcut.data() as { zaman?: number; olusturma?: unknown };
+      if (typeof d.zaman === "number" && d.zaman > 0) veri.zaman = d.zaman; // ilk bulunma korunur
+      if (d.olusturma) delete (veri as { olusturma?: unknown }).olusturma; // olusturma'yı ezme
+    } else {
+      veri.olusturma = serverTimestamp(); // yalnız İLK oluşturmada
+    }
+    await setDoc(ref, veri, { merge: true });
   } catch {
     /* kurallar yayınlanmadıysa sessiz geç */
   }
