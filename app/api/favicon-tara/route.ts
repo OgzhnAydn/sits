@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { faviconMarkaEslesme } from "@/lib/faviconMarka";
-import { domainOsint } from "@/lib/osint";
 import { itibarliMi } from "@/lib/itibarli";
 import { resmiMarkaDomaini } from "@/lib/korunanMarkalar";
 import { markaAdayKaydet, markaGunlukArtir } from "@/lib/store";
@@ -39,19 +38,13 @@ export async function POST(req: NextRequest) {
   const marka = await faviconMarkaEslesme(domain);
   if (!marka) return NextResponse.json({ ok: true, eslesme: false });
 
-  // Favicon BİREBİR eşleşti → isim alakasız olsa bile güçlü taklit. Tam analiz + kaydet.
-  let skor = 70;
-  let sinyaller: string[] = [];
-  try {
-    const r = await domainOsint(domain);
-    skor = Math.min(100, Math.max(70, r.risk + 30)); // favicon-kopya tek başına yüksek
-    sinyaller = r.bulgular.slice(0, 4);
-  } catch {
-    /* analiz olmasa da favicon eşleşmesi yeterli */
-  }
-  sinyaller = [
+  // Favicon BİREBİR eşleşti → isim alakasız olsa bile güçlü taklit işareti.
+  // NOT: Burada domainOsint ÇAĞIRMIYORUZ — 25s'lik tam analiz worker burst'ünde 30s
+  // fonksiyon limitini aşıp 504'e yol açıyordu. Favicon-kopya tek başına aday olarak
+  // kaydedilir; tam OSINT + risk skoru ZATEN yeniden-tarama (yenidenTaraBatch) ile gelir.
+  const skor = 75; // favicon-kopya güçlü ama tek sinyal; rescan rafine eder
+  const sinyaller = [
     `İsim markayı içermese de, ${marka.ad}'ın favicon'unu (logosunu) BİREBİR kopyalamış — güçlü taklit işareti.`,
-    ...sinyaller,
   ];
 
   await markaGunlukArtir(marka.anahtar, new Date().toISOString().slice(0, 10), true);
