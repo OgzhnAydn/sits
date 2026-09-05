@@ -55,11 +55,11 @@ export default function KontrolOdasi() {
   return (
     <ConfigProvider theme={tema}>
       {oturum === null || (oturum && !veri) ? (
-        <Flex align="center" justify="center" style={{ height: "100vh", background: "#080f1a" }}><Spin tip="Kontrol odası yükleniyor…"><div style={{ padding: 40 }} /></Spin></Flex>
+        <Flex align="center" justify="center" style={{ position: "fixed", inset: 0, background: "#080f1a" }}><Spin tip="Kontrol odası yükleniyor…"><div style={{ padding: 40 }} /></Spin></Flex>
       ) : !veri ? (
-        <Flex align="center" justify="center" style={{ height: "100vh", background: "#080f1a", color: "#8fa6bd" }}>Veri alınamadı.</Flex>
+        <Flex align="center" justify="center" style={{ position: "fixed", inset: 0, background: "#080f1a", color: "#8fa6bd" }}>Veri alınamadı.</Flex>
       ) : (
-        <div style={{ minHeight: "100vh", background: "#080f1a", padding: "16px 20px 40px", fontFamily: "'IBM Plex Sans',sans-serif" }}>
+        <div style={{ position: "fixed", inset: 0, overflowY: "auto", background: "#080f1a", padding: "16px 20px 40px", fontFamily: "'IBM Plex Sans',sans-serif" }}>
           {/* Üst bar */}
           <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: 18, rowGap: 10 }}>
             <Flex align="center" gap={12} wrap style={{ rowGap: 6 }}>
