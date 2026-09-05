@@ -60,8 +60,8 @@ export default function KontrolOdasi() {
       ) : (
         <div style={{ minHeight: "100vh", background: "#080f1a", padding: "16px 20px 40px", fontFamily: "'IBM Plex Sans',sans-serif" }}>
           {/* Üst bar */}
-          <Flex justify="space-between" align="center" style={{ marginBottom: 18 }}>
-            <Flex align="center" gap={12}>
+          <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: 18, rowGap: 10 }}>
+            <Flex align="center" gap={12} wrap style={{ rowGap: 6 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/mirleon-white.svg" alt="MirLeon" style={{ height: 22 }} />
               <span style={{ width: 1, height: 20, background: "#1f3652" }} />
@@ -125,7 +125,7 @@ export default function KontrolOdasi() {
               <Card style={KART} styles={{ body: { padding: 14 } }} title={<Text style={{ color: "#c7d6e6" }}>İzlenen markalar</Text>}>
                 <Table
                   size="small" pagination={false} rowKey="marka" dataSource={veri.markalar}
-                  scroll={{ y: 360 }}
+                  scroll={{ x: "max-content", y: 360 }}
                   columns={[
                     { title: "Marka", dataIndex: "markaAdi", render: (v: string, r: MarkaSat) => <a onClick={() => router.push("/mercek")} style={{ color: "#cfe3f5" }}>{v || r.marka}</a> },
                     { title: "Toplam", dataIndex: "toplam", width: 80, align: "center", render: (v: number) => <Text strong style={{ color: "#e6eef7" }}>{v}</Text> },
@@ -141,7 +141,7 @@ export default function KontrolOdasi() {
               <Card style={KART} styles={{ body: { padding: 14 } }} title={<Text style={{ color: "#c7d6e6" }}>Son tespitler (tüm markalar)</Text>}>
                 <Table
                   size="small" pagination={false} rowKey={(r: Son) => r.domain} dataSource={veri.sonlar}
-                  scroll={{ y: 360 }}
+                  scroll={{ x: "max-content", y: 360 }}
                   columns={[
                     { title: "Domain", dataIndex: "domain", ellipsis: true, render: (v: string) => <a href={`/sorgula?q=${encodeURIComponent(v)}`} target="_blank" rel="noreferrer" style={{ color: "#ff9aa4", fontFamily: "monospace", fontSize: 12 }}>{v}</a> },
                     { title: "Marka", dataIndex: "marka", width: 90, ellipsis: true, render: (v: string) => <Text style={{ fontSize: 11, color: "#8fb0d4" }}>{v}</Text> },

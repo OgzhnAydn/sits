@@ -212,7 +212,7 @@ function Kokpit() {
   return (
     <div style={{ position: "fixed", inset: 0, background: "#080f1a", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "'IBM Plex Sans',sans-serif" }}>
       {/* ÜST ÇUBUK */}
-      <Flex align="center" gap={16} style={{ padding: "10px 18px", borderBottom: "1px solid #17293c", background: "#0a1420" }}>
+      <Flex align="center" gap={16} wrap style={{ padding: "10px 18px", borderBottom: "1px solid #17293c", background: "#0a1420", rowGap: 8 }}>
         <Flex align="center" gap={10}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/mirleon-white.svg" alt="MirLeon" style={{ height: 20, width: "auto" }} />
@@ -280,7 +280,7 @@ function Kokpit() {
             <Card
               size="small" style={{ height: "100%" }} styles={{ body: { height: "calc(100% - 46px)", padding: 8 } }}
               title={baslik(3, "THREAT UNIVERSE GRAFİĞİ", (
-                <Space size={11}>
+                <Space size={11} wrap>
                   <Efsane renk="#f5222d" t="Aktif Tehdit" />
                   <Efsane renk="#fa8c16" t="Yüksek Güven" />
                   <Efsane renk="#faad14" halka t="Şüpheli" />
@@ -304,7 +304,7 @@ function Kokpit() {
           <Col xs={24} lg={18}>
             <Card size="small" title={baslik(5, "CANLI OLAY AKIŞI")}>
               <Table
-                size="small" pagination={false} rowKey={(_, i) => String(i)}
+                size="small" pagination={false} rowKey={(_, i) => String(i)} scroll={{ x: "max-content" }}
                 dataSource={olaylar(akis, gosterilen, markaFiltre)}
                 locale={{ emptyText: <Empty description="Canlı olay bekleniyor…" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
                 columns={[

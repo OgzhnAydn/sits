@@ -102,11 +102,11 @@ export default function Home() {
               placeholder="Şüpheli linki, mesajı (SMS/WhatsApp), IBAN'ı, telefonu, kripto adresini veya profili buraya yapıştır…"
               className="min-h-[104px] min-w-0 flex-1 resize-none bg-transparent py-0.5 text-[15px] leading-relaxed outline-none placeholder:text-on-surface-variant"
             />
-            <div className="flex shrink-0 flex-col gap-2">
-              <button onClick={() => router.push("/gorsel")} aria-label="Fotoğraf / QR" className="press text-primary">
+            <div className="flex shrink-0 flex-col gap-1">
+              <button onClick={() => router.push("/gorsel")} aria-label="Fotoğraf / QR" className="press grid h-10 w-10 place-items-center rounded-xl text-primary">
                 <span className="material-symbols-outlined" style={{ fontSize: 24 }}>photo_camera</span>
               </button>
-              <button onClick={yapistir} aria-label="Panodan yapıştır" className="press text-on-surface-variant">
+              <button onClick={yapistir} aria-label="Panodan yapıştır" className="press grid h-10 w-10 place-items-center rounded-xl text-on-surface-variant">
                 <span className="material-symbols-outlined" style={{ fontSize: 24 }}>content_paste</span>
               </button>
             </div>

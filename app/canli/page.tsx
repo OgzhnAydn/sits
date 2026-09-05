@@ -45,6 +45,9 @@ export default function CanliPanel() {
   const [bagli, setBagli] = useState<boolean | null>(null);
   const [sayac, setSayac] = useState({ akan: 0, eslesme: 0 });
   const [altta, setAltta] = useState(true);
+  // Mobilde 3 kolon tek ekrana sığmaz + sol akış sonsuz kaydığından alt bölümlere
+  // ulaşılamıyordu → mobilde sekme (masaüstünde 3 kolon aynen). "en iyi UX" gereği.
+  const [sekme, setSekme] = useState<"akis" | "loglar" | "tespit">("akis");
   const gorulen = useRef<Set<number>>(new Set());
   const kutu = useRef<HTMLDivElement>(null);
   const basT = useRef<number>(Date.now());
@@ -144,11 +147,30 @@ export default function CanliPanel() {
         </div>
       </header>
 
-      {/* ══ 3 KOLON ══ */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-px overflow-hidden bg-[#0e1a2b] lg:grid-cols-[1fr_1.05fr_1.05fr]">
+      {/* ══ MOBİL SEKME ÇUBUĞU (masaüstünde gizli — orada 3 kolon yan yana) ══ */}
+      <div className="flex shrink-0 border-b border-[#12213a] bg-[#070d18] lg:hidden">
+        {([
+          { k: "akis", ad: "Canlı akış", ikon: "sensors", renk: "#3ba1ff", n: akis.length },
+          { k: "loglar", ad: "CT logları", ikon: "lan", renk: "#3ba1ff", n: logDizi.length },
+          { k: "tespit", ad: "Tespitler", ikon: "gpp_bad", renk: "#ff5468", n: tespitler.length },
+        ] as const).map((s) => (
+          <button
+            key={s.k}
+            onClick={() => setSekme(s.k)}
+            className={`flex flex-1 items-center justify-center gap-1.5 border-b-2 py-2.5 text-[11px] font-bold uppercase tracking-wide transition ${sekme === s.k ? "border-[#3ba1ff] text-white" : "border-transparent text-[#5b7695]"}`}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 15, color: sekme === s.k ? s.renk : undefined }}>{s.ikon}</span>
+            <span className="truncate">{s.ad}</span>
+            <span className="shrink-0 rounded-full bg-[#0d1a2c] px-1.5 py-px text-[9px] font-bold tabular-nums text-[#7d9cbf]">{s.n}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ══ 3 KOLON (masaüstü) / TEK BÖLÜM (mobil) ══ */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-1 gap-px overflow-hidden bg-[#0e1a2b] lg:grid-rows-1 lg:grid-cols-[1fr_1.05fr_1.05fr]">
 
         {/* ── SOL: CANLI AKIŞ ── */}
-        <section className="flex min-h-0 flex-col bg-[#05090f]">
+        <section className={`${sekme === "akis" ? "flex" : "hidden"} min-h-0 flex-col bg-[#05090f] lg:flex`}>
           <div className="flex items-center justify-between border-b border-[#12213a] px-4 py-2.5">
             <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-[#8fb0d4]">
               <span className="material-symbols-outlined text-[#3ba1ff]" style={{ fontSize: 16 }}>sensors</span>Canlı akış
@@ -190,7 +212,7 @@ export default function CanliPanel() {
         </section>
 
         {/* ── ORTA: İZLENEN LOGLAR (canlı kapsama) ── */}
-        <section className="flex min-h-0 flex-col bg-[#05090f]">
+        <section className={`${sekme === "loglar" ? "flex" : "hidden"} min-h-0 flex-col bg-[#05090f] lg:flex`}>
           <div className="flex items-center justify-between border-b border-[#12213a] px-4 py-2.5">
             <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-[#8fb0d4]">
               <span className="material-symbols-outlined text-[#3ba1ff]" style={{ fontSize: 16 }}>lan</span>İzlenen CT logları
@@ -236,7 +258,7 @@ export default function CanliPanel() {
         </section>
 
         {/* ── SAĞ: TESPİT EDİLENLER ── */}
-        <section className="flex min-h-0 flex-col bg-[#05090f]">
+        <section className={`${sekme === "tespit" ? "flex" : "hidden"} min-h-0 flex-col bg-[#05090f] lg:flex`}>
           <div className="flex items-center justify-between border-b border-[#12213a] px-4 py-2.5">
             <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-[#8fb0d4]">
               <span className="material-symbols-outlined text-[#ff5468]" style={{ fontSize: 16 }}>gpp_bad</span>Tespit edilenler

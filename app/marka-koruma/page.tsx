@@ -373,7 +373,7 @@ export default function MarkaKoruma() {
                             </div>
                             {gk && <p className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-on-surface-variant">{gk}</p>}
                             {t.kampanya && (t.kampanya.iletisimKanallari.length > 0 || t.kampanya.exfilVar) && (
-                              <p className="mt-1 text-[10.5px] font-medium text-error">
+                              <p className="mt-1 break-all text-[10.5px] font-medium text-error">
                                 {t.kampanya.iletisimKanallari.length > 0 && `Dolandırıcı kanalı: ${t.kampanya.iletisimKanallari.join(", ")}`}
                                 {t.kampanya.exfilVar && " · veri dış adrese gidiyor"}
                               </p>
@@ -480,7 +480,7 @@ export default function MarkaKoruma() {
                 })}
               </div>
               {tarama.digerCanli.length > 0 && (
-                <p className="mt-2 text-[11px] text-on-surface-variant">Canlı ama incelenmedi: {tarama.digerCanli.join(", ")}</p>
+                <p className="mt-2 break-all text-[11px] text-on-surface-variant">Canlı ama incelenmedi: {tarama.digerCanli.join(", ")}</p>
               )}
               <p className="mt-2 text-[10px] leading-relaxed text-on-surface-variant">
                 Bunlar <b>aday</b>dır; bir kısmı markanın <b>kendi savunma domaini</b> ya da park edilmiş olabilir. Kesin &quot;sahte&quot; için inceleme gerekir.

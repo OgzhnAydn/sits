@@ -63,6 +63,9 @@ body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Mobil güvenlik ağı: kenardan taşan bir öğe yatay kaydırma yaratmasın.
+     `clip` (hidden değil) kaydırma bağlamı oluşturmaz → position:sticky bozulmaz. */
+  overflow-x: clip;
 }
 
 h1, h2, h3, .font-display {

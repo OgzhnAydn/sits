@@ -136,9 +136,9 @@ export default function MarkaAvci() {
                       Operasyon Haritası — {a.kampanya.domainSayisi} kardeş domain
                     </div>
                     <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-on-surface-variant">
-                      {a.kampanya.ipler.length > 0 && <div>Ortak IP: <b className="text-on-surface">{a.kampanya.ipler.join(", ")}</b></div>}
-                      {a.kampanya.asnler.length > 0 && <div>ASN: <b className="text-on-surface">{a.kampanya.asnler.join(", ")}</b></div>}
-                      {a.kampanya.iletisimKanallari.length > 0 && <div className="col-span-2">Dolandırıcı kanalı: <b className="text-error">{a.kampanya.iletisimKanallari.join(", ")}</b></div>}
+                      {a.kampanya.ipler.length > 0 && <div className="min-w-0 break-all">Ortak IP: <b className="text-on-surface">{a.kampanya.ipler.join(", ")}</b></div>}
+                      {a.kampanya.asnler.length > 0 && <div className="min-w-0 break-all">ASN: <b className="text-on-surface">{a.kampanya.asnler.join(", ")}</b></div>}
+                      {a.kampanya.iletisimKanallari.length > 0 && <div className="col-span-2 min-w-0 break-all">Dolandırıcı kanalı: <b className="text-error">{a.kampanya.iletisimKanallari.join(", ")}</b></div>}
                       {a.kampanya.exfilVar && <div className="col-span-2 font-semibold text-error">Toplanan veri dış adrese gönderiliyor</div>}
                     </div>
                   </div>
