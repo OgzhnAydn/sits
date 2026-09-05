@@ -436,13 +436,17 @@ function takipKimlikleri(ham: string): string[] {
   return [...set].slice(0, 6);
 }
 
-function iceriktenBulgu(ham: string, r: OsintRapor) {
+function iceriktenBulgu(ham: string, r: OsintRapor, markaBagli = false) {
   const t = ham.toLowerCase();
   // Diğer sinyaller şüpheli mi? (yeni domain, taklit, IDN, geçersiz SSL, riskli TLD…)
   // Meşru bir giriş sayfasındaki şifre alanı tek başına suç değildir; ancak
   // başka şüphe varsa şifre/kart alanı güçlü bir oltalama işaretidir.
+  // markaBagli: sayfa tanınmış bir markanın adını taşıyor ama resmi/kontrolündeki adres
+  // DEĞİL (typosquat VEYA "birebir ad + farklı uzantı"). Böyle bir adreste CANLI bir şifre/
+  // kart alanı tek başına yeter — kullanıcı turkcell.site'ı turkcell.com.tr'den ayıramaz;
+  // resmi olmayan marka-adresinde bilgi toplayan form aktif kimlik-avı panelidir.
   const supheli =
-    r.risk >= 25 || r.alanlar.some((a) => ["Taklit uyarısı", "IDN uyarısı", "SSL uyarısı"].includes(a.ad));
+    markaBagli || r.risk >= 25 || r.alanlar.some((a) => ["Taklit uyarısı", "IDN uyarısı", "SSL uyarısı"].includes(a.ad));
   const sifreVar = /type=["']?password/.test(t);
   const kartVar = /autocomplete=["']?cc-number|kart\s*(numara|no)|card\s*number|cvv|cvc/.test(t);
 
@@ -741,8 +745,8 @@ export function kategoriKarti(rapor: OsintRapor): KategoriDurum[] {
 
   // Kimlik Avı (Phishing)
   let phishing = 0;
-  if (has(/kimlik.?av|şifre giriş alanı var|kart bilgisi isteniyor|üçüncü bir tarafa aktarılıyor|kategori: oltalama|phishing/)) phishing = 80;
-  else if (has(/dış veri hedefi|şüpheli.*şifre|giriş.*form/)) phishing = 40;
+  if (has(/kimlik.?av|şi.?fre giriş alanı|kart bilgisi isteniyor|üçüncü bir tarafa aktarılıyor|kimlik bilgini çal|kategori: oltalama|phishing/)) phishing = 80;
+  else if (has(/dış veri hedefi|şüpheli.*şi.?fre|giriş.*form/)) phishing = 40;
   if (/banka giriş|giriş\/oturum|ödeme\/kart|kimlik.?av/.test(gorsel)) phishing = Math.max(phishing, 70);
 
   // Marka Taklidi — çok-modlu güven skoru varsa onu kullan (kelime-eşleşmesinden kanıta).
@@ -798,12 +802,17 @@ export function domainDurumu(rapor: OsintRapor): { durum: DomainDurum; etiket: s
   const parkGorsel = /park|satılık/.test(gorsel);
   const parkMetin = /park edilmiş|satılık|available to be registered|parklogic|domain for sale|bu alan adı sat|for sale/.test(b + " " + not);
   const cozulmuyor = /çözülmüyor|yayında değil|kapatılmış/.test(b);
-  const aktifForm =
-    /şifre giriş alanı var|kart bilgisi isteniyor|üçüncü bir tarafa aktarılıyor|aktif.*tuzak|aktif.*kimlik/.test(b) ||
-    /banka giriş|giriş\/oturum|ödeme\/kart|kimlik.?av/.test(gorsel);
+  // CLOAKING: içerik tarayıcı-dışına gizleniyorsa "park" damgası YANILTICIDIR — tarayıcıda
+  // canlı bir sayfa (çoğu zaman tuzak) çalışıyor. Bayat park görseli buna aldanmasın.
+  const cloaking = Boolean(alan("i̇çerik gizleme (cloaking)")) || Boolean(alan("içerik gizleme (cloaking)")) || /içerik gizleni|cloaking/.test(b);
+  // CANLI fetch'imizin bulduğu form (bulgular), BAYAT urlscan görselini (parkGorsel) YENER.
+  // (turkcell.site: görsel bayat "park" ama canlı sayfa şifre soran login paneli.)
+  const aktifFormCanli = /şi.?fre giriş alanı|kart bilgisi isteniyor|üçüncü bir tarafa aktarılıyor|kimlik bilgini çal|aktif.*tuzak|aktif.*kimlik/.test(b);
+  const aktifFormGorsel = /banka giriş|giriş\/oturum|ödeme\/kart|kimlik.?av/.test(gorsel);
 
-  if (aktifForm && !parkGorsel) return { durum: "aktif-tuzak", etiket: "Aktif — bilgi/giriş formu içeriyor", ikon: "gpp_bad" };
-  if (parkServis || parkGorsel || parkMetin) return { durum: "park", etiket: "Park edilmiş — şu an aktif tuzak değil (izlemede)", ikon: "inventory_2" };
+  if (aktifFormCanli) return { durum: "aktif-tuzak", etiket: "Aktif — canlı sayfada bilgi/giriş formu var", ikon: "gpp_bad" };
+  if (aktifFormGorsel && !parkGorsel) return { durum: "aktif-tuzak", etiket: "Aktif — bilgi/giriş formu içeriyor", ikon: "gpp_bad" };
+  if ((parkServis || parkGorsel || parkMetin) && !cloaking && !aktifFormCanli) return { durum: "park", etiket: "Park edilmiş — şu an aktif tuzak değil (izlemede)", ikon: "inventory_2" };
   if (cozulmuyor) return { durum: "yayinda-degil", etiket: "Yayında değil / çözülmüyor", ikon: "cloud_off" };
   // Kayıtlı ama şu an A kaydı yok → "canlı" DEĞİL ama "kaldırılmış" da değil (dürüst ara durum).
   if (alan("dns durumu").includes("a kaydı yok")) return { durum: "yayinda-degil", etiket: "Şu an erişilemiyor — kayıtlı, A kaydı yok", ikon: "cloud_off" };
@@ -1424,12 +1433,23 @@ export async function domainOsint(domain: string, tamUrl?: string): Promise<Osin
         } catch { /* izlenemedi: stub'da kal */ }
       }
     }
+    // ── CLOAKING TESPİTİ: sunucu-fetch'ine BOŞ/1-byte gibi minik gövde ama domain
+    // çözülüyor + marka bağlamı → içerik tarayıcı-dışına GİZLENİYOR (kaçınma). "Park"
+    // DEĞİL: tarayıcıda canlı bir tuzak çalışıyor olabilir. (turkcell.site: curl'e 1
+    // bayt, tarayıcıda 5G Saha Test giriş paneli.) FP tuzağı: normal SPA shell'i yüzlerce
+    // bayttır → eşik <120 bayt + (marka VEYA mevcut şüphe) ile dar tutulur.
+    const hamUz = sayfa ? sayfa.trim().length : -1;
+    if (hamUz >= 0 && hamUz < 120 && !mesruYonlendirme && !parkHostRe.test(sonUrl) && (markaEslesme || r.risk >= 25)) {
+      r.risk += 28;
+      r.bulgular.unshift("Sayfanın içeriği tarayıcı-dışı erişime KAPALI — içerik gizleniyor (cloaking). Kimlik-avı siteleri gerçek tuzağı yalnız tarayıcıya gösterip tarayıcı-dışına boş sayfa döndürerek tespitten kaçar. Bu adres 'boş/park' değil; tarayıcıda canlı bir tuzak çalışıyor olabilir — kullanıcı adı/şifre GİRME.");
+      r.alanlar.push({ ad: "İçerik gizleme (cloaking)", deger: "Sunucu erişimine boş/minik gövde döndü; içerik tarayıcıya özel — kaçınma (evasion) işareti" });
+    }
     // PARK / SATILIK domain tespiti: (a) yönlendirilen FINAL host bilinen bir domain
     // pazarı mı (forsale.godaddy/sedo/dan.com…), VEYA (b) gövdede satış metni.
     const parkMetin = sayfa ? parkMetinRe.test(sayfa) : false;
     if (parkHostRe.test(sonUrl) || parkMetin) parkli = true;
     if (sayfa) {
-      iceriktenBulgu(sayfa, r);
+      iceriktenBulgu(sayfa, r, !!markaEslesme);
       // İÇERİK ANLAMA: sayfanın ne olduğunu çıkar (başlık/tür/açıklama).
       const bilgi = sayfaBilgiCikar(sayfa);
       r.sayfa = bilgi;
