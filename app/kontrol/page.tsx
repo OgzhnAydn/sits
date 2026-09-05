@@ -4,7 +4,7 @@
 // Tüm markalar + sistem sağlığı + kanal durumu (iOS/Android/Google/Meta) tek ekranda.
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ConfigProvider, theme, Row, Col, Card, Statistic, Table, Tag, Flex, Button, Spin, Typography, Badge, Progress } from "antd";
+import { ConfigProvider, theme, Row, Col, Card, Statistic, Table, Tag, Flex, Button, Spin, Typography, Badge, Progress, Grid } from "antd";
 import {
   EyeOutlined, ThunderboltOutlined, SafetyCertificateOutlined, GlobalOutlined, LogoutOutlined,
   AppleOutlined, AndroidOutlined, GoogleOutlined, NotificationOutlined, RadarChartOutlined, BarChartOutlined, CheckCircleOutlined, MinusCircleOutlined,
@@ -28,6 +28,7 @@ const durumAd: Record<string, string> = { "aktif-tuzak": "aktif tuzak", "canli":
 
 export default function KontrolOdasi() {
   const router = useRouter();
+  const screens = Grid.useBreakpoint(); // md+ → KPI'lar flex ile eşit-dolu; altında span ile 2/3'lü ızgara
   const [oturum, setOturum] = useState<boolean | null>(null);
   const [hesapAdi, setHesapAdi] = useState("");
   const [veri, setVeri] = useState<Ozet | null>(null);
@@ -71,7 +72,7 @@ export default function KontrolOdasi() {
               </div>
               <Badge status="processing" color="#31c8b0" text={<Text style={{ color: "#31c8b0", fontFamily: "monospace", fontSize: 11 }}>LIVE</Text>} />
             </Flex>
-            <Flex gap={8}>
+            <Flex gap={8} wrap style={{ rowGap: 8 }}>
               <Button icon={<RadarChartOutlined />} onClick={() => router.push("/mercek")} style={{ color: "#8fa6bd" }}>Kokpit</Button>
               <Button icon={<BarChartOutlined />} onClick={() => router.push("/panel")} style={{ color: "#8fa6bd" }}>Panel</Button>
               <Button icon={<LogoutOutlined />} onClick={() => { cikis(); router.replace("/marka-giris"); }} style={{ color: "#8fa6bd" }}>Çıkış ({hesapAdi})</Button>
@@ -87,7 +88,7 @@ export default function KontrolOdasi() {
               { t: "İzlenen Marka", v: fmt(veri.ozet.marka), i: <GlobalOutlined />, c: "#4d9fe0" },
               { t: "Aktif Tuzak", v: fmt(veri.ozet.aktif), i: <ThunderboltOutlined />, c: "#f5222d" },
             ].map((k) => (
-              <Col key={k.t} xs={12} sm={8} lg={4} flex="1">
+              <Col key={k.t} {...(screens.md ? { flex: "1" } : { xs: 12, sm: 8 })}>
                 <Card size="small" style={KART} styles={{ body: { padding: "12px 14px" } }}>
                   <Statistic title={<Text style={{ fontSize: 11, color: "#8fa6bd" }}>{k.t}</Text>} value={k.v} prefix={<span style={{ color: k.c, marginRight: 4 }}>{k.i}</span>} valueStyle={{ color: k.c, fontSize: 20, fontWeight: 700 }} />
                 </Card>
