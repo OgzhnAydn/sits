@@ -190,13 +190,38 @@ function duzenlemeMesafesi(a: string, b: string): number {
   return dp[m][n];
 }
 
+function ortakOnek(a: string, b: string): number {
+  let i = 0; const n = Math.min(a.length, b.length);
+  while (i < n && a[i] === b[i]) i++;
+  return i;
+}
+// Domainlerde sık görülen görsel-aldatan harf/rakam çiftleri (l↔1, o↔0, a↔4…). Erken
+// konumda olsalar bile "marka gibi görünür"; guarani/abbank gibi farklı kelimeler taşımaz.
+const GORSEL_CIFT: Record<string, string> = {
+  "0": "o", o: "0", "1": "l", l: "1", i: "1", "5": "s", s: "5",
+  "3": "e", e: "3", "4": "a", a: "4", "9": "g", g: "9", "6": "b", b: "6", "7": "t", t: "7", "2": "z", z: "2",
+};
+// Tek harflik yer-değiştirme görsel-aldatan bir çift mi? (turkce1l≈turkcell, 4kbank≈akbank)
+function tekEditGorsel(label: string, k: string): boolean {
+  if (label.length !== k.length) return false;
+  let fark = -1;
+  for (let i = 0; i < k.length; i++) if (label[i] !== k[i]) { if (fark >= 0) return false; fark = i; }
+  return fark >= 0 && GORSEL_CIFT[k[fark]] === label[fark];
+}
+
 // Tescilli etiket, markaya harf-oyunuyla benziyor mu? (göz-aldatan typosquat: anadolumet≈anadolujet)
+// FP DARALTMA: gerçek typosquat markanın başlangıç şeklini korur (≥3 ortak önek); farklı bir
+// meşru kelime (guarani≈garanti, abbank≈akbank) baştan ayrışır → eşik-içi olsa da elenmeli.
+// İstisna: erken konumda görsel-aldatan tek harf (4kbank≈akbank) yine typosquat sayılır.
 function yakinTypo(label: string, k: string): boolean {
   if (k.length < 5) return false; // 4-harf anahtarda edit-distance çok yanlış-pozitif
   const esik = k.length >= 7 ? 2 : 1;
   if (Math.abs(label.length - k.length) > esik) return false;
   const d = duzenlemeMesafesi(label, k);
-  return d > 0 && d <= esik;
+  if (d === 0 || d > esik) return false;
+  if (ortakOnek(label, k) >= 3) return true;              // başlangıcı koruyan klasik typosquat
+  if (esik === 1 && d === 1 && tekEditGorsel(label, k)) return true; // erken ama görsel-aldatan
+  return false;
 }
 
 // domain, verilen marka anahtarının GERÇEK taklidi mi? (kendi domaini/kelime-içi değil)
