@@ -312,6 +312,30 @@ export default function MarkaKoruma() {
               Bugüne kadar markanız adına açılmış <b className="text-on-surface">{ozet.toplam}</b> sahte/şüpheli adres tespit ettik.
             </p>
           )}
+          {/* CANLILIK GÖSTERGESİ — "donmuş mu?" endişesini yanıtlar: en yeni tespit + son pencerelerde kaç yeni.
+             Yeni gelenlerin çoğu .ph kümesine katlandığından bireysel liste durağan görünüyor; bu satır akışın canlı olduğunu gösterir. */}
+          {(() => {
+            const s = (ozet.sonlar ?? []).filter((t) => t.zaman);
+            if (!s.length) return null;
+            const now = Date.now(), H = 3600000;
+            const enYeni = Math.max(...s.map((t) => t.zaman));
+            const g24 = s.filter((t) => now - t.zaman < 24 * H).length;
+            const g48 = s.filter((t) => now - t.zaman < 48 * H).length;
+            return (
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+                <span className="inline-flex items-center gap-1.5 font-semibold text-secondary">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-secondary opacity-70" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-secondary" />
+                  </span>
+                  Canlı izleme
+                </span>
+                <span className="text-on-surface-variant">· son tespit <b className="text-on-surface">{tespitZaman(enYeni)}</b></span>
+                {g24 > 0 && <span className="text-on-surface-variant">· son 24 saatte <b className="text-secondary">+{g24}</b></span>}
+                {g48 > g24 && <span className="text-on-surface-variant">· 48 saatte <b className="text-on-surface">+{g48}</b></span>}
+              </div>
+            );
+          })()}
           <div className="mt-3 grid grid-cols-4 gap-2 text-center">
             {ozet.kumeAdet && ozet.kumeAdet > 0 ? (
               <>
