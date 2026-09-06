@@ -15,6 +15,7 @@ import {
   WarningOutlined, ClockCircleOutlined, BarChartOutlined, AppstoreOutlined,
 } from "@ant-design/icons";
 import { markaDinle, cikis } from "@/lib/markaAuth";
+import { usePanoTema } from "@/lib/panoTema";
 import AnalitikPanel from "./AnalitikPanel";
 
 const { Text, Title } = Typography;
@@ -37,10 +38,10 @@ const fmt = (n: number) => n.toLocaleString("tr-TR");
 const buyukHarf = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 // 4-seviye güven — "kırmızı=kesin sahte" değil; aday≠kesin ilkesiyle.
 function seviye(s: number): { renk: string; etiket: string; tag: string } {
-  if (s >= 60) return { renk: "#f5222d", etiket: "AKTİF TEHDİT", tag: "error" };
-  if (s >= 45) return { renk: "#fa8c16", etiket: "YÜKSEK GÜVEN", tag: "volcano" };
-  if (s >= 30) return { renk: "#faad14", etiket: "ŞÜPHELİ", tag: "warning" };
-  return { renk: "#8c8c8c", etiket: "İZLEMEDE", tag: "default" };
+  if (s >= 60) return { renk: "var(--c-f5222d)", etiket: "AKTİF TEHDİT", tag: "error" };
+  if (s >= 45) return { renk: "var(--c-fa8c16)", etiket: "YÜKSEK GÜVEN", tag: "volcano" };
+  if (s >= 30) return { renk: "var(--c-faad14)", etiket: "ŞÜPHELİ", tag: "warning" };
+  return { renk: "var(--c-8c8c8c)", etiket: "İZLEMEDE", tag: "default" };
 }
 const skorRenk = (s: number) => seviye(s).renk;
 function hexRgba(hex: string, a: number): string {
@@ -76,29 +77,30 @@ async function ekranAl(domain: string): Promise<string | null> {
 }
 
 export default function MercekKokpit() {
+  const { tema, koyu, degistir } = usePanoTema();
   return (
     <ConfigProvider
       theme={{
-        algorithm: theme.darkAlgorithm,
+        algorithm: koyu ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
-          colorPrimary: "#f2a33c", colorInfo: "#4d9fe0", borderRadius: 12,
-          colorBgLayout: "#080f1a", colorBgContainer: "#0b1726", colorBorderSecondary: "#17293c",
+          colorPrimary: koyu ? "#f2a33c" : "#c06e12", colorInfo: koyu ? "#4d9fe0" : "#2478c9", borderRadius: 12,
+          colorBgLayout: koyu ? "#080f1a" : "#eef1f6", colorBgContainer: koyu ? "#0b1726" : "#ffffff", colorBorderSecondary: koyu ? "#17293c" : "#dbe3ee",
           fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
         },
         components: {
           Card: { headerBg: "transparent", headerFontSize: 12, paddingLG: 16 },
           Statistic: { titleFontSize: 12 },
-          Table: { headerBg: "#0d1b2b", rowHoverBg: "#12233a", borderColor: "#152a40" },
+          Table: { headerBg: koyu ? "#0d1b2b" : "#eef2f8", rowHoverBg: koyu ? "#12233a" : "#f1f5fa", borderColor: koyu ? "#152a40" : "#dbe3ee" },
         },
       }}
     >
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" />
-      <Kokpit />
+      <Kokpit tema={tema} koyu={koyu} degistir={degistir} />
     </ConfigProvider>
   );
 }
 
-function Kokpit() {
+function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degistir: () => void }) {
   const [loglar, setLoglar] = useState<Record<string, { toplam: number }>>({});
   const [akis, setAkis] = useState<AkisSatir[]>([]);
   const [toplamCT, setToplamCT] = useState(0);
@@ -218,32 +220,32 @@ function Kokpit() {
   const markaAdi = markaFiltre ? buyukHarf(markaFiltre) : (hesapAdi || "Tüm Markalar");
 
   if (oturum !== true) {
-    return <Flex align="center" justify="center" style={{ height: "100vh", background: "#080f1a", color: "#8fa6bd" }}><Spin tip={oturum === false ? "Yönlendiriliyor…" : "Oturum kontrol ediliyor…"}><div style={{ padding: 40 }} /></Spin></Flex>;
+    return <Flex vertical align="center" justify="center" gap={14} style={{ position: "fixed", inset: 0, zIndex: 60, background: "var(--c-080f1a)", color: "var(--c-8fa6bd)" }}><Spin size="large" /><span>{oturum === false ? "Yönlendiriliyor…" : "Oturum kontrol ediliyor…"}</span></Flex>;
   }
 
   const baslik = (no: number, t: string, sag?: React.ReactNode) => (
     <Flex align="center" gap={9} style={{ width: "100%" }}>
-      <Avatar size={20} style={{ background: "transparent", border: "1.5px solid #f2a33c", color: "#f2a33c", fontSize: 11, fontWeight: 600, verticalAlign: "middle" }}>{no}</Avatar>
-      <Text strong style={{ fontSize: 11.5, letterSpacing: ".08em", color: "#cfe0ef" }}>{t}</Text>
+      <Avatar size={20} style={{ background: "transparent", border: "1.5px solid var(--c-f2a33c)", color: "var(--c-f2a33c)", fontSize: 11, fontWeight: 600, verticalAlign: "middle" }}>{no}</Avatar>
+      <Text strong style={{ fontSize: 11.5, letterSpacing: ".08em", color: "var(--c-cfe0ef)" }}>{t}</Text>
       {sag && <div style={{ marginLeft: "auto" }}>{sag}</div>}
     </Flex>
   );
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#080f1a", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "'IBM Plex Sans',sans-serif" }}>
+    <div className="pano" data-tema={tema} style={{ position: "fixed", inset: 0, zIndex: 60, background: "var(--c-080f1a)", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "'IBM Plex Sans',sans-serif" }}>
       {/* ÜST ÇUBUK */}
-      <Flex align="center" gap={16} wrap style={{ padding: "10px 18px", borderBottom: "1px solid #17293c", background: "#0a1420", rowGap: 8 }}>
+      <Flex align="center" gap={16} wrap style={{ padding: "10px 18px", borderBottom: "1px solid var(--c-17293c)", background: "var(--c-0a1420)", rowGap: 8 }}>
         <Flex align="center" gap={10}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/mirleon-white.svg" alt="MirLeon" style={{ height: 20, width: "auto" }} />
-          <span style={{ width: 1, height: 18, background: "#1f3652" }} />
-          <Text style={{ fontSize: 12, letterSpacing: ".08em", color: "#5f7c9c", textTransform: "uppercase" }}>Siber Mercek</Text>
+          <img src={koyu ? "/mirleon-white.svg" : "/mirleon.svg"} alt="MirLeon" style={{ height: 20, width: "auto" }} />
+          <span style={{ width: 1, height: 18, background: "var(--c-1f3652)" }} />
+          <Text style={{ fontSize: 12, letterSpacing: ".08em", color: "var(--c-5f7c9c)", textTransform: "uppercase" }}>Siber Mercek</Text>
         </Flex>
-        <Badge status="processing" color="#31c8b0" text={<Text style={{ color: "#31c8b0", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11 }}>LIVE</Text>} />
-        <Text style={{ color: "#8fa6bd", fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 }}>{toplamCT ? `${(toplamCT / 1e9).toFixed(2)}B sertifika` : "—"}</Text>
+        <Badge status="processing" color="var(--c-31c8b0)" text={<Text style={{ color: "var(--c-31c8b0)", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11 }}>LIVE</Text>} />
+        <Text style={{ color: "var(--c-8fa6bd)", fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 }}>{toplamCT ? `${(toplamCT / 1e9).toFixed(2)}B sertifika` : "—"}</Text>
         {operator && (<>
-          <span style={{ width: 1, height: 18, background: "#1f3652" }} />
-          <Button size="small" icon={<AppstoreOutlined />} onClick={() => router.push("/kontrol")} style={{ color: "#8fa6bd" }}>Kontrol</Button>
+          <span style={{ width: 1, height: 18, background: "var(--c-1f3652)" }} />
+          <Button size="small" icon={<AppstoreOutlined />} onClick={() => router.push("/kontrol")} style={{ color: "var(--c-8fa6bd)" }}>Kontrol</Button>
           <Select
             size="small" value={markaFiltre} onChange={markaSec} showSearch optionFilterProp="label"
             style={{ minWidth: 168 }} placeholder="Marka seç"
@@ -252,10 +254,12 @@ function Kokpit() {
         </>)}
         <div style={{ flex: 1 }} />
         <Clock />
-        <Badge count={sayim.yuksek} size="small" color="#f5222d"><BellOutlined style={{ color: "#8fa6bd", fontSize: 17 }} /></Badge>
-        <Button size="small" icon={gorunum === "panel" ? <GlobalOutlined /> : <BarChartOutlined />} onClick={() => setGorunum(gorunum === "panel" ? "evren" : "panel")} style={{ color: gorunum === "panel" ? "#4d9fe0" : "#8fa6bd" }}>{gorunum === "panel" ? "Tehdit Evreni" : "Analitik Panel"}</Button>
-        <Button size="small" icon={<LogoutOutlined />} onClick={() => { cikis(); router.replace("/marka-giris"); }} style={{ color: "#8fa6bd" }}>
-          <Avatar size={20} style={{ background: "#1f4b78", fontSize: 10 }}>{(hesapAdi || "A").charAt(0)}</Avatar> {hesapAdi}
+        <Button size="small" type="text" onClick={degistir} title={koyu ? "Açık temaya geç" : "Koyu temaya geç"} style={{ color: "var(--c-8fa6bd)" }}
+          icon={<span className="material-symbols-outlined" style={{ fontSize: 17, lineHeight: 1 }}>{koyu ? "light_mode" : "dark_mode"}</span>} />
+        <Badge count={sayim.yuksek} size="small" color="var(--c-f5222d)"><BellOutlined style={{ color: "var(--c-8fa6bd)", fontSize: 17 }} /></Badge>
+        <Button size="small" icon={gorunum === "panel" ? <GlobalOutlined /> : <BarChartOutlined />} onClick={() => setGorunum(gorunum === "panel" ? "evren" : "panel")} style={{ color: gorunum === "panel" ? "var(--c-4d9fe0)" : "var(--c-8fa6bd)" }}>{gorunum === "panel" ? "Tehdit Evreni" : "Analitik Panel"}</Button>
+        <Button size="small" icon={<LogoutOutlined />} onClick={() => { cikis(); router.replace("/marka-giris"); }} style={{ color: "var(--c-8fa6bd)" }}>
+          <Avatar size={20} style={{ background: "var(--c-1f4b78)", fontSize: 10 }}>{(hesapAdi || "A").charAt(0)}</Avatar> {hesapAdi}
         </Button>
       </Flex>
 
@@ -266,22 +270,22 @@ function Kokpit() {
           <Col xs={24} lg={5}>
             <Flex vertical gap={12}>
               <Card size="small" title={baslik(1, "MARKA PANELİ")}>
-                <Flex vertical align="center" gap={8} style={{ paddingBottom: 12, borderBottom: "1px solid #17293c" }}>
-                  <Avatar size={54} shape="square" style={{ background: "linear-gradient(135deg,#f2a33c,#e5772f)", color: "#0a1420", fontSize: 20, fontWeight: 700, borderRadius: 14 }}>{markaAdi.slice(0, 2).toUpperCase()}</Avatar>
+                <Flex vertical align="center" gap={8} style={{ paddingBottom: 12, borderBottom: "1px solid var(--c-17293c)" }}>
+                  <Avatar size={54} shape="square" style={{ background: "linear-gradient(135deg,var(--c-f2a33c),var(--c-e5772f))", color: "var(--c-0a1420)", fontSize: 20, fontWeight: 700, borderRadius: 14 }}>{markaAdi.slice(0, 2).toUpperCase()}</Avatar>
                   <Title level={5} style={{ margin: 0 }}>{markaAdi.toUpperCase()}</Title>
                   <Tag color="blue" bordered style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, letterSpacing: ".1em" }}>KORUNAN MARKA</Tag>
                   <Text type="secondary" style={{ fontSize: 11 }}>{markaFiltre ? "Marka tehdit panosu" : "Operatör görünümü"}</Text>
                 </Flex>
                 <div style={{ paddingTop: 8 }}>
-                  <StatSatir ikon={<EyeOutlined style={{ color: "#4d9fe0" }} />} t="Toplam Gözlem" n={sayim.toplam} />
-                  <StatSatir ikon={<SafetyCertificateOutlined style={{ color: "#f5222d" }} />} t="Yüksek Güven" n={sayim.yuksek} />
-                  <StatSatir ikon={<SearchOutlined style={{ color: "#faad14" }} />} t="Araştırılıyor" n={sayim.arastiriliyor} />
-                  <StatSatir ikon={<ClusterOutlined style={{ color: "#8b7de0" }} />} t="Altyapı Bağlantılı" n={sayim.altyapi} />
-                  <StatSatir ikon={<ThunderboltOutlined style={{ color: "#31c8b0" }} />} t="Yeni Gözlem" n={sayim.yeni} son />
+                  <StatSatir ikon={<EyeOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Toplam Gözlem" n={sayim.toplam} />
+                  <StatSatir ikon={<SafetyCertificateOutlined style={{ color: "var(--c-f5222d)" }} />} t="Yüksek Güven" n={sayim.yuksek} />
+                  <StatSatir ikon={<SearchOutlined style={{ color: "var(--c-faad14)" }} />} t="Araştırılıyor" n={sayim.arastiriliyor} />
+                  <StatSatir ikon={<ClusterOutlined style={{ color: "var(--c-8b7de0)" }} />} t="Altyapı Bağlantılı" n={sayim.altyapi} />
+                  <StatSatir ikon={<ThunderboltOutlined style={{ color: "var(--c-31c8b0)" }} />} t="Yeni Gözlem" n={sayim.yeni} son />
                 </div>
                 <Button block type={gorunum === "panel" ? "primary" : "default"} icon={gorunum === "panel" ? <GlobalOutlined /> : <BarChartOutlined />}
                   onClick={() => setGorunum(gorunum === "panel" ? "evren" : "panel")}
-                  style={{ marginTop: 12, height: 40, ...(gorunum === "panel" ? {} : { background: "linear-gradient(135deg,#12283f,#0e2036)", borderColor: "#1f4b78", color: "#cfe3f5" }), fontWeight: 600 }}>
+                  style={{ marginTop: 12, height: 40, ...(gorunum === "panel" ? {} : { background: "linear-gradient(135deg,var(--c-12283f),var(--c-0e2036))", borderColor: "var(--c-1f4b78)", color: "var(--c-cfe3f5)" }), fontWeight: 600 }}>
                   {gorunum === "panel" ? "← Tehdit Evrenine dön" : "Analitik Panel — tempo, ortak nokta, ülke"}
                 </Button>
               </Card>
@@ -290,11 +294,11 @@ function Kokpit() {
                 <Segmented
                   vertical block value={filtre} onChange={(v) => setFiltre(v as Filtre)}
                   options={[
-                    { label: <FiltreEt renk="#cfe0ef" t="Tümü" n={sayim.toplam} />, value: "hepsi" },
-                    { label: <FiltreEt renk="#f5222d" t="Yüksek Güven" n={sayim.yuksek} />, value: "yuksek" },
-                    { label: <FiltreEt renk="#faad14" t="Araştırılıyor" n={sayim.arastiriliyor} />, value: "arastiriliyor" },
-                    { label: <FiltreEt renk="#8b7de0" t="Altyapı Bağlantılı" n={sayim.altyapi} />, value: "altyapi" },
-                    { label: <FiltreEt renk="#31c8b0" t="Yeni Gözlem" n={sayim.yeni} />, value: "yeni" },
+                    { label: <FiltreEt renk="var(--c-cfe0ef)" t="Tümü" n={sayim.toplam} />, value: "hepsi" },
+                    { label: <FiltreEt renk="var(--c-f5222d)" t="Yüksek Güven" n={sayim.yuksek} />, value: "yuksek" },
+                    { label: <FiltreEt renk="var(--c-faad14)" t="Araştırılıyor" n={sayim.arastiriliyor} />, value: "arastiriliyor" },
+                    { label: <FiltreEt renk="var(--c-8b7de0)" t="Altyapı Bağlantılı" n={sayim.altyapi} />, value: "altyapi" },
+                    { label: <FiltreEt renk="var(--c-31c8b0)" t="Yeni Gözlem" n={sayim.yeni} />, value: "yeni" },
                   ]}
                 />
               </Card>
@@ -310,15 +314,16 @@ function Kokpit() {
               size="small" style={{ height: "100%" }} styles={{ body: { height: "calc(100% - 46px)", padding: 8 } }}
               title={baslik(3, "THREAT UNIVERSE GRAFİĞİ", (
                 <Space size={11} wrap>
-                  <Efsane renk="#f5222d" t="Aktif Tehdit" />
-                  <Efsane renk="#fa8c16" t="Yüksek Güven" />
-                  <Efsane renk="#faad14" halka t="Şüpheli" />
-                  <Efsane renk="#8b7de0" t="Altyapı" />
-                  <Efsane renk="#39bdf8" t="Resmi Marka" />
+                  <Efsane renk="var(--c-f5222d)" t="Aktif Tehdit" />
+                  <Efsane renk="var(--c-fa8c16)" t="Yüksek Güven" />
+                  <Efsane renk="var(--c-faad14)" halka t="Şüpheli" />
+                  <Efsane renk="var(--c-8b7de0)" t="Altyapı" />
+                  <Efsane renk="var(--c-39bdf8)" t="Resmi Marka" />
                 </Space>
               ))}
             >
-              <div style={{ height: 460 }}><ThreatUniverse marka={markaAdi} adaylar={gosterilen} secili={secili} rapor={rapor} onSelect={analizEt} /></div>
+              {/* Grafik her iki temada da koyu "radar ekranı" kalır (canvas renkleri koyu; JS ile CSS-var okunamadığından). */}
+              <div style={{ height: 460, background: "#0a1420", borderRadius: 10, overflow: "hidden" }}><ThreatUniverse marka={markaAdi} adaylar={gosterilen} secili={secili} rapor={rapor} onSelect={analizEt} /></div>
             </Card>
           </Col>
 
@@ -333,14 +338,14 @@ function Kokpit() {
           <Col xs={24} lg={18}>
             <Card size="small" title={baslik(5, "CANLI OLAY AKIŞI")}>
               <Table
-                size="small" pagination={false} rowKey={(_, i) => String(i)} scroll={{ x: "max-content" }}
+                size="small" pagination={false} rowKey={(r) => `${r.zaman}-${r.tip}-${r.varlik}`} scroll={{ x: "max-content" }}
                 dataSource={olaylar(akis, gosterilen, markaFiltre)}
                 locale={{ emptyText: <Empty description="Canlı olay bekleniyor…" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
                 columns={[
-                  { title: "Zaman", dataIndex: "zaman", width: 90, render: (v) => <Text style={{ fontFamily: "'IBM Plex Mono',monospace", color: "#8fa6bd", fontSize: 11 }}>{v}</Text> },
+                  { title: "Zaman", dataIndex: "zaman", width: 90, render: (v) => <Text style={{ fontFamily: "'IBM Plex Mono',monospace", color: "var(--c-8fa6bd)", fontSize: 11 }}>{v}</Text> },
                   { title: "Olay Tipi", dataIndex: "tip", width: 170, render: (v, r) => <Text style={{ color: r.renk, fontFamily: "'IBM Plex Mono',monospace", fontSize: 10.5, fontWeight: 600 }}>{v}</Text> },
-                  { title: "Açıklama", dataIndex: "aciklama", ellipsis: true, render: (v) => <Text style={{ color: "#a7bccf", fontSize: 12 }}>{v}</Text> },
-                  { title: "İlişkili Varlık", dataIndex: "varlik", width: 220, ellipsis: true, render: (v) => <Text style={{ fontFamily: "'IBM Plex Mono',monospace", color: "#8fa6bd", fontSize: 11 }}>{v}</Text> },
+                  { title: "Açıklama", dataIndex: "aciklama", ellipsis: true, render: (v) => <Text style={{ color: "var(--c-a7bccf)", fontSize: 12 }}>{v}</Text> },
+                  { title: "İlişkili Varlık", dataIndex: "varlik", width: 220, ellipsis: true, render: (v) => <Text style={{ fontFamily: "'IBM Plex Mono',monospace", color: "var(--c-8fa6bd)", fontSize: 11 }}>{v}</Text> },
                   { title: "Skor", dataIndex: "skor", width: 60, align: "center", render: (v) => v ? <Tag color={v >= 60 ? "error" : "warning"} style={{ margin: 0, fontFamily: "'IBM Plex Mono',monospace" }}>{v}</Tag> : <Text type="secondary">–</Text> },
                 ]}
               />
@@ -351,10 +356,10 @@ function Kokpit() {
           <Col xs={24} lg={6}>
             <Card size="small" style={{ height: "100%" }} title={baslik(6, "KÜÇÜK İSTATİSTİKLER")}>
               <Row gutter={[10, 10]}>
-                <Col span={12}><MiniStat n={sayim.toplam} t="Toplam Gözlem" renk="#e9f2fa" /></Col>
-                <Col span={12}><MiniStat n={new Set(markaAdaylari.map((a) => a.marka)).size} t="İzlenen Marka" renk="#4d9fe0" /></Col>
-                <Col span={12}><MiniStat n={sayim.yuksek} t="Yüksek Güven" renk="#f5222d" /></Col>
-                <Col span={12}><MiniStat n={sayim.yeni} t="Yeni Gözlem" renk="#31c8b0" /></Col>
+                <Col span={12}><MiniStat n={sayim.toplam} t="Toplam Gözlem" renk="var(--c-e9f2fa)" /></Col>
+                <Col span={12}><MiniStat n={new Set(markaAdaylari.map((a) => a.marka)).size} t="İzlenen Marka" renk="var(--c-4d9fe0)" /></Col>
+                <Col span={12}><MiniStat n={sayim.yuksek} t="Yüksek Güven" renk="var(--c-f5222d)" /></Col>
+                <Col span={12}><MiniStat n={sayim.yeni} t="Yeni Gözlem" renk="var(--c-31c8b0)" /></Col>
               </Row>
             </Card>
           </Col>
@@ -369,12 +374,12 @@ function Kokpit() {
 function Clock() {
   const [t, setT] = useState("--:--:--");
   useEffect(() => { const f = () => setT(new Date().toTimeString().slice(0, 8)); f(); const id = setInterval(f, 1000); return () => clearInterval(id); }, []);
-  return <Text style={{ color: "#8fa6bd", fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 }}>{t}</Text>;
+  return <Text style={{ color: "var(--c-8fa6bd)", fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 }}>{t}</Text>;
 }
 function StatSatir({ ikon, t, n, son }: { ikon: React.ReactNode; t: string; n: number; son?: boolean }) {
   return (
-    <Flex align="center" gap={10} style={{ padding: "8px 2px", borderBottom: son ? "none" : "1px solid #12202e" }}>
-      {ikon}<Text style={{ color: "#a7bccf", fontSize: 12.5 }}>{t}</Text>
+    <Flex align="center" gap={10} style={{ padding: "8px 2px", borderBottom: son ? "none" : "1px solid var(--c-12202e)" }}>
+      {ikon}<Text style={{ color: "var(--c-a7bccf)", fontSize: 12.5 }}>{t}</Text>
       <Text strong style={{ marginLeft: "auto", fontFamily: "'IBM Plex Mono',monospace", fontSize: 15 }}>{fmt(n)}</Text>
     </Flex>
   );
@@ -383,20 +388,20 @@ function FiltreEt({ renk, t, n }: { renk: string; t: string; n: number }) {
   return <Flex align="center" gap={9} style={{ width: "100%", padding: "2px 2px" }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: renk, flex: "0 0 auto" }} /><span style={{ fontSize: 12.5 }}>{t}</span><b style={{ marginLeft: "auto", fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(n)}</b></Flex>;
 }
 function MiniStat({ n, t, renk }: { n: number; t: string; renk: string }) {
-  return <div style={{ background: "rgba(47,111,176,.06)", border: "1px solid #17293c", borderRadius: 10, padding: 12 }}><div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 26, fontWeight: 600, color: renk, lineHeight: 1 }}>{fmt(n)}</div><Text type="secondary" style={{ fontSize: 10.5, marginTop: 5, display: "block" }}>{t}</Text></div>;
+  return <div style={{ background: "rgba(47,111,176,.06)", border: "1px solid var(--c-17293c)", borderRadius: 10, padding: 12 }}><div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 26, fontWeight: 600, color: renk, lineHeight: 1 }}>{fmt(n)}</div><Text type="secondary" style={{ fontSize: 10.5, marginTop: 5, display: "block" }}>{t}</Text></div>;
 }
 function Efsane({ renk, t, halka }: { renk: string; t: string; halka?: boolean }) {
-  return <Flex align="center" gap={5}><span style={{ width: 9, height: 9, borderRadius: "50%", background: halka ? "transparent" : renk, border: halka ? `2px solid ${renk}` : "none" }} /><Text style={{ fontSize: 9.5, color: "#8fa6bd" }}>{t}</Text></Flex>;
+  return <Flex align="center" gap={5}><span style={{ width: 9, height: 9, borderRadius: "50%", background: halka ? "transparent" : renk, border: halka ? `2px solid ${renk}` : "none" }} /><Text style={{ fontSize: 9.5, color: "var(--c-8fa6bd)" }}>{t}</Text></Flex>;
 }
 
 function olaylar(akis: AkisSatir[], adaylar: Aday[], markaFiltre: string) {
   const saat = (d = new Date()) => d.toTimeString().slice(0, 8);
   const out: { zaman: string; tip: string; renk: string; aciklama: string; varlik: string; skor?: number }[] = [];
   for (const a of [...adaylar].sort((x, y) => y.skor - x.skor).slice(0, 3)) {
-    out.push({ zaman: saat(), tip: a.skor >= 60 ? "TEHDİT OLUŞTURULDU" : "MARKA EŞLEŞMESİ", renk: a.skor >= 60 ? "#f5222d" : "#faad14", aciklama: `${a.domain} · ${buyukHarf(a.marka)} taklidi (skor ${a.skor})`, varlik: a.domain, skor: a.skor });
+    out.push({ zaman: saat(), tip: a.skor >= 60 ? "TEHDİT OLUŞTURULDU" : "MARKA EŞLEŞMESİ", renk: a.skor >= 60 ? "var(--c-f5222d)" : "var(--c-faad14)", aciklama: `${a.domain} · ${buyukHarf(a.marka)} taklidi (skor ${a.skor})`, varlik: a.domain, skor: a.skor });
   }
   for (const e of akis.filter((x) => !markaFiltre || (x.marka || "").toLowerCase() === markaFiltre).slice(0, 4)) {
-    out.push({ zaman: saat(), tip: e.marka ? "MARKA EŞLEŞMESİ" : "YENİ SERTİFİKA", renk: e.marka ? "#faad14" : "#4d9fe0", aciklama: e.marka ? `${e.domain} → ${buyukHarf(e.marka)} ilişkili sertifika` : `${e.domain} · CT sertifikası yayınlandı`, varlik: e.domain });
+    out.push({ zaman: saat(), tip: e.marka ? "MARKA EŞLEŞMESİ" : "YENİ SERTİFİKA", renk: e.marka ? "var(--c-faad14)" : "var(--c-4d9fe0)", aciklama: e.marka ? `${e.domain} → ${buyukHarf(e.marka)} ilişkili sertifika` : `${e.domain} · CT sertifikası yayınlandı`, varlik: e.domain });
   }
   return out.slice(0, 6);
 }
@@ -419,7 +424,7 @@ function nedenTehdit(r: Rapor | null) {
 }
 
 function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom }: { aday: Aday | null; rapor: Rapor | null; yukleniyor: boolean; markaAdi: string; resmiDom?: string }) {
-  if (!aday) return <Empty description={<span style={{ color: "#8fa6bd" }}><b style={{ color: "#31c8a0" }}>{markaAdi} için tehdit yok</b><br />Sistem izlemeye devam ediyor.</span>} />;
+  if (!aday) return <Empty description={<span style={{ color: "var(--c-8fa6bd)" }}><b style={{ color: "var(--c-31c8a0)" }}>{markaAdi} için tehdit yok</b><br />Sistem izlemeye devam ediyor.</span>} />;
   const risk = rapor?.risk ?? aday.skor;
   const sv = seviye(risk);
   const renk = sv.renk;
@@ -436,7 +441,7 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom }: { aday: A
         <Text style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 14, wordBreak: "break-all" }}>{aday.domain}</Text>
         <br /><Tag color={sev.c as string} style={{ marginTop: 8 }}>{sev.t}</Tag>
       </div>
-      <Flex align="center" justify="space-between" style={{ borderTop: "1px solid #17293c", borderBottom: "1px solid #17293c", padding: "10px 0" }}>
+      <Flex align="center" justify="space-between" style={{ borderTop: "1px solid var(--c-17293c)", borderBottom: "1px solid var(--c-17293c)", padding: "10px 0" }}>
         <Statistic title="Güven Skoru" value={yukleniyor && !rapor ? "…" : risk} suffix="/100" valueStyle={{ color: renk, fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600 }} />
         <Progress type="dashboard" percent={Math.min(100, risk)} size={70} strokeColor={renk} format={() => ""} />
       </Flex>
@@ -449,8 +454,8 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom }: { aday: A
         <Flex vertical gap={6} style={{ marginTop: 8 }}>
           {neden.map((n, i) => (
             <Flex key={i} align="center" gap={8}>
-              <SafetyCertificateOutlined style={{ color: "#31c8a0", fontSize: 13 }} />
-              <Text style={{ fontSize: 12, color: "#a7bccf" }}>{n.t}</Text>
+              <SafetyCertificateOutlined style={{ color: "var(--c-31c8a0)", fontSize: 13 }} />
+              <Text style={{ fontSize: 12, color: "var(--c-a7bccf)" }}>{n.t}</Text>
               {n.m && <Text strong style={{ marginLeft: "auto", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5 }}>{n.m}</Text>}
             </Flex>
           ))}
@@ -466,8 +471,8 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom }: { aday: A
           { key: "5", label: "Sertifika", children: alan("En yeni sertifika") || alan("Sertifika (urlscan)") || "—" },
           ...(rapor?.dna && rapor.dna.eslesenler.length > 0 ? [{ key: "6", label: "Kardeş domain", children: `${rapor.dna.eslesenler.length} (kampanya)` }] : []),
         ]}
-        labelStyle={{ color: "#5c748b", fontSize: 11.5 }}
-        contentStyle={{ color: "#cfe0ef", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, justifyContent: "flex-end", textAlign: "right" }}
+        labelStyle={{ color: "var(--c-5c748b)", fontSize: 11.5 }}
+        contentStyle={{ color: "var(--c-cfe0ef)", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, justifyContent: "flex-end", textAlign: "right" }}
       />
       <KarsilastirGorsel resmiDom={resmiDom} fakeDom={aday.domain} fakeShot={rapor?.ekranGoruntusu} benzerlik={benzerlik} markaAdi={markaAdi} />
 
@@ -505,8 +510,8 @@ function SaldiriGelisimi({ rapor }: { rapor: Rapor | null }) {
           dot: i === asama ? <ThunderboltOutlined style={{ fontSize: 12 }} /> : undefined,
           children: (
             <Flex justify="space-between" gap={8}>
-              <Text style={{ fontSize: 12, color: i <= asama ? "#cfe0ef" : "#5c748b", fontWeight: i === asama ? 600 : 400 }}>{s}{i === asama ? " · şu an burada" : ""}</Text>
-              {zaman(i) && <Text style={{ fontSize: 10, color: "#8fa6bd", fontFamily: "'IBM Plex Mono',monospace", whiteSpace: "nowrap" }}>{zaman(i)}</Text>}
+              <Text style={{ fontSize: 12, color: i <= asama ? "var(--c-cfe0ef)" : "var(--c-5c748b)", fontWeight: i === asama ? 600 : 400 }}>{s}{i === asama ? " · şu an burada" : ""}</Text>
+              {zaman(i) && <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)", fontFamily: "'IBM Plex Mono',monospace", whiteSpace: "nowrap" }}>{zaman(i)}</Text>}
             </Flex>
           ),
         }))}
@@ -522,9 +527,9 @@ function RiskCizgi({ gecmis }: { gecmis: Gecmis[] }) {
   const renk = seviye(gecmis[n - 1].risk).renk;
   return (
     <div style={{ marginTop: 4 }}>
-      <Text style={{ fontSize: 10, color: "#8fa6bd" }}>Risk gelişimi · {gecmis[0].risk} → {gecmis[n - 1].risk} ({n} gözlem)</Text>
+      <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)" }}>Risk gelişimi · {gecmis[0].risk} → {gecmis[n - 1].risk} ({n} gözlem)</Text>
       <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 42, display: "block" }} preserveAspectRatio="none">
-        <path d={`${line} L${pts[n - 1][0].toFixed(1)} ${h} L${pad} ${h} Z`} fill={hexRgba(renk, 0.15)} />
+        <path d={`${line} L${pts[n - 1][0].toFixed(1)} ${h} L${pad} ${h} Z`} fill={renk} fillOpacity={0.15} />
         <path d={line} fill="none" stroke={renk} strokeWidth="2" strokeLinejoin="round" />
         <circle cx={pts[n - 1][0]} cy={pts[n - 1][1]} r="3" fill={renk} />
       </svg>
@@ -553,28 +558,28 @@ function KarsilastirGorsel({ resmiDom, fakeDom, fakeShot, benzerlik, markaAdi }:
 
   const kutu = (baslik: string, alt: string, src: string | null, yuk: boolean, kenar: string) => (
     <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ fontSize: 9, letterSpacing: ".06em", color: "#8fa6bd", marginBottom: 4, textTransform: "uppercase" }}>{baslik}</div>
-      <div style={{ aspectRatio: "16/10", borderRadius: 8, border: `1px solid ${kenar}`, overflow: "hidden", background: "#0a1420", display: "grid", placeItems: "center" }}>
+      <div style={{ fontSize: 9, letterSpacing: ".06em", color: "var(--c-8fa6bd)", marginBottom: 4, textTransform: "uppercase" }}>{baslik}</div>
+      <div style={{ aspectRatio: "16/10", borderRadius: 8, border: `1px solid ${kenar}`, overflow: "hidden", background: "var(--c-0a1420)", display: "grid", placeItems: "center" }}>
         {yuk ? <Spin size="small" /> : src
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={src} alt={alt} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-          : <span style={{ fontSize: 10, color: "#5c748b" }}>görüntü yok</span>}
+          : <span style={{ fontSize: 10, color: "var(--c-5c748b)" }}>görüntü yok</span>}
       </div>
-      <div style={{ fontSize: 9.5, color: "#8fa6bd", marginTop: 3, fontFamily: "'IBM Plex Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{alt}</div>
+      <div style={{ fontSize: 9.5, color: "var(--c-8fa6bd)", marginTop: 3, fontFamily: "'IBM Plex Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{alt}</div>
     </div>
   );
 
   return (
-    <div style={{ borderTop: "1px solid #17293c", paddingTop: 12 }}>
+    <div style={{ borderTop: "1px solid var(--c-17293c)", paddingTop: 12 }}>
       <Text strong style={{ fontSize: 11, letterSpacing: ".05em" }}>Gerçek vs Sahte</Text>
       <Flex gap={10} style={{ marginTop: 8 }}>
-        {kutu("GERÇEK MARKA", resmiDom || markaAdi, gercek, gYuk, "#1f4b78")}
-        {kutu("ŞÜPHELİ SİTE", fakeDom, sahte, sYuk, "#5a2226")}
+        {kutu("GERÇEK MARKA", resmiDom || markaAdi, gercek, gYuk, "var(--c-1f4b78)")}
+        {kutu("ŞÜPHELİ SİTE", fakeDom, sahte, sYuk, "var(--c-5a2226)")}
       </Flex>
       {typeof benzerlik === "number" && (
         <Flex align="center" gap={8} style={{ marginTop: 10 }}>
-          <Text style={{ fontSize: 10.5, color: "#8fa6bd" }}>GÖRSEL BENZERLİK</Text>
-          <Progress percent={benzerlik} size="small" strokeColor={seviye(benzerlik).renk} style={{ flex: 1, margin: 0 }} format={(p) => <span style={{ color: "#e9f2fa", fontFamily: "'IBM Plex Mono',monospace" }}>%{p}</span>} />
+          <Text style={{ fontSize: 10.5, color: "var(--c-8fa6bd)" }}>GÖRSEL BENZERLİK</Text>
+          <Progress percent={benzerlik} size="small" strokeColor={seviye(benzerlik).renk} style={{ flex: 1, margin: 0 }} format={(p) => <span style={{ color: "var(--c-e9f2fa)", fontFamily: "'IBM Plex Mono',monospace" }}>%{p}</span>} />
         </Flex>
       )}
     </div>
@@ -593,6 +598,13 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect }: { marka: st
   useEffect(() => {
     const canvas = cv.current; if (!canvas) return;
     const ctx = canvas.getContext("2d")!; const DPR = Math.min(2, devicePixelRatio || 1);
+    // Canvas CSS değişkenini çözemez → "var(--c-xxxxxx)"'i çizim anında gerçek renge çevir (tema değişince otomatik).
+    // Değişkeni .pano kökünden oku; okunamazsa --c-<hex> zaten #<hex> demek → koyu hex'e düş (asla çıplak var dönme, çökme yok).
+    const coz = (v: string): string => {
+      const m = /var\(--c-([0-9a-fA-F]{6})\)/.exec(v); if (!m) return v;
+      const kok = canvas.closest(".pano") || document.documentElement;
+      return getComputedStyle(kok).getPropertyValue("--c-" + m[1]).trim() || ("#" + m[1]);
+    };
     let W = 0, H = 0, raf = 0; const reduce = matchMedia("(prefers-reduced-motion:reduce)").matches;
     const resize = () => { const b = canvas.getBoundingClientRect(); W = b.width; H = b.height; canvas.width = W * DPR; canvas.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); };
     const ro = new ResizeObserver(resize); ro.observe(canvas); resize();
@@ -641,7 +653,7 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect }: { marka: st
       ctx.clearRect(0, 0, W, H);
       const sel = selRef.current, rap = rapRef.current;
       for (const n of nodes) {
-        const c = seviye(n.aday.skor).renk; const aktif = n.aday.skor >= 45;
+        const c = coz(seviye(n.aday.skor).renk); const aktif = n.aday.skor >= 45;
         ctx.beginPath(); ctx.moveTo(merkez.x, merkez.y); ctx.lineTo(n.x, n.y);
         ctx.strokeStyle = hexRgba(c, aktif ? 0.5 : 0.32); ctx.lineWidth = aktif ? 1.4 : 1; ctx.setLineDash(aktif ? [] : [4, 4]);
         ctx.stroke(); ctx.setLineDash([]);
@@ -653,25 +665,25 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect }: { marka: st
       for (const a of altyapi) if (a.bagli) { ctx.beginPath(); ctx.moveTo(a.bagli.x, a.bagli.y); ctx.lineTo(a.x, a.y); ctx.strokeStyle = "rgba(139,125,224,.4)"; ctx.lineWidth = 1; ctx.stroke(); }
       if (altyapi[0]) { ctx.beginPath(); ctx.moveTo(merkez.x, merkez.y); ctx.lineTo(altyapi[0].x, altyapi[0].y); ctx.strokeStyle = "rgba(139,125,224,.25)"; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]); }
       ctx.beginPath(); ctx.arc(merkez.x, merkez.y, merkez.r + 12, 0, 6.28); ctx.strokeStyle = "rgba(57,189,248," + (.2 + .12 * Math.sin(t * 2)) + ")"; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.beginPath(); ctx.arc(merkez.x, merkez.y, merkez.r, 0, 6.28); const g = ctx.createRadialGradient(merkez.x, merkez.y - 8, 2, merkez.x, merkez.y, merkez.r); g.addColorStop(0, "#0e3a5a"); g.addColorStop(1, "#0a2740"); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = "#39bdf8"; ctx.lineWidth = 2; ctx.stroke();
-      ctx.font = "700 12px 'IBM Plex Sans',sans-serif"; ctx.fillStyle = "#e9f2fa"; ctx.textAlign = "center"; ctx.fillText(markaRef.current.toUpperCase().slice(0, 12), merkez.x, merkez.y + 3);
-      ctx.font = "600 7px 'IBM Plex Mono',monospace"; ctx.fillStyle = "#5aa9e0"; ctx.fillText("KORUNAN MARKA", merkez.x, merkez.y + 15);
+      ctx.beginPath(); ctx.arc(merkez.x, merkez.y, merkez.r, 0, 6.28); const g = ctx.createRadialGradient(merkez.x, merkez.y - 8, 2, merkez.x, merkez.y, merkez.r); g.addColorStop(0, coz("var(--c-0e3a5a)")); g.addColorStop(1, coz("var(--c-0a2740)")); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = coz("var(--c-39bdf8)"); ctx.lineWidth = 2; ctx.stroke();
+      ctx.font = "700 12px 'IBM Plex Sans',sans-serif"; ctx.fillStyle = coz("var(--c-e9f2fa)"); ctx.textAlign = "center"; ctx.fillText(markaRef.current.toUpperCase().slice(0, 12), merkez.x, merkez.y + 3);
+      ctx.font = "600 7px 'IBM Plex Mono',monospace"; ctx.fillStyle = coz("var(--c-5aa9e0)"); ctx.fillText("KORUNAN MARKA", merkez.x, merkez.y + 15);
       for (const n of nodes) {
-        const c = seviye(n.aday.skor).renk;
+        const c = coz(seviye(n.aday.skor).renk);
         const isSel = selRef.current && selRef.current.domain === n.aday.domain;
         const gl = (Math.sin(t * 3 + n.x) + 1) / 2;
         ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 5 + gl * 3, 0, 6.28); ctx.fillStyle = hexRgba(c, 0.05 + gl * 0.06); ctx.fill();
-        if (isSel) { ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 6, 0, 6.28); ctx.strokeStyle = "#e9f2fa"; ctx.lineWidth = 2; ctx.stroke(); }
-        ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 6.28); ctx.fillStyle = "#12202e"; ctx.fill(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.stroke();
-        ctx.fillStyle = c; ctx.fillRect(n.x - 5, n.y - 4, 10, 8); ctx.fillStyle = "#12202e"; ctx.fillRect(n.x - 5, n.y - 4, 10, 2.2);
-        ctx.font = "500 9.5px 'IBM Plex Mono',monospace"; ctx.fillStyle = "#b9cbdc"; ctx.textAlign = "center";
+        if (isSel) { ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 6, 0, 6.28); ctx.strokeStyle = coz("var(--c-e9f2fa)"); ctx.lineWidth = 2; ctx.stroke(); }
+        ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 6.28); ctx.fillStyle = coz("var(--c-12202e)"); ctx.fill(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = c; ctx.fillRect(n.x - 5, n.y - 4, 10, 8); ctx.fillStyle = coz("var(--c-12202e)"); ctx.fillRect(n.x - 5, n.y - 4, 10, 2.2);
+        ctx.font = "500 9.5px 'IBM Plex Mono',monospace"; ctx.fillStyle = coz("var(--c-b9cbdc)"); ctx.textAlign = "center";
         const dom = n.aday.domain.length > 22 ? n.aday.domain.slice(0, 21) + "…" : n.aday.domain;
         ctx.fillText(dom, n.x, n.y + n.r + 12);
         ctx.font = "600 9px 'IBM Plex Mono',monospace"; ctx.fillStyle = c; ctx.fillText("%" + n.aday.skor, n.x, n.y + n.r + 23);
       }
       for (const a of altyapi) {
-        ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, 6.28); ctx.fillStyle = "#1a1830"; ctx.fill(); ctx.strokeStyle = "#8b7de0"; ctx.lineWidth = 1.6; ctx.stroke();
-        ctx.font = "500 8.5px 'IBM Plex Mono',monospace"; ctx.fillStyle = "#b3a9e0"; ctx.textAlign = "center"; ctx.fillText(a.label, a.x, a.y + a.r + 11);
+        ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, 6.28); ctx.fillStyle = coz("var(--c-1a1830)"); ctx.fill(); ctx.strokeStyle = coz("var(--c-8b7de0)"); ctx.lineWidth = 1.6; ctx.stroke();
+        ctx.font = "500 8.5px 'IBM Plex Mono',monospace"; ctx.fillStyle = coz("var(--c-b3a9e0)"); ctx.textAlign = "center"; ctx.fillText(a.label, a.x, a.y + a.r + 11);
       }
       if (!reduce) raf = requestAnimationFrame(frame);
     }

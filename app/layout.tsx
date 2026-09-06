@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import Link from "next/link";
 import BottomNav from "@/components/BottomNav";
+import RootFooter from "@/components/RootFooter";
 import AppHeader from "@/components/AppHeader";
 import RizaKapisi from "@/components/RizaKapisi";
 import PWA from "@/components/PWA";
@@ -66,14 +66,7 @@ export default function RootLayout({
 
           <main className="relative z-10 flex-1 pb-32">
             {children}
-            <div className="px-5 pb-2 pt-6 text-center text-[11px] text-on-surface-variant">
-              <p>Resmi bir devlet uygulaması değildir. Acil durumda 155 / 112.</p>
-              <p className="mt-0.5">
-                <Link href="/gizlilik" className="underline">Gizlilik</Link>
-                {" · "}
-                <Link href="/kosullar" className="underline">Koşullar</Link>
-              </p>
-            </div>
+            <RootFooter />
           </main>
 
           <BottomNav />
