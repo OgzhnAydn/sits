@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
   if (limit) return limit;
 
   try {
-  const { giris } = await req.json();
+  const { giris, taze } = await req.json();
   if (!giris || typeof giris !== "string" || giris.trim().length < 3) {
     return NextResponse.json({ hata: "Geçerli bir değer girin." }, { status: 400 });
   }
@@ -155,7 +155,8 @@ export async function POST(req: NextRequest) {
 
   // Pahalı enricher çıktısını önbellekten oku (dış API kotasını korur).
   // Topluluk/seed/bağlantı sinyalleri cache SONRASI eklenir — hep taze kalır.
-  let rapor = (await cacheOku(tip, deger)) as OsintRapor | null;
+  // taze:true → önbelleği ATLA (operatör "yeniden tara" dediğinde site durumu değişmiş olabilir).
+  let rapor = taze ? null : (await cacheOku(tip, deger)) as OsintRapor | null;
   if (!rapor) {
     // Tam URL'yi (yol dahil) içerik analizi için geçir — paylaşılan belirli
     // sayfayı (haber makalesi gibi) tanımlayabilelim.

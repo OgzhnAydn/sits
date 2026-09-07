@@ -3,7 +3,7 @@
 // kullanıyoruz ki App Check enforcement client-SDK yazmalarını kesince cache kırılmasın.
 // İleride paylaşımlı cache gerekirse Admin SDK + Firestore veya Redis eklenebilir.
 
-const TTL_MS = 12 * 60 * 60 * 1000; // 12 saat
+const TTL_MS = 3 * 60 * 60 * 1000; // 3 saat — güvenlik aracı için taze; anlık "yeniden tara" cache'i taze:true ile atlar
 
 type Giris = { rapor: unknown; ms: number };
 const bellek = new Map<string, Giris>();

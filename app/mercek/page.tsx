@@ -190,10 +190,10 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
     return () => { durdu = true; clearInterval(t); };
   }, [markaFiltre]);
 
-  const analizEt = useCallback(async (a: Aday) => {
+  const analizEt = useCallback(async (a: Aday, taze = false) => {
     setSecili(a); setRapor(null); setYukleniyor(true);
     try {
-      const j = await (await fetch("/api/osint", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ giris: a.domain }) })).json();
+      const j = await (await fetch("/api/osint", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ giris: a.domain, taze }) })).json();
       setRapor(j?.hata ? null : j);
     } catch { setRapor(null); }
     setYukleniyor(false);
@@ -344,7 +344,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
           {/* SAĞ: 4 varlık detayı */}
           <Col xs={24} lg={6}>
             <Card size="small" style={{ height: "100%" }} title={baslik(4, "SEÇİLEN VARLIK DETAYI")}>
-              <EntityDetail aday={secili} rapor={rapor} yukleniyor={yukleniyor} markaAdi={markaAdi} resmiDom={secili ? resmiMap[secili.marka] : undefined} />
+              <EntityDetail aday={secili} rapor={rapor} yukleniyor={yukleniyor} markaAdi={markaAdi} resmiDom={secili ? resmiMap[secili.marka] : undefined} onYenile={() => secili && analizEt(secili, true)} />
             </Card>
           </Col>
 
@@ -437,7 +437,7 @@ function nedenTehdit(r: Rapor | null) {
   return out.slice(0, 6);
 }
 
-function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom }: { aday: Aday | null; rapor: Rapor | null; yukleniyor: boolean; markaAdi: string; resmiDom?: string }) {
+function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }: { aday: Aday | null; rapor: Rapor | null; yukleniyor: boolean; markaAdi: string; resmiDom?: string; onYenile?: () => void }) {
   if (!aday) return <Empty description={<span style={{ color: "var(--c-8fa6bd)" }}><b style={{ color: "var(--c-31c8a0)" }}>{markaAdi} için tehdit yok</b><br />Sistem izlemeye devam ediyor.</span>} />;
   const risk = rapor?.risk ?? aday.skor;
   const sv = seviye(risk);
@@ -452,8 +452,12 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom }: { aday: A
   return (
     <Flex vertical gap={12}>
       <div>
-        <Text style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 14, wordBreak: "break-all" }}>{aday.domain}</Text>
-        <br /><Tag color={sev.c as string} style={{ marginTop: 8 }}>{sev.t}</Tag>
+        <Flex align="flex-start" justify="space-between" gap={8}>
+          <Text style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 14, wordBreak: "break-all" }}>{aday.domain}</Text>
+          {onYenile && <Button size="small" type="text" loading={yukleniyor} onClick={onYenile} title="Önbelleği atla, siteyi şimdi yeniden tara"
+            icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>refresh</span>} style={{ color: "var(--c-8fa6bd)", flexShrink: 0 }} />}
+        </Flex>
+        <Tag color={sev.c as string} style={{ marginTop: 8 }}>{sev.t}</Tag>
       </div>
       <Flex align="center" justify="space-between" style={{ borderTop: "1px solid var(--c-17293c)", borderBottom: "1px solid var(--c-17293c)", padding: "10px 0" }}>
         <Statistic title="Güven Skoru" value={yukleniyor && !rapor ? "…" : risk} suffix="/100" valueStyle={{ color: renk, fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600 }} />
