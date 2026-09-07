@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { girisYap, kayitOl, markaDinle } from "@/lib/markaAuth";
+import { girisYap, kayitOl, markaDinle, operatorGiris } from "@/lib/markaAuth";
 
 export default function MarkaGiris() {
   const router = useRouter();
@@ -21,8 +21,11 @@ export default function MarkaGiris() {
   async function gonder(e: React.FormEvent) {
     e.preventDefault(); setHata(""); setBekle(true);
     try {
-      if (mod === "giris") await girisYap(email, sifre);
-      else {
+      if (mod === "giris") {
+        // Operatör (admin) girişi → Firebase'siz, doğrudan Kontrol Odası'na.
+        if (operatorGiris(email, sifre)) { router.replace("/kontrol"); return; }
+        await girisYap(email, sifre);
+      } else {
         if (!resmi.trim()) throw new Error("En az bir resmî adres gir (ör. markam.com).");
         if (sifre.length < 6) throw new Error("Parola en az 6 karakter olmalı.");
         await kayitOl(email, sifre, ad, resmi);

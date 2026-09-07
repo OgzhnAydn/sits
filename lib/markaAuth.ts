@@ -11,6 +11,25 @@ import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
 export type MarkaHesap = { marka: string; ad: string; email?: string };
 
+// ── OPERATÖR (platform sahibi) GİRİŞİ — Firebase'siz, basit erişim ──
+// GÜVENLİK UYARISI: admin/admin ZAYIF bir paroladır; site herkese açık olduğundan
+// bunu bilen HERKES tüm markaların panosuna girebilir. Üretimde mutlaka güçlü bir
+// parolayla değiştir (aşağıdaki OP_PAROLA). marka="*" → tüm markalar (operatör).
+const OP_KEY = "mrl_op";
+const OP_KULLANICI = "admin";
+const OP_PAROLA = "admin";
+export function operatorGiris(email: string, sifre: string): boolean {
+  const e = email.trim().toLowerCase();
+  if ((e === OP_KULLANICI || e === `${OP_KULLANICI}@mirleon.ai`) && sifre === OP_PAROLA) {
+    try { localStorage.setItem(OP_KEY, "1"); } catch { /* yok say */ }
+    return true;
+  }
+  return false;
+}
+export function operatorMu(): boolean {
+  try { return typeof window !== "undefined" && localStorage.getItem(OP_KEY) === "1"; } catch { return false; }
+}
+
 export async function girisYap(email: string, sifre: string): Promise<void> {
   if (!auth) throw new Error("Auth hazır değil");
   await signInWithEmailAndPassword(auth, email.trim(), sifre);
@@ -35,7 +54,10 @@ export async function kayitOl(email: string, sifre: string, ad: string, resmiMet
   return j.anahtar;
 }
 
-export async function cikis(): Promise<void> { if (auth) await signOut(auth); }
+export async function cikis(): Promise<void> {
+  try { localStorage.removeItem(OP_KEY); } catch { /* yok say */ }
+  if (auth) await signOut(auth);
+}
 
 export async function markamGetir(uid: string): Promise<MarkaHesap | null> {
   if (!db) return null;
@@ -49,6 +71,8 @@ export async function markamGetir(uid: string): Promise<MarkaHesap | null> {
 
 // Auth durumunu dinle → oturum açık kullanıcıyı ve markasını verir.
 export function markaDinle(cb: (user: User | null, hesap: MarkaHesap | null) => void): () => void {
+  // Operatör oturumu (admin girişi) → Firebase'i atla, tüm markalara erişim ver.
+  if (operatorMu()) { cb({ uid: "operator" } as User, { marka: "*", ad: "Operatör" }); return () => {}; }
   if (!firebaseHazir || !auth) { cb(null, null); return () => {}; }
   return onAuthStateChanged(auth, async (user) => {
     if (!user) { cb(null, null); return; }
