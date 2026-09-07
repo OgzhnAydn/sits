@@ -692,19 +692,25 @@ export function kSeviye(s: number): KategoriDurum["seviye"] {
 // Saldırganın altyapı parmak izini toplanan sinyallerden çıkarır: ad sunucusu +
 // sertifika CA + ASN/barındırma (+ favicon eşi). Aynı imzayı taşıyan farklı
 // domainler AYNI kampanya/altyapıdır → yeni domaini bilinen operasyona bağlar.
+// JENERİK altyapı — milyonlarca site paylaşır → "aynı operatör" KANITI DEĞİL (#1 yanlış-pozitif).
+// Cloudflare NS + Google Trust CA + Cloudflare ASN eşleşmesi kampanya değildir.
+const DNA_JENERIK = /cloudflare|google|amazon|\baws\b|azure|microsoft|akamai|fastly|let'?s?\s*encrypt|sectigo|digicert|comodo|globalsign|zerossl|godaddy|namecheap|cloudns|hetzner|\bovh\b|digitalocean|linode|vercel|netlify|hostinger|namesilo|dnspod|alibaba/i;
+const MX_JENERIK = /google|outlook|office365|yandex|zoho|mail\.ru|protonmail|gmail|hostinger|yandexmail/i;
 export function altyapiDna(r: OsintRapor): { imza: string; parcalar: { k: string; v: string }[] } | null {
   const ad = (x: string) => r.alanlar.find((a) => a.ad.startsWith(x))?.deger || "";
   const kok = (h: string) => h.trim().toLowerCase().split(".").slice(-2).join(".");
   const parcalar: { k: string; v: string }[] = [];
+  // Yalnız AYIRT EDİCİ sinyaller. CA hiç kullanılmaz (herkes aynı 4-5 CA'yı kullanır).
   const ns = ad("Ad sunucusu (NS)").split(",")[0];
-  if (ns) parcalar.push({ k: "NS", v: kok(ns) });
-  const ca = ad("SSL veren (CA)") || (ad("En yeni sertifika").split("·")[1] || "").trim();
-  if (ca) parcalar.push({ k: "CA", v: ca.replace(/,?\s*Inc\.?|LLC/gi, "").trim().slice(0, 22) });
+  if (ns && !DNA_JENERIK.test(ns)) parcalar.push({ k: "NS", v: kok(ns) });
   const asn = ad("Ağ (ASN)").replace(/^AS\d+\s*/, "").replace(/,?\s*Inc\.?/gi, "").trim();
-  if (asn) parcalar.push({ k: "ASN", v: asn.slice(0, 22) });
+  if (asn && !DNA_JENERIK.test(asn)) parcalar.push({ k: "ASN", v: asn.slice(0, 22) });
+  const mx = ad("E-posta (MX)"); const mxh = mx.match(/·\s*([a-z0-9.-]+\.[a-z]{2,})/i);
+  if (mxh && !DNA_JENERIK.test(mxh[1]) && !MX_JENERIK.test(mxh[1])) parcalar.push({ k: "MX", v: kok(mxh[1]) });
   const fav = ad("Favicon"); if (fav && /aynı|birebir/i.test(fav)) parcalar.push({ k: "favicon", v: "eş" });
-  const mx = ad("E-posta (MX)"); const mxh = mx.match(/·\s*([a-z0-9.-]+\.[a-z]{2,})/i); if (mxh) parcalar.push({ k: "MX", v: kok(mxh[1]) });
-  if (parcalar.length < 2) return null;
+  // Favicon-eş tek başına güçlüdür; aksi halde ≥2 ayırt edici altyapı gerekir.
+  const guclu = parcalar.some((p) => p.k === "favicon");
+  if ((!guclu && parcalar.length < 2) || parcalar.length === 0) return null; // ayırt edici bağ yok → kampanya İDDİA ETME
   return { imza: parcalar.map((p) => p.k + ":" + p.v).join("|").toLowerCase(), parcalar };
 }
 
