@@ -328,16 +328,16 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
               size="small" style={{ height: "100%" }} styles={{ body: { height: "calc(100% - 46px)", padding: 8 } }}
               title={baslik(3, "THREAT UNIVERSE GRAFİĞİ", (
                 <Space size={11} wrap>
-                  <Efsane renk="var(--c-f5222d)" t="Aktif Tehdit" />
-                  <Efsane renk="var(--c-fa8c16)" t="Yüksek Güven" />
-                  <Efsane renk="var(--c-faad14)" halka t="Şüpheli" />
-                  <Efsane renk="var(--c-8b7de0)" t="Altyapı" />
-                  <Efsane renk="var(--c-39bdf8)" t="Resmi Marka" />
+                  <Efsane renk="var(--c-ff5468)" t="Aktif tuzak" />
+                  <Efsane renk="var(--c-fa8c16)" t="Canlı" />
+                  <Efsane renk="var(--c-8fb0d4)" t="Park · pasif" />
+                  <Efsane renk="var(--c-8fb0d4)" halka t="Küme (tıkla→aç)" />
+                  <Efsane renk="var(--c-39bdf8)" t="Resmi marka" />
                 </Space>
               ))}
             >
               {/* Grafik her iki temada da koyu "radar ekranı" kalır (canvas renkleri koyu; JS ile CSS-var okunamadığından). */}
-              <div style={{ height: 460, background: "#0a1420", borderRadius: 10, overflow: "hidden" }}><ThreatUniverse marka={markaAdi} adaylar={gosterilen} secili={secili} rapor={rapor} onSelect={analizEt} /></div>
+              <div style={{ height: 460, background: "#0a1420", borderRadius: 10, overflow: "hidden" }}><ThreatUniverse marka={markaAdi} adaylar={gosterilen} secili={secili} rapor={rapor} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} /></div>
             </Card>
           </Col>
 
@@ -605,13 +605,15 @@ function KarsilastirGorsel({ resmiDom, fakeDom, fakeShot, benzerlik, markaAdi }:
 }
 
 /* THREAT UNIVERSE — marka merkezli force-graph + seçilenin altyapı alt-grafiği */
-function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect }: { marka: string; adaylar: Aday[]; secili: Aday | null; rapor: Rapor | null; onSelect: (a: Aday) => void }) {
+function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect, logo }: { marka: string; adaylar: Aday[]; secili: Aday | null; rapor: Rapor | null; onSelect: (a: Aday) => void; logo?: string | null }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const st = useRef<{ nodes: any[]; merkez: any; altyapi: any[] }>({ nodes: [], merkez: null, altyapi: [] });
   const adRef = useRef(adaylar); adRef.current = adaylar;
   const selRef = useRef(secili); selRef.current = secili;
   const rapRef = useRef(rapor); rapRef.current = rapor;
   const markaRef = useRef(marka); markaRef.current = marka;
+  const logoRef = useRef(logo); logoRef.current = logo;
+  const acikKume = useRef<Set<string>>(new Set()); // tıklanınca açılan park kümeleri (TLD)
 
   useEffect(() => {
     const canvas = cv.current; if (!canvas) return;
@@ -626,17 +628,55 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect }: { marka: st
     let W = 0, H = 0, raf = 0; const reduce = matchMedia("(prefers-reduced-motion:reduce)").matches;
     const resize = () => { const b = canvas.getBoundingClientRect(); W = b.width; H = b.height; canvas.width = W * DPR; canvas.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); };
     const ro = new ResizeObserver(resize); ro.observe(canvas); resize();
+    // Merkez marka logosu (favicon) — canvas'a çizilir; şeffaf/CORS olsa da GÖRÜNTÜLEME serbest
+    // (piksel OKUMAYIZ → tainting sorun değil). Marka değişince kur()'da src güncellenir.
+    const logoImg = new Image();
 
     function kur() {
-      const cx = W / 2, cy = H * 0.4; const merkez = { x: cx, y: cy, r: 32 };
-      const ad = adRef.current.slice(0, 9);
-      const nodes = ad.map((a, i) => {
-        const ang = -Math.PI / 2 + (i / Math.max(1, ad.length)) * Math.PI * 2;
-        const R = Math.min(W, H) * 0.34;
-        return { aday: a, x: cx + Math.cos(ang) * R + (Math.random() - .5) * 20, y: cy + Math.sin(ang) * R + (Math.random() - .5) * 20, vx: 0, vy: 0, r: a.skor >= 60 ? 15 : 13, ang };
-      });
+      if (logoRef.current && logoImg.src !== logoRef.current) logoImg.src = logoRef.current;
+      // ÖĞELER = tekil sahteler + park KÜMELERİ (aynı TLD, ≥6, kapalıyken tek düğüm). Böylece
+      // "225 canlı sahte" yanılsaması yok: aktif/canlı tek tek, dormant park'lar toplu.
+      const acik = acikKume.current;
+      const tld = (d: string) => { const p = String(d).toLowerCase().replace(/\.$/, "").split("."); return p[p.length - 1] || ""; };
+      const parkMi = (a: any) => a.durum === "park" || a.durum === "yayinda-degil";
+      const grup: Record<string, any[]> = {}; const tekiller: any[] = [];
+      for (const a of adRef.current) { if (parkMi(a)) (grup[tld(a.domain)] ||= []).push(a); else tekiller.push(a); }
+      const items: any[] = tekiller.map((a) => ({ aday: a }));
+      for (const [t, uyeler] of Object.entries(grup)) {
+        if (uyeler.length >= 6 && !acik.has(t)) items.push({ kume: { tld: t, uyeler, sayi: uyeler.length, skor: Math.max(0, ...uyeler.map((u) => u.skor || 0)) } });
+        else for (const a of uyeler) items.push({ aday: a });
+      }
+      const skorOf = (it: any) => it.kume ? it.kume.skor : (it.aday.skor || 0);
+      const oncelik = (it: any) => it.aday ? (it.aday.durum === "aktif-tuzak" ? 3 : it.aday.durum === "canli" ? 2 : 0) : 1; // aktif>canlı>küme>park
+      items.sort((x, y) => (oncelik(y) - oncelik(x)) || (skorOf(y) - skorOf(x)));
+      const secilenler = items.slice(0, 140);
+      const N = secilenler.length, cok = N;
+      const cx = W / 2, cy = H * (cok > 18 ? 0.5 : 0.42); const merkez = { x: cx, y: cy, r: cok > 40 ? 26 : 30 };
+      const nr = N > 60 ? 5 : N > 36 ? 6.5 : N > 18 ? 8.5 : N > 9 ? 11 : 13; // düğüm yarıçapı (çoksa küçülür)
+      const baseR = Math.min(W, H) * (N > 24 ? 0.17 : 0.24);
+      const step = Math.min(W, H) * (N > 60 ? 0.085 : N > 24 ? 0.11 : 0.14);
+      const Rmax = Math.min(cx, cy) - nr - 14; // canvas'a sığan en dış yarıçap
+      const nodes: any[] = [];
+      let idx = 0, ring = 0;
+      while (idx < N) {
+        const R = baseR + ring * step;
+        if (R > Rmax && ring > 0) break; // canvas dışına taşma → dur
+        const cap = Math.max(6, Math.floor((2 * Math.PI * R) / (nr * 2 + 26)));
+        const bu = Math.min(cap, N - idx);
+        for (let k = 0; k < bu; k++) {
+          const ang = -Math.PI / 2 + (k / bu) * Math.PI * 2 + (ring % 2 ? Math.PI / bu : 0);
+          const it = secilenler[idx];
+          const rr = it.kume ? nr + 4 : (it.aday.skor >= 60 ? nr + 1.5 : nr);
+          nodes.push({ item: it, aday: it.aday, kume: it.kume, x: cx + Math.cos(ang) * R + (Math.random() - .5) * 6, y: cy + Math.sin(ang) * R + (Math.random() - .5) * 6, vx: 0, vy: 0, r: rr, ang, R });
+          idx++;
+        }
+        ring++;
+      }
+      st.current = { nodes, merkez, altyapi: [] } as any;
+      (st.current as any).nr = nr;
+      // Altyapı alt-grafiği yalnız az düğümde (çok sahtede ekran zaten dolu) — seçilenin IP/NS/ASN'i.
       const r = rapRef.current; const alt: any[] = [];
-      if (r) {
+      if (r && N <= 14) {
         const alan = (x: string) => r.alanlar?.find((a) => a.ad.startsWith(x))?.deger;
         const ip = alan("IP adresi"), ns = alan("Ad sunucusu"), asn = alan("Ağ (ASN)"), cert = alan("En yeni sertifika") || alan("Sertifika (urlscan)");
         const iy = cy + Math.min(W, H) * 0.36;
@@ -646,7 +686,7 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect }: { marka: st
         if (cert) alt.push({ label: "cert", x: cx, y: iy + 66, r: 11, bagli: hub });
         if (asn) alt.push({ label: asn.replace(/\s.*/, "").slice(0, 12) || "ASN", x: cx + 120, y: iy + 44, r: 11, bagli: hub });
       }
-      st.current = { nodes, merkez, altyapi: alt };
+      (st.current as any).altyapi = alt;
     }
     kur(); const kurT = setInterval(kur, 3500);
 
@@ -654,50 +694,92 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect }: { marka: st
       const b = canvas.getBoundingClientRect(); const mx = e.clientX - b.left, my = e.clientY - b.top;
       let best: any = null, bd = 520;
       for (const n of st.current.nodes) { const d = (n.x - mx) ** 2 + (n.y - my) ** 2; if (d < bd) { bd = d; best = n; } }
-      if (best) onSelect(best.aday);
+      if (!best) return;
+      if (best.kume) { // KÜME düğümü → aç/kapa (üyeleri tek tek göster/topla)
+        if (acikKume.current.has(best.kume.tld)) acikKume.current.delete(best.kume.tld);
+        else acikKume.current.add(best.kume.tld);
+        kur();
+      } else if (best.aday) onSelect(best.aday);
     };
 
     let t = 0;
     function frame() {
       t += 0.015;
       const { nodes, merkez, altyapi } = st.current;
+      const nr = (st.current as any).nr || 12;
+      const azDugum = nodes.length <= 14; // kenar-etiketi/altyapı yalnız azken (çoksa ekran dolar)
+      // RENK = DURUM (canlılık) — "hepsi kırmızı=aktif" yanılsamasını önler: aktif kırmızı,
+      // canlı turuncu, park/pasif SOLUK gri; küme soluk gri.
+      const durumRengi = (n: any): string => {
+        if (n.kume) return "var(--c-8fb0d4)";
+        const d = n.aday.durum;
+        return d === "aktif-tuzak" ? "var(--c-ff5468)" : d === "canli" ? "var(--c-fa8c16)" : d === "yayinda-degil" ? "var(--c-5b7695)" : "var(--c-8fb0d4)";
+      };
       for (const n of nodes) {
-        const R = Math.min(W, H) * 0.34;
+        const R = n.R || Math.min(W, H) * 0.34;
         const tx = merkez.x + Math.cos(n.ang) * R, ty = merkez.y + Math.sin(n.ang) * R;
-        n.vx += (tx - n.x) * 0.02; n.vy += (ty - n.y) * 0.02;
-        for (const o of nodes) { if (o === n) continue; const dx = n.x - o.x, dy = n.y - o.y, ds = dx * dx + dy * dy + 1; if (ds < 4000) { const f = 120 / ds; n.vx += dx * f; n.vy += dy * f; } }
+        n.vx += (tx - n.x) * 0.03; n.vy += (ty - n.y) * 0.03;
+        for (const o of nodes) { if (o === n) continue; const dx = n.x - o.x, dy = n.y - o.y, ds = dx * dx + dy * dy + 1; if (ds < 2500) { const f = 70 / ds; n.vx += dx * f; n.vy += dy * f; } }
         n.vx *= 0.8; n.vy *= 0.8; n.x += n.vx; n.y += n.vy;
       }
       ctx.clearRect(0, 0, W, H);
       const sel = selRef.current, rap = rapRef.current;
       for (const n of nodes) {
-        const c = coz(seviye(n.aday.skor).renk); const aktif = n.aday.skor >= 45;
+        const c = coz(durumRengi(n));
+        const aktif = n.aday ? (n.aday.durum === "aktif-tuzak" || n.aday.durum === "canli") : false;
+        const isSel0 = sel && n.aday && sel.domain === n.aday.domain;
         ctx.beginPath(); ctx.moveTo(merkez.x, merkez.y); ctx.lineTo(n.x, n.y);
-        ctx.strokeStyle = hexRgba(c, aktif ? 0.5 : 0.32); ctx.lineWidth = aktif ? 1.4 : 1; ctx.setLineDash(aktif ? [] : [4, 4]);
+        ctx.strokeStyle = hexRgba(c, aktif ? 0.42 : 0.18); ctx.lineWidth = aktif ? 1.3 : 0.8; ctx.setLineDash(aktif ? [] : [4, 4]);
         ctx.stroke(); ctx.setLineDash([]);
-        const mx = merkez.x + (n.x - merkez.x) * 0.5, my = merkez.y + (n.y - merkez.y) * 0.5;
-        // kenar etiketi = ilişki türü (seçili varlıkta zengin; diğerinde skor)
-        const et = (sel && rap && sel.domain === n.aday.domain) ? iliskiEtiket(rap) : "%" + n.aday.skor;
-        ctx.font = "600 10px 'IBM Plex Mono',monospace"; ctx.fillStyle = c; ctx.textAlign = "center"; ctx.fillText(et, mx, my - 2);
+        if ((azDugum || isSel0) && n.aday) {
+          const mx = merkez.x + (n.x - merkez.x) * 0.5, my = merkez.y + (n.y - merkez.y) * 0.5;
+          const et = (isSel0 && rap) ? iliskiEtiket(rap) : "%" + n.aday.skor;
+          ctx.font = "600 10px 'IBM Plex Mono',monospace"; ctx.fillStyle = c; ctx.textAlign = "center"; ctx.fillText(et, mx, my - 2);
+        }
       }
       for (const a of altyapi) if (a.bagli) { ctx.beginPath(); ctx.moveTo(a.bagli.x, a.bagli.y); ctx.lineTo(a.x, a.y); ctx.strokeStyle = "rgba(139,125,224,.4)"; ctx.lineWidth = 1; ctx.stroke(); }
       if (altyapi[0]) { ctx.beginPath(); ctx.moveTo(merkez.x, merkez.y); ctx.lineTo(altyapi[0].x, altyapi[0].y); ctx.strokeStyle = "rgba(139,125,224,.25)"; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]); }
       ctx.beginPath(); ctx.arc(merkez.x, merkez.y, merkez.r + 12, 0, 6.28); ctx.strokeStyle = "rgba(57,189,248," + (.2 + .12 * Math.sin(t * 2)) + ")"; ctx.lineWidth = 1.5; ctx.stroke();
       ctx.beginPath(); ctx.arc(merkez.x, merkez.y, merkez.r, 0, 6.28); const g = ctx.createRadialGradient(merkez.x, merkez.y - 8, 2, merkez.x, merkez.y, merkez.r); g.addColorStop(0, coz("var(--c-0e3a5a)")); g.addColorStop(1, coz("var(--c-0a2740)")); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = coz("var(--c-39bdf8)"); ctx.lineWidth = 2; ctx.stroke();
-      ctx.font = "700 12px 'IBM Plex Sans',sans-serif"; ctx.fillStyle = coz("var(--c-e9f2fa)"); ctx.textAlign = "center"; ctx.fillText(markaRef.current.toUpperCase().slice(0, 12), merkez.x, merkez.y + 3);
-      ctx.font = "600 7px 'IBM Plex Mono',monospace"; ctx.fillStyle = coz("var(--c-5aa9e0)"); ctx.fillText("KORUNAN MARKA", merkez.x, merkez.y + 15);
+      if (logoRef.current && logoImg.complete && logoImg.naturalWidth > 0) {
+        // MERKEZE LOGO — beyaz zeminde (favicon şeffaf olabilir), daireye kırp; ad altına.
+        ctx.save();
+        ctx.beginPath(); ctx.arc(merkez.x, merkez.y, merkez.r - 3, 0, 6.28); ctx.clip();
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(merkez.x - merkez.r, merkez.y - merkez.r, merkez.r * 2, merkez.r * 2);
+        const s = (merkez.r - 5) * 2;
+        ctx.drawImage(logoImg, merkez.x - s / 2, merkez.y - s / 2, s, s);
+        ctx.restore();
+        ctx.font = "700 8px 'IBM Plex Sans',sans-serif"; ctx.fillStyle = coz("var(--c-e9f2fa)"); ctx.textAlign = "center"; ctx.fillText(markaRef.current.toUpperCase().slice(0, 16), merkez.x, merkez.y + merkez.r + 11);
+      } else {
+        ctx.font = "700 12px 'IBM Plex Sans',sans-serif"; ctx.fillStyle = coz("var(--c-e9f2fa)"); ctx.textAlign = "center"; ctx.fillText(markaRef.current.toUpperCase().slice(0, 12), merkez.x, merkez.y + 3);
+        ctx.font = "600 7px 'IBM Plex Mono',monospace"; ctx.fillStyle = coz("var(--c-5aa9e0)"); ctx.fillText("KORUNAN MARKA", merkez.x, merkez.y + 15);
+      }
+      const lf0 = Math.max(7, Math.min(9.5, nr * 0.92));
       for (const n of nodes) {
-        const c = coz(seviye(n.aday.skor).renk);
-        const isSel = selRef.current && selRef.current.domain === n.aday.domain;
+        const c = coz(durumRengi(n));
+        const isSel = selRef.current && n.aday && selRef.current.domain === n.aday.domain;
+        const aktif = n.aday && (n.aday.durum === "aktif-tuzak" || n.aday.durum === "canli");
         const gl = (Math.sin(t * 3 + n.x) + 1) / 2;
-        ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 5 + gl * 3, 0, 6.28); ctx.fillStyle = hexRgba(c, 0.05 + gl * 0.06); ctx.fill();
+        if (aktif || n.kume) { ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 5 + gl * 3, 0, 6.28); ctx.fillStyle = hexRgba(c, 0.05 + gl * 0.06); ctx.fill(); } // yalnız aktif/küme nabız; park soluk kalsın
         if (isSel) { ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 6, 0, 6.28); ctx.strokeStyle = coz("var(--c-e9f2fa)"); ctx.lineWidth = 2; ctx.stroke(); }
+        if (n.kume) {
+          // KÜME düğümü — "istifli" daireler + üye sayısı; tıkla=aç.
+          ctx.fillStyle = coz("var(--c-12202e)"); ctx.strokeStyle = c; ctx.lineWidth = 1.4;
+          for (const off of [5, 2.5, 0]) { ctx.beginPath(); ctx.arc(n.x + off, n.y - off, n.r, 0, 6.28); ctx.fill(); ctx.stroke(); }
+          ctx.font = `700 ${Math.max(9, n.r * 0.8)}px 'IBM Plex Mono',monospace`; ctx.fillStyle = c; ctx.textAlign = "center"; ctx.fillText(String(n.kume.sayi), n.x, n.y + n.r * 0.32);
+          const lf = Math.max(8, Math.min(10.5, nr * 1.05));
+          ctx.font = `600 ${lf}px 'IBM Plex Mono',monospace`; ctx.fillStyle = coz("var(--c-8fb0d4)"); ctx.fillText(`.${n.kume.tld} ×${n.kume.sayi} park`, n.x, n.y + n.r + lf + 6);
+          ctx.font = `500 ${lf - 1.5}px 'IBM Plex Sans',sans-serif`; ctx.fillStyle = coz("var(--c-5b6b7d)"); ctx.fillText("tıkla → aç", n.x, n.y + n.r + lf * 2 + 8);
+          continue;
+        }
         ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 6.28); ctx.fillStyle = coz("var(--c-12202e)"); ctx.fill(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.stroke();
-        ctx.fillStyle = c; ctx.fillRect(n.x - 5, n.y - 4, 10, 8); ctx.fillStyle = coz("var(--c-12202e)"); ctx.fillRect(n.x - 5, n.y - 4, 10, 2.2);
-        ctx.font = "500 9.5px 'IBM Plex Mono',monospace"; ctx.fillStyle = coz("var(--c-b9cbdc)"); ctx.textAlign = "center";
-        const dom = n.aday.domain.length > 22 ? n.aday.domain.slice(0, 21) + "…" : n.aday.domain;
-        ctx.fillText(dom, n.x, n.y + n.r + 12);
-        ctx.font = "600 9px 'IBM Plex Mono',monospace"; ctx.fillStyle = c; ctx.fillText("%" + n.aday.skor, n.x, n.y + n.r + 23);
+        const ik = Math.max(3, n.r * 0.42);
+        ctx.fillStyle = c; ctx.fillRect(n.x - ik, n.y - ik * 0.8, ik * 2, ik * 1.6); ctx.fillStyle = coz("var(--c-12202e)"); ctx.fillRect(n.x - ik, n.y - ik * 0.8, ik * 2, ik * 0.44);
+        const lf = lf0, maxc = nr < 7 ? 15 : nr < 9 ? 20 : 24;
+        const dom = n.aday.domain.length > maxc ? n.aday.domain.slice(0, maxc - 1) + "…" : n.aday.domain;
+        ctx.font = `${isSel ? 600 : 500} ${lf}px 'IBM Plex Mono',monospace`; ctx.fillStyle = isSel ? coz("var(--c-e9f2fa)") : (aktif ? coz("var(--c-d3e2f5)") : coz("var(--c-7d9cbf)")); ctx.textAlign = "center";
+        ctx.fillText(dom, n.x, n.y + n.r + lf + 2);
+        if (nr >= 8.5) { ctx.font = `600 ${lf - 0.5}px 'IBM Plex Mono',monospace`; ctx.fillStyle = c; ctx.fillText("%" + n.aday.skor, n.x, n.y + n.r + lf * 2 + 4); }
       }
       for (const a of altyapi) {
         ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, 6.28); ctx.fillStyle = coz("var(--c-1a1830)"); ctx.fill(); ctx.strokeStyle = coz("var(--c-8b7de0)"); ctx.lineWidth = 1.6; ctx.stroke();
