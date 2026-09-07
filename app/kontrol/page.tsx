@@ -11,6 +11,7 @@ import {
 } from "@ant-design/icons";
 import { markaDinle, cikis } from "@/lib/markaAuth";
 import { usePanoTema, antTokenKoyu, antTokenAcik } from "@/lib/panoTema";
+import { markaLogoAnahtar } from "@/lib/korunanMarkalar";
 
 const { Text, Title } = Typography;
 const fmt = (n: number) => (n || 0).toLocaleString("tr-TR");
@@ -133,7 +134,14 @@ export default function KontrolOdasi() {
                   size="small" pagination={false} rowKey="marka" dataSource={veri.markalar}
                   scroll={{ x: "max-content", y: 360 }}
                   columns={[
-                    { title: "Marka", dataIndex: "markaAdi", render: (v: string, r: MarkaSat) => <a onClick={() => router.push(`/mercek?marka=${encodeURIComponent(r.marka)}`)} style={{ color: "var(--c-cfe3f5)" }}>{v || r.marka}</a> },
+                    { title: "Marka", dataIndex: "markaAdi", render: (v: string, r: MarkaSat) => {
+                      const logo = markaLogoAnahtar(r.marka, 32);
+                      return <a onClick={() => router.push(`/mercek?marka=${encodeURIComponent(r.marka)}`)} style={{ color: "var(--c-cfe3f5)", display: "inline-flex", alignItems: "center", gap: 8 }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        {logo && <img src={logo} alt="" width={18} height={18} style={{ borderRadius: 4, background: "#fff", flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />}
+                        <span>{v || r.marka}</span>
+                      </a>;
+                    } },
                     { title: "Toplam", dataIndex: "toplam", width: 80, align: "center", render: (v: number) => <Text strong style={{ color: "var(--c-e6eef7)" }}>{v}</Text> },
                     { title: "Aktif", dataIndex: "aktif", width: 70, align: "center", render: (v: number) => v ? <Tag color="error" style={{ margin: 0 }}>{v}</Tag> : <Text type="secondary">–</Text> },
                     { title: "Canlı", dataIndex: "canli", width: 70, align: "center", render: (v: number) => <Text style={{ color: "var(--c-4d9fe0)" }}>{v}</Text> },

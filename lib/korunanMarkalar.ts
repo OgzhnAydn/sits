@@ -94,7 +94,26 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "uyap", ad: "UYAP (Ulusal Yargı Ağı)", resmi: ["uyap.gov.tr", "vatandas.uyap.gov.tr", "adalet.gov.tr"] },
   { anahtar: "orphion", ad: "Orphion Pharma", resmi: ["orphionpharma.com"] },
   { anahtar: "etimaden", ad: "Eti Maden", resmi: ["etimaden.gov.tr"] },
+  // ── Konut / gayrimenkul (sıkça taklit edilir: sahte TOKİ/konut başvuru-çekiliş siteleri) ──
+  { anahtar: "toki", ad: "TOKİ (Toplu Konut İdaresi)", resmi: ["toki.gov.tr"] },
+  { anahtar: "emlakkonut", ad: "Emlak Konut GYO", resmi: ["emlakkonut.com.tr"] },
 ];
+
+// Marka logosu — resmî domainin faviconu (Google favicon servisi). Tüm markalar için
+// otomatik + hep güncel; görsel gelmezse arayan taraf baş-harf avatarına düşer.
+export function markaLogo(resmi: string | string[] | undefined | null, boyut = 128): string | null {
+  const d = Array.isArray(resmi) ? resmi[0] : resmi;
+  if (!d) return null;
+  const host = String(d).replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
+  if (!host) return null;
+  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${boyut}`;
+}
+
+// Marka anahtarından logo (yalnız anahtar bilinen yerler için — kontrol tablosu vb.).
+export function markaLogoAnahtar(anahtar: string, boyut = 128): string | null {
+  const m = KORUNAN_MARKALAR.find((x) => x.anahtar === String(anahtar || "").toLowerCase());
+  return m ? markaLogo(m.resmi, boyut) : null;
+}
 
 // ── KAMU KURUMLARI — içerik/logo taklidi tespiti için (özellikle sahte turizm/teşvik/
 // yardım siteleri bakanlık isim+logolarını kullanır). "kelimeler" sayfa METNİNDE aranır;

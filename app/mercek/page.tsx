@@ -16,6 +16,7 @@ import {
 } from "@ant-design/icons";
 import { markaDinle, cikis } from "@/lib/markaAuth";
 import { usePanoTema } from "@/lib/panoTema";
+import { markaLogo } from "@/lib/korunanMarkalar";
 import AnalitikPanel from "./AnalitikPanel";
 
 const { Text, Title } = Typography;
@@ -250,6 +251,14 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
             size="small" value={markaFiltre} onChange={markaSec} showSearch optionFilterProp="label"
             style={{ minWidth: 168 }} placeholder="Marka seç"
             options={[{ value: "", label: "Tüm markalar" }, ...markaListe.map((m) => ({ value: m.anahtar, label: m.ad }))]}
+            optionRender={(opt) => {
+              const logo = opt.value ? markaLogo(resmiMap[String(opt.value)]) : null;
+              return <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {logo ? <img src={logo} alt="" width={16} height={16} style={{ borderRadius: 3, background: "#fff", flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} /> : <span style={{ width: 16 }} />}
+                <span>{opt.label}</span>
+              </span>;
+            }}
           />
         </>)}
         <div style={{ flex: 1 }} />
@@ -271,7 +280,12 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
             <Flex vertical gap={12}>
               <Card size="small" title={baslik(1, "MARKA PANELİ")}>
                 <Flex vertical align="center" gap={8} style={{ paddingBottom: 12, borderBottom: "1px solid var(--c-17293c)" }}>
-                  <Avatar size={54} shape="square" style={{ background: "linear-gradient(135deg,var(--c-f2a33c),var(--c-e5772f))", color: "var(--c-0a1420)", fontSize: 20, fontWeight: 700, borderRadius: 14 }}>{markaAdi.slice(0, 2).toUpperCase()}</Avatar>
+                  {(() => { const logo = markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null; return (
+                    <Avatar size={54} shape="square" src={logo || undefined}
+                      style={{ background: logo ? "#fff" : "linear-gradient(135deg,var(--c-f2a33c),var(--c-e5772f))", color: "var(--c-0a1420)", fontSize: 20, fontWeight: 700, borderRadius: 14 }}>
+                      {markaAdi.slice(0, 2).toUpperCase()}
+                    </Avatar>
+                  ); })()}
                   <Title level={5} style={{ margin: 0 }}>{markaAdi.toUpperCase()}</Title>
                   <Tag color="blue" bordered style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, letterSpacing: ".1em" }}>KORUNAN MARKA</Tag>
                   <Text type="secondary" style={{ fontSize: 11 }}>{markaFiltre ? "Marka tehdit panosu" : "Operatör görünümü"}</Text>
