@@ -378,7 +378,9 @@ export async function markaAdaylariGetir(n = 60): Promise<MarkaAday[]> {
 // NOT: yeni koleksiyon (rules deploy) engelini aşmak için, zaten yazmaya-izinli
 // gunluk_marka_stat koleksiyonunu "greklam_" önekli belge id ile kullanırız
 // (kural: marka is string → verimiz uyuyor; markaGunlukGetir'in id deseniyle çakışmaz).
-export type GoogleReklam = { reklamveren: string; yasal?: string; konum?: string; dogrulama: string; url?: string; supheli: boolean };
+// tur: tehdit=marka adına finans/tam-ad reklamı (müşteriye) · inceleme=bayi/belirsiz ·
+// ilgisiz=farklı işletme/konu (gizli) · resmi=Google-doğrulanmış (gerçek marka).
+export type GoogleReklam = { reklamveren: string; yasal?: string; konum?: string; dogrulama: string; url?: string; supheli: boolean; tur?: "tehdit" | "inceleme" | "ilgisiz" | "resmi"; konu?: string };
 const greklamId = (marka: string) => "greklam_" + belgeId("m", marka);
 export async function googleReklamKaydet(marka: string, reklamlar: GoogleReklam[]): Promise<void> {
   if (!firebaseHazir || !db) return;

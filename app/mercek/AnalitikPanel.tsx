@@ -122,7 +122,7 @@ type AppBulgu = { platform: string; ad: string; gelistirici: string; paket: stri
 type AppSonuc = { markaAdi: string; sonuc: AppBulgu[]; toplam: number; resmi: number; incele: number; not?: string };
 type Reklam = { reklamveren: string; baslik?: string; metin?: string; hedefAlan?: string; snapshot?: string; baslangic?: string; platformlar?: string[]; supheli: boolean };
 type ReklamSonuc = { yapilandirildi: boolean; reklamlar: Reklam[]; supheli: number; not: string };
-type GReklam = { reklamveren: string; yasal?: string; konum?: string; dogrulama: string; url?: string; supheli: boolean };
+type GReklam = { reklamveren: string; yasal?: string; konum?: string; dogrulama: string; url?: string; supheli: boolean; tur?: "tehdit" | "inceleme" | "ilgisiz" | "resmi"; konu?: string };
 type GReklamSonuc = { yapilandirildi: boolean; reklamlar: GReklam[]; supheli: number; guncelleme: number; not: string };
 
 export default function AnalitikPanel({ marka }: { marka: string }) {
@@ -303,35 +303,54 @@ export default function AnalitikPanel({ marka }: { marka: string }) {
       {/* Reklam izleme (Google Ads Transparency) */}
       {greklam && (
         <Card style={KART} styles={{ body: { padding: 18 } }}>
-          <Flex align="center" justify="space-between" style={{ marginBottom: greklam.yapilandirildi && greklam.reklamlar.length ? 14 : 0 }}>
-            <Baslik ikon={<GoogleOutlined />}>Reklam izleme — Google Ads</Baslik>
-            {greklam.yapilandirildi
-              ? <Tag color={greklam.supheli ? "error" : "success"} style={{ margin: 0 }}>{greklam.supheli} doğrulanmamış reklamveren</Tag>
-              : <Tag style={{ margin: 0 }}>yapılandırılmadı</Tag>}
-          </Flex>
-          {!greklam.yapilandirildi ? (
-            <Text style={{ fontSize: 12, color: "var(--c-8fb0d4)" }}>{greklam.not}</Text>
-          ) : greklam.reklamlar.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<Text style={{ color: "var(--c-5b6b7d)", fontSize: 12 }}>{greklam.not}</Text>} />
-          ) : (
-            <Flex vertical gap={8}>
-              {greklam.reklamlar.slice(0, 12).map((r, i) => (
-                <div key={i} style={{ padding: "9px 12px", border: "1px solid var(--c-17293c)", borderRadius: 10, borderLeft: `3px solid ${r.supheli ? "var(--c-f5222d)" : "var(--c-3ee08a)"}` }}>
-                  <Flex align="center" justify="space-between" gap={8}>
-                    <Text style={{ color: "var(--c-e6eef7)", fontSize: 13, fontWeight: 600 }}>{r.reklamveren || "—"}</Text>
-                    {r.supheli
-                      ? <Tag icon={<WarningOutlined />} color="error" style={{ margin: 0 }}>doğrulanmamış</Tag>
-                      : <Tag icon={<CheckCircleOutlined />} color="success" style={{ margin: 0 }}>doğrulanmış</Tag>}
-                  </Flex>
-                  <Flex align="center" gap={8} style={{ marginTop: 3 }}>
-                    {r.yasal ? <Text style={{ color: "var(--c-8fb0d4)", fontSize: 11 }}>{r.yasal}</Text> : null}
-                    {r.konum ? <Text style={{ color: "var(--c-5b6b7d)", fontSize: 11 }}>· {r.konum}</Text> : null}
-                    {r.url ? <a href={r.url} target="_blank" rel="noreferrer" style={{ color: "var(--c-4d9fe0)", fontSize: 11, marginLeft: "auto" }}>reklamı gör →</a> : null}
-                  </Flex>
-                </div>
-              ))}
-            </Flex>
-          )}
+          {(() => {
+            const tur = (r: GReklam) => r.tur || (r.supheli ? "inceleme" : "resmi");
+            const tehdit = greklam.reklamlar.filter((r) => tur(r) === "tehdit");
+            const inceleme = greklam.reklamlar.filter((r) => tur(r) === "inceleme");
+            const resmi = greklam.reklamlar.filter((r) => tur(r) === "resmi").length;
+            const ilgisiz = greklam.reklamlar.filter((r) => tur(r) === "ilgisiz").length;
+            const satir = (r: GReklam, anahtar: string, renk: string, rozet: string, rozetRenk: string) => (
+              <div key={anahtar} style={{ padding: "9px 12px", border: "1px solid var(--c-17293c)", borderRadius: 10, borderLeft: `3px solid ${renk}` }}>
+                <Flex align="center" justify="space-between" gap={8}>
+                  <Text style={{ color: "var(--c-e6eef7)", fontSize: 13, fontWeight: 600 }}>{r.reklamveren || "—"}</Text>
+                  <Tag color={rozetRenk} style={{ margin: 0 }}>{rozet}</Tag>
+                </Flex>
+                <Flex align="center" gap={8} style={{ marginTop: 3 }} wrap>
+                  {r.konu ? <Text style={{ color: "var(--c-8fb0d4)", fontSize: 11 }}>{r.konu}</Text> : null}
+                  {r.konum ? <Text style={{ color: "var(--c-5b6b7d)", fontSize: 11 }}>· {r.konum}</Text> : null}
+                  {r.url ? <a href={r.url} target="_blank" rel="noreferrer" style={{ color: "var(--c-4d9fe0)", fontSize: 11, marginLeft: "auto" }}>reklamı gör →</a> : null}
+                </Flex>
+              </div>
+            );
+            return (<>
+              <Flex align="center" justify="space-between" style={{ marginBottom: greklam.yapilandirildi && greklam.reklamlar.length ? 14 : 0 }}>
+                <Baslik ikon={<GoogleOutlined />}>Reklam izleme — Google Ads</Baslik>
+                {greklam.yapilandirildi
+                  ? <Tag color={tehdit.length ? "error" : "success"} style={{ margin: 0 }}>{tehdit.length ? `${tehdit.length} tehdit` : "tehdit yok"}</Tag>
+                  : <Tag style={{ margin: 0 }}>yapılandırılmadı</Tag>}
+              </Flex>
+              {!greklam.yapilandirildi ? (
+                <Text style={{ fontSize: 12, color: "var(--c-8fb0d4)" }}>{greklam.not}</Text>
+              ) : greklam.reklamlar.length === 0 ? (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<Text style={{ color: "var(--c-5b6b7d)", fontSize: 12 }}>{greklam.not}</Text>} />
+              ) : (
+                <Flex vertical gap={8}>
+                  {tehdit.length > 0 && <Text style={{ color: "var(--c-ff9aa4)", fontSize: 11, fontWeight: 600 }}>Marka adına şüpheli reklam — {tehdit.length}</Text>}
+                  {tehdit.slice(0, 12).map((r, i) => satir(r, "t" + i, "var(--c-f5222d)", "doğrulanmamış", "error"))}
+                  {inceleme.length > 0 && <Text style={{ color: "var(--c-faad14)", fontSize: 11, fontWeight: 600, marginTop: tehdit.length ? 6 : 0 }}>İncelenecek — bayi ya da belirsiz — {inceleme.length}</Text>}
+                  {inceleme.slice(0, 8).map((r, i) => satir(r, "i" + i, "var(--c-faad14)", "incele", "warning"))}
+                  {tehdit.length === 0 && inceleme.length === 0 && <Text style={{ color: "var(--c-3ee08a)", fontSize: 12 }}>Markanız adına şüpheli reklam yok. ✓</Text>}
+                  {(ilgisiz > 0 || resmi > 0) && (
+                    <Text style={{ color: "var(--c-5b6b7d)", fontSize: 11, marginTop: 4 }}>
+                      {ilgisiz > 0 ? `${ilgisiz} alakasız reklam otomatik elendi (farklı işletme/konu)` : ""}
+                      {ilgisiz > 0 && resmi > 0 ? " · " : ""}
+                      {resmi > 0 ? `${resmi} doğrulanmış (gerçek marka)` : ""}
+                    </Text>
+                  )}
+                </Flex>
+              )}
+            </>);
+          })()}
         </Card>
       )}
 
