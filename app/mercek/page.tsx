@@ -337,7 +337,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
               ))}
             >
               {/* Grafik her iki temada da koyu "radar ekranı" kalır (canvas renkleri koyu; JS ile CSS-var okunamadığından). */}
-              <div style={{ height: 460, background: "#0a1420", borderRadius: 10, overflow: "hidden" }}><ThreatUniverse marka={markaAdi} adaylar={gosterilen} secili={secili} rapor={rapor} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} /></div>
+              <div style={{ height: 460, background: koyu ? "#0a1420" : "#f4f7fb", borderRadius: 10, overflow: "hidden" }}><ThreatUniverse marka={markaAdi} adaylar={gosterilen} secili={secili} rapor={rapor} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} /></div>
             </Card>
           </Col>
 
@@ -605,7 +605,7 @@ function KarsilastirGorsel({ resmiDom, fakeDom, fakeShot, benzerlik, markaAdi }:
 }
 
 /* THREAT UNIVERSE — marka merkezli force-graph + seçilenin altyapı alt-grafiği */
-function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect, logo }: { marka: string; adaylar: Aday[]; secili: Aday | null; rapor: Rapor | null; onSelect: (a: Aday) => void; logo?: string | null }) {
+function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect, logo, koyu = true }: { marka: string; adaylar: Aday[]; secili: Aday | null; rapor: Rapor | null; onSelect: (a: Aday) => void; logo?: string | null; koyu?: boolean }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const st = useRef<{ nodes: any[]; merkez: any; altyapi: any[] }>({ nodes: [], merkez: null, altyapi: [] });
   const adRef = useRef(adaylar); adRef.current = adaylar;
@@ -613,6 +613,7 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect, logo }: { mar
   const rapRef = useRef(rapor); rapRef.current = rapor;
   const markaRef = useRef(marka); markaRef.current = marka;
   const logoRef = useRef(logo); logoRef.current = logo;
+  const koyuRef = useRef(koyu); koyuRef.current = koyu;
   const acikKume = useRef<Set<string>>(new Set()); // tıklanınca açılan park kümeleri (TLD)
 
   useEffect(() => {
@@ -625,6 +626,9 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect, logo }: { mar
       const kok = canvas.closest(".pano") || document.documentElement;
       return getComputedStyle(kok).getPropertyValue("--c-" + m[1]).trim() || ("#" + m[1]);
     };
+    // Tema-duyarlı yapısal renk (zemin/dolgu/etiket) — canvas CSS-var okuyamadığından koyu/açık
+    // gerçek hex'i koyuRef'ten seçer. Aksanlar (kırmızı/turuncu) coz ile aynı kalır.
+    const T = (dark: string, light: string) => (koyuRef.current ? dark : light);
     let W = 0, H = 0, raf = 0; const reduce = matchMedia("(prefers-reduced-motion:reduce)").matches;
     const resize = () => { const b = canvas.getBoundingClientRect(); W = b.width; H = b.height; canvas.width = W * DPR; canvas.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); };
     const ro = new ResizeObserver(resize); ro.observe(canvas); resize();
@@ -711,9 +715,10 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect, logo }: { mar
       // RENK = DURUM (canlılık) — "hepsi kırmızı=aktif" yanılsamasını önler: aktif kırmızı,
       // canlı turuncu, park/pasif SOLUK gri; küme soluk gri.
       const durumRengi = (n: any): string => {
-        if (n.kume) return "var(--c-8fb0d4)";
+        const park = T("#8fb0d4", "#7089a3"); // park/pasif soluk — açıkta biraz koyulaşır (beyazda görünür)
+        if (n.kume) return park;
         const d = n.aday.durum;
-        return d === "aktif-tuzak" ? "var(--c-ff5468)" : d === "canli" ? "var(--c-fa8c16)" : d === "yayinda-degil" ? "var(--c-5b7695)" : "var(--c-8fb0d4)";
+        return d === "aktif-tuzak" ? "#ff5468" : d === "canli" ? (koyuRef.current ? "#fa8c16" : "#e07b0e") : d === "yayinda-degil" ? T("#5b7695", "#647d95") : park;
       };
       for (const n of nodes) {
         const R = n.R || Math.min(W, H) * 0.34;
@@ -740,7 +745,7 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect, logo }: { mar
       for (const a of altyapi) if (a.bagli) { ctx.beginPath(); ctx.moveTo(a.bagli.x, a.bagli.y); ctx.lineTo(a.x, a.y); ctx.strokeStyle = "rgba(139,125,224,.4)"; ctx.lineWidth = 1; ctx.stroke(); }
       if (altyapi[0]) { ctx.beginPath(); ctx.moveTo(merkez.x, merkez.y); ctx.lineTo(altyapi[0].x, altyapi[0].y); ctx.strokeStyle = "rgba(139,125,224,.25)"; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]); }
       ctx.beginPath(); ctx.arc(merkez.x, merkez.y, merkez.r + 12, 0, 6.28); ctx.strokeStyle = "rgba(57,189,248," + (.2 + .12 * Math.sin(t * 2)) + ")"; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.beginPath(); ctx.arc(merkez.x, merkez.y, merkez.r, 0, 6.28); const g = ctx.createRadialGradient(merkez.x, merkez.y - 8, 2, merkez.x, merkez.y, merkez.r); g.addColorStop(0, coz("var(--c-0e3a5a)")); g.addColorStop(1, coz("var(--c-0a2740)")); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = coz("var(--c-39bdf8)"); ctx.lineWidth = 2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(merkez.x, merkez.y, merkez.r, 0, 6.28); const g = ctx.createRadialGradient(merkez.x, merkez.y - 8, 2, merkez.x, merkez.y, merkez.r); g.addColorStop(0, T("#0e3a5a", "#dbeafe")); g.addColorStop(1, T("#0a2740", "#bfdbfe")); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = coz("var(--c-39bdf8)"); ctx.lineWidth = 2; ctx.stroke();
       if (logoRef.current && logoImg.complete && logoImg.naturalWidth > 0) {
         // MERKEZE LOGO — beyaz zeminde (favicon şeffaf olabilir), daireye kırp; ad altına.
         ctx.save();
@@ -749,10 +754,10 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect, logo }: { mar
         const s = (merkez.r - 5) * 2;
         ctx.drawImage(logoImg, merkez.x - s / 2, merkez.y - s / 2, s, s);
         ctx.restore();
-        ctx.font = "700 8px 'IBM Plex Sans',sans-serif"; ctx.fillStyle = coz("var(--c-e9f2fa)"); ctx.textAlign = "center"; ctx.fillText(markaRef.current.toUpperCase().slice(0, 16), merkez.x, merkez.y + merkez.r + 11);
+        ctx.font = "700 8px 'IBM Plex Sans',sans-serif"; ctx.fillStyle = T("#e9f2fa", "#0f172a"); ctx.textAlign = "center"; ctx.fillText(markaRef.current.toUpperCase().slice(0, 16), merkez.x, merkez.y + merkez.r + 11);
       } else {
-        ctx.font = "700 12px 'IBM Plex Sans',sans-serif"; ctx.fillStyle = coz("var(--c-e9f2fa)"); ctx.textAlign = "center"; ctx.fillText(markaRef.current.toUpperCase().slice(0, 12), merkez.x, merkez.y + 3);
-        ctx.font = "600 7px 'IBM Plex Mono',monospace"; ctx.fillStyle = coz("var(--c-5aa9e0)"); ctx.fillText("KORUNAN MARKA", merkez.x, merkez.y + 15);
+        ctx.font = "700 12px 'IBM Plex Sans',sans-serif"; ctx.fillStyle = T("#e9f2fa", "#0f172a"); ctx.textAlign = "center"; ctx.fillText(markaRef.current.toUpperCase().slice(0, 12), merkez.x, merkez.y + 3);
+        ctx.font = "600 7px 'IBM Plex Mono',monospace"; ctx.fillStyle = T("#5aa9e0", "#2563eb"); ctx.fillText("KORUNAN MARKA", merkez.x, merkez.y + 15);
       }
       const lf0 = Math.max(7, Math.min(9.5, nr * 0.92));
       for (const n of nodes) {
@@ -761,23 +766,23 @@ function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect, logo }: { mar
         const aktif = n.aday && (n.aday.durum === "aktif-tuzak" || n.aday.durum === "canli");
         const gl = (Math.sin(t * 3 + n.x) + 1) / 2;
         if (aktif || n.kume) { ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 5 + gl * 3, 0, 6.28); ctx.fillStyle = hexRgba(c, 0.05 + gl * 0.06); ctx.fill(); } // yalnız aktif/küme nabız; park soluk kalsın
-        if (isSel) { ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 6, 0, 6.28); ctx.strokeStyle = coz("var(--c-e9f2fa)"); ctx.lineWidth = 2; ctx.stroke(); }
+        if (isSel) { ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 6, 0, 6.28); ctx.strokeStyle = T("#e9f2fa", "#0f172a"); ctx.lineWidth = 2; ctx.stroke(); }
         if (n.kume) {
           // KÜME düğümü — "istifli" daireler + üye sayısı; tıkla=aç.
-          ctx.fillStyle = coz("var(--c-12202e)"); ctx.strokeStyle = c; ctx.lineWidth = 1.4;
+          ctx.fillStyle = T("#12202e", "#ffffff"); ctx.strokeStyle = c; ctx.lineWidth = 1.4;
           for (const off of [5, 2.5, 0]) { ctx.beginPath(); ctx.arc(n.x + off, n.y - off, n.r, 0, 6.28); ctx.fill(); ctx.stroke(); }
           ctx.font = `700 ${Math.max(9, n.r * 0.8)}px 'IBM Plex Mono',monospace`; ctx.fillStyle = c; ctx.textAlign = "center"; ctx.fillText(String(n.kume.sayi), n.x, n.y + n.r * 0.32);
           const lf = Math.max(8, Math.min(10.5, nr * 1.05));
-          ctx.font = `600 ${lf}px 'IBM Plex Mono',monospace`; ctx.fillStyle = coz("var(--c-8fb0d4)"); ctx.fillText(`.${n.kume.tld} ×${n.kume.sayi} park`, n.x, n.y + n.r + lf + 6);
-          ctx.font = `500 ${lf - 1.5}px 'IBM Plex Sans',sans-serif`; ctx.fillStyle = coz("var(--c-5b6b7d)"); ctx.fillText("tıkla → aç", n.x, n.y + n.r + lf * 2 + 8);
+          ctx.font = `600 ${lf}px 'IBM Plex Mono',monospace`; ctx.fillStyle = T("#8fb0d4", "#475569"); ctx.fillText(`.${n.kume.tld} ×${n.kume.sayi} park`, n.x, n.y + n.r + lf + 6);
+          ctx.font = `500 ${lf - 1.5}px 'IBM Plex Sans',sans-serif`; ctx.fillStyle = T("#5b6b7d", "#94a3b8"); ctx.fillText("tıkla → aç", n.x, n.y + n.r + lf * 2 + 8);
           continue;
         }
-        ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 6.28); ctx.fillStyle = coz("var(--c-12202e)"); ctx.fill(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.stroke();
+        ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 6.28); ctx.fillStyle = T("#12202e", "#ffffff"); ctx.fill(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.stroke();
         const ik = Math.max(3, n.r * 0.42);
-        ctx.fillStyle = c; ctx.fillRect(n.x - ik, n.y - ik * 0.8, ik * 2, ik * 1.6); ctx.fillStyle = coz("var(--c-12202e)"); ctx.fillRect(n.x - ik, n.y - ik * 0.8, ik * 2, ik * 0.44);
+        ctx.fillStyle = c; ctx.fillRect(n.x - ik, n.y - ik * 0.8, ik * 2, ik * 1.6); ctx.fillStyle = T("#12202e", "#ffffff"); ctx.fillRect(n.x - ik, n.y - ik * 0.8, ik * 2, ik * 0.44);
         const lf = lf0, maxc = nr < 7 ? 15 : nr < 9 ? 20 : 24;
         const dom = n.aday.domain.length > maxc ? n.aday.domain.slice(0, maxc - 1) + "…" : n.aday.domain;
-        ctx.font = `${isSel ? 600 : 500} ${lf}px 'IBM Plex Mono',monospace`; ctx.fillStyle = isSel ? coz("var(--c-e9f2fa)") : (aktif ? coz("var(--c-d3e2f5)") : coz("var(--c-7d9cbf)")); ctx.textAlign = "center";
+        ctx.font = `${isSel ? 600 : 500} ${lf}px 'IBM Plex Mono',monospace`; ctx.fillStyle = isSel ? T("#e9f2fa", "#0f172a") : (aktif ? T("#d3e2f5", "#1e293b") : T("#7d9cbf", "#5b7290")); ctx.textAlign = "center";
         ctx.fillText(dom, n.x, n.y + n.r + lf + 2);
         if (nr >= 8.5) { ctx.font = `600 ${lf - 0.5}px 'IBM Plex Mono',monospace`; ctx.fillStyle = c; ctx.fillText("%" + n.aday.skor, n.x, n.y + n.r + lf * 2 + 4); }
       }
