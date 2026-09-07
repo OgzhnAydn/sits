@@ -52,8 +52,9 @@ export default function MarkaGiris() {
         </div>
         <p className="mg-alt">{mod === "giris" ? "Markanın panosuna giriş yap — yalnız sana yönelik tehditleri görürsün." : "Marka hesabı oluştur — sadece kendi markanın verisine erişir."}</p>
 
-        <form onSubmit={gonder} className="mg-form">
-          <label>E-posta<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" placeholder="marka@sirket.com" /></label>
+        {/* noValidate: HTML5 "@ eksik" kontrolünü kapat — operatör "admin" ile girebilsin (JS doğruluyor). */}
+        <form onSubmit={gonder} className="mg-form" noValidate>
+          <label>E-posta<input type="text" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" placeholder="marka@sirket.com — ya da admin" /></label>
           {mod === "kayit" && (
             <>
               <label>Marka adı<input value={ad} onChange={(e) => setAd(e.target.value)} placeholder="ör. Garanti BBVA" /></label>
