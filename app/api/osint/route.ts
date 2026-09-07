@@ -4,7 +4,7 @@ import { normalize } from "@/lib/demoVeri";
 import { domainOsint, telefonOsint, ibanOsint, typosquatDurustlukCap, kategoriKarti, kSeviye, domainDurumu, saldiriAsamasi, SALDIRI_ASAMALARI, altyapiDna, takipIdBirincil, type OsintRapor } from "@/lib/osint";
 import { kriptoOsint } from "@/lib/kripto";
 import { itibarliMi } from "@/lib/itibarli";
-import { gostergeSorgula, baglantilariGetir, analizKaydet, delilCikar, riskGecmisiEkle, riskGecmisiGetir, dnaEslesenler, takipEslesenler } from "@/lib/store";
+import { gostergeSorgula, baglantilariGetir, analizKaydet, delilCikar, riskGecmisiEkle, riskGecmisiGetir, dnaEslesenler, takipEslesenler, telegramEslesenler } from "@/lib/store";
 import { cacheOku, cacheYaz } from "@/lib/osintCache";
 import { seedKontrol } from "@/lib/seed";
 import { ESIK, GOSTER_ESIK } from "@/lib/esik";
@@ -271,20 +271,23 @@ export async function POST(req: NextRequest) {
     asama = saldiriAsamasi(rapor);
     const d = altyapiDna(rapor);
     const takipId = takipIdBirincil(rapor);
-    await riskGecmisiEkle(deger, rapor.risk, asama, d?.imza, takipId).catch(() => {});
+    const tgImza = rapor.telegramImza; // çalınan verinin gittiği Telegram → en güçlü operatör pivotu
+    await riskGecmisiEkle(deger, rapor.risk, asama, d?.imza, takipId, tgImza).catch(() => {});
     gecmis = await riskGecmisiGetir(deger).catch(() => []);
-    // Takip kimliği pivotu: aynı analytics/reklam hesabını taşıyan diğer domainler.
-    // Altyapı (IP/NS) farklı olsa BİLE aynı operatör → grafiğe ekle.
+    // GÜÇLÜ operatör pivotları (altyapıdan bağımsız): aynı analytics hesabı VEYA aynı
+    // Telegram exfil hedefi → altyapı (IP/NS/CDN) tamamen farklı olsa bile AYNI saldırgan.
     const takipEs = takipId ? await takipEslesenler(takipId, deger).catch(() => []) : [];
+    const tgEs = tgImza ? await telegramEslesenler(tgImza, deger).catch(() => []) : [];
     if (takipId && takipEs.length) takip = { id: takipId, eslesenler: takipEs };
+    const gucluEs = [...new Set([...takipEs, ...tgEs])];
     if (d) {
       const infraEs = await dnaEslesenler(d.imza, deger).catch(() => []);
-      // Birleşik ilişki kümesi: altyapı VEYA takip kimliği eşleşen tüm domainler.
-      const eslesenler = [...new Set([...infraEs, ...takipEs])];
+      // Birleşik ilişki kümesi: ayırt edici altyapı VEYA takip/Telegram pivotu eşleşen domainler.
+      const eslesenler = [...new Set([...infraEs, ...gucluEs])];
       dna = { ...d, eslesenler };
-    } else if (takipEs.length) {
-      // Altyapı DNA çıkmasa bile takip pivotu tek başına ilişki kümesi üretir.
-      dna = { imza: "", parcalar: [], eslesenler: takipEs };
+    } else if (gucluEs.length) {
+      // Altyapı DNA çıkmasa bile takip/Telegram pivotu tek başına ilişki kümesi üretir.
+      dna = { imza: "", parcalar: [], eslesenler: gucluEs };
     }
   }
 

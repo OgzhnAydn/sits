@@ -471,24 +471,27 @@ export async function analizKaydet(a: AnalizKaydi): Promise<void> {
 // ── RİSK YÖRÜNGESİ ── domainin risk+aşama gelişimini zaman içinde kaydeder.
 // Yalnız ANLAMLI değişimde nokta ekler (aşama arttı / risk ±5 / >1sa geçti) → gürültüsüz.
 export type GecmisNokta = { t: number; risk: number; asama: number };
-export async function riskGecmisiEkle(domain: string, risk: number, asama: number, dnaImza?: string, takipId?: string): Promise<void> {
+export async function riskGecmisiEkle(domain: string, risk: number, asama: number, dnaImza?: string, takipId?: string, tgImza?: string): Promise<void> {
   if (!firebaseHazir || !db) return;
   try {
     const ref = doc(db, "analizler", belgeId("dom", domain));
     const snap = await getDoc(ref);
-    const son0 = snap.exists() ? (snap.data() as { takipId?: string }).takipId : undefined;
+    const veriMevcut = snap.exists() ? (snap.data() as { takipId?: string; telegramImza?: string }) : {};
+    const son0 = veriMevcut.takipId;
+    const sonTg = veriMevcut.telegramImza;
     const g: GecmisNokta[] = snap.exists() && Array.isArray((snap.data() as { gecmis?: GecmisNokta[] }).gecmis)
       ? (snap.data() as { gecmis: GecmisNokta[] }).gecmis : [];
     const son = g[g.length - 1];
     // Yörünge noktası yalnız anlamlı değişimde eklenir; ama takip kimliği YENİ görüldüyse
     // (önce yoktu) her hâlde yaz → atıf pivotu kaçmasın.
-    if (!son || son.asama !== asama || Math.abs(son.risk - risk) >= 5 || Date.now() - son.t > 3600_000 || (takipId && takipId !== son0)) {
+    if (!son || son.asama !== asama || Math.abs(son.risk - risk) >= 5 || Date.now() - son.t > 3600_000 || (takipId && takipId !== son0) || (tgImza && tgImza !== sonTg)) {
       if (!son || son.asama !== asama || Math.abs(son.risk - risk) >= 5 || Date.now() - son.t > 3600_000)
         g.push({ t: Date.now(), risk: Math.round(risk) || 0, asama });
       // domain+risk yaz → analizler kuralı (domain string + risk number) yeni belgede de geçsin.
       const veri: Record<string, unknown> = { domain, risk: Math.round(risk) || 0, gecmis: g.slice(-50), sonAsama: asama, zaman: Date.now() };
       if (dnaImza) veri.dnaImza = dnaImza; // altyapı DNA imzası → kampanya kümeleme
       if (takipId) veri.takipId = takipId; // analytics/reklam hesap kimliği → operatör pivotu
+      if (tgImza) veri.telegramImza = tgImza; // çalınan verinin gittiği Telegram → en güçlü operatör pivotu
       await setDoc(ref, veri, { merge: true });
     }
   } catch { /* kurallar yoksa sessiz */ }
@@ -510,6 +513,17 @@ export async function takipEslesenler(takipId: string, haricDomain: string): Pro
   if (!firebaseHazir || !db || !takipId) return [];
   try {
     const snap = await getDocs(query(collection(db, "analizler"), where("takipId", "==", takipId), fbLimit(20)));
+    return snap.docs.map((d) => (d.data() as { domain?: string }).domain || "").filter((x) => x && x !== haricDomain);
+  } catch { return []; }
+}
+
+// Aynı Telegram bot/kanalına veri gönderen diğer domainler. Çalınan verinin gittiği
+// yer = EN GÜÇLÜ operatör parmak izi; altyapı (IP/NS/CDN) tamamen farklı olsa bile
+// aynı Telegram hedefi = neredeyse kesin AYNI saldırgan. dnaEslesenler'den bağımsız.
+export async function telegramEslesenler(tgImza: string, haricDomain: string): Promise<string[]> {
+  if (!firebaseHazir || !db || !tgImza) return [];
+  try {
+    const snap = await getDocs(query(collection(db, "analizler"), where("telegramImza", "==", tgImza), fbLimit(20)));
     return snap.docs.map((d) => (d.data() as { domain?: string }).domain || "").filter((x) => x && x !== haricDomain);
   } catch { return []; }
 }

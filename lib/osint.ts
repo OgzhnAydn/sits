@@ -14,6 +14,7 @@ export type OsintRapor = {
   ekranNotu?: string; // ekran görüntüsü yanıltıcıysa (varsayılan/boş sayfa) dürüst not
   cikisAni?: number; // sahte adresin DOĞUŞ anı (ms) — en eski sertifika notBefore'u (tespit hızı için)
   sayfa?: SayfaBilgi; // paylaşılan sayfanın içerik özeti (başlık/tür/açıklama)
+  telegramImza?: string; // çalınan verinin gittiği Telegram bot/kanal — operatör parmak izi (kampanya bağı)
 };
 
 import tls from "node:tls";
@@ -1310,6 +1311,21 @@ export async function domainOsint(domain: string, tamUrl?: string): Promise<Osin
           if (dSay) r.alanlar.push({ ad: "İletişilen ağ", deger: `${dSay} domain${ulke ? ` · ${ulke} ülke` : ""}` });
           if (tek.length) r.alanlar.push({ ad: "Teknoloji (urlscan)", deger: tek.join(", ") });
           if (typeof fpage?.umbrellaRank === "number") r.alanlar.push({ ad: "Popülerlik (Umbrella)", deger: `#${fpage.umbrellaRank.toLocaleString("tr-TR")}` });
+          // TELEGRAM/EXFİL HEDEFİ — sayfanın çıkan isteklerinde bir Telegram bot/kanalı varsa,
+          // çalınan veri oraya akıyor demektir. Bu, EN GÜÇLÜ operatör parmak izi: aynı Telegram
+          // hedefini kullanan iki sahte site neredeyse kesin AYNI saldırgana aittir (altyapı değişse de).
+          const fdata = full.data as { requests?: { request?: { request?: { url?: string } } }[] } | undefined;
+          const cikanlar = [...(lists?.domains || []), ...((full.lists as { urls?: string[] } | undefined)?.urls || []), ...((fdata?.requests || []).map((q) => q?.request?.request?.url || ""))];
+          let tg = "";
+          for (const u of cikanlar) {
+            const b = u.match(/api\.telegram\.org\/bot(\d{6,}):/i); if (b) { tg = "bot" + b[1]; break; }
+            const t = u.match(/(?:^|\/\/|\.)t\.me\/([A-Za-z0-9_]{3,32})/i); if (t && !/^(s|share|iv|proxy)$/i.test(t[1])) tg = t[1].toLowerCase();
+          }
+          if (tg) {
+            r.telegramImza = "tg:" + tg;
+            r.alanlar.push({ ad: "Veri hedefi (Telegram)", deger: tg.startsWith("bot") ? `Telegram botu (${tg.replace(/^bot/, "bot ")})` : `t.me/${tg}` });
+            r.bulgular.push(`Sayfanın topladığı bilgi bir Telegram hedefine (${tg.startsWith("bot") ? "bot" : "t.me/" + tg}) gönderiliyor — çalınan veri buraya akıyor; aynı hedefi kullanan diğer sahte siteler AYNI operatöre ait.`);
+          }
         }
       }
     }
