@@ -1472,6 +1472,26 @@ export async function domainOsint(domain: string, tamUrl?: string): Promise<Osin
     if (parkHostRe.test(sonUrl) || parkMetin) parkli = true;
     if (sayfa) {
       iceriktenBulgu(sayfa, r, !!markaEslesme);
+      // TELEGRAM EXFİL — kimlik-hırsızı kitleri bot token'ını çoğu zaman sayfa JS'ine GÖMER
+      // (form gönderilince çağrılır; urlscan sayfayı yalnız açtığı için o isteği kaçırır).
+      // Kaynağı burada tara → çok daha güvenilir tetikler + operatör parmak izi (telegramImza).
+      if (!r.telegramImza) {
+        const bm = sayfa.match(/api\.telegram\.org\/bot(\d{6,}):[A-Za-z0-9_-]{20,}/i);
+        const tm = sayfa.match(/(?:https?:\/\/)?(?:www\.)?t\.me\/([A-Za-z0-9_]{4,32})/i);
+        const kanal = tm && !/^(s|share|iv|proxy|joinchat|addstickers)$/i.test(tm[1]) ? tm[1].toLowerCase() : "";
+        if (bm) {
+          // Bot token'ı client tarafında = KESİN veri hırsızı; meşru site asla koymaz.
+          r.telegramImza = "tg:bot" + bm[1];
+          r.risk += 20;
+          r.alanlar.push({ ad: "Veri hedefi (Telegram)", deger: `Telegram botu (bot ${bm[1]}) — sayfa kaynağında token gömülü` });
+          r.bulgular.unshift("Sayfanın kaynağında bir TELEGRAM BOT TOKEN'ı gömülü — girdiğin bilgi anında bu Telegram botuna gönderiliyor (klasik kimlik-hırsızı kiti). Aynı botu kullanan diğer sahte siteler AYNI operatöre ait — kesinlikle bilgi girme.");
+        } else if (kanal && (markaEslesme || r.risk >= 25)) {
+          // t.me/kanal yalnız ŞÜPHELİ bağlamda (sosyal-link FP'sine karşı marka/risk şartı).
+          r.telegramImza = "tg:" + kanal;
+          r.alanlar.push({ ad: "Telegram kanalı", deger: `t.me/${kanal} — dolandırıcı iletişim/exfil kanalı olabilir` });
+          r.bulgular.push(`Sayfada bir Telegram kanalı bağlantısı var (t.me/${kanal}); aynı kanalı kullanan diğer sahte siteler aynı operatöre işaret eder.`);
+        }
+      }
       // İÇERİK ANLAMA: sayfanın ne olduğunu çıkar (başlık/tür/açıklama).
       const bilgi = sayfaBilgiCikar(sayfa);
       r.sayfa = bilgi;
