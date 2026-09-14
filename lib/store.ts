@@ -12,6 +12,13 @@ import {
   increment,
   arrayUnion,
   serverTimestamp,
+  getCountFromServer,
+  deleteDoc,
+  startAfter,
+  documentId,
+  type WhereFilterOp,
+  type QueryDocumentSnapshot,
+  type QueryConstraint,
 } from "firebase/firestore";
 import { db, firebaseHazir } from "./firebase";
 import { gercekTaklit } from "./korunanMarkalar";
@@ -373,6 +380,88 @@ export async function markaAdaylariGetir(n = 60): Promise<MarkaAday[]> {
   }
 }
 
+// ── YASA DIŞI BAHİS RADARI — kalıcı feed (worker + app CT-örnekleyici besler) ──────
+// Bellek-içi birikim deploy/cold-start'ta sıfırlanıyordu; kalıcılık için Firestore.
+export type BahisAday = {
+  domain: string; guven: number; marka: string | null; trHedefli: boolean;
+  usomda: boolean | null; engelli?: boolean | null; ca: string; tld: string; isaretler: string[];
+  zaman: number; sonTarama?: number; kaynak?: string;
+};
+export async function bahisAdayKaydet(a: BahisAday): Promise<void> {
+  if (!firebaseHazir || !db) return;
+  try {
+    const ref = doc(db, "bahis_adaylari", belgeId("dom", a.domain));
+    // İLK-BULUNMA zamanını KORU (re-tespit "yeni" görünmesin) — yalnız sonTarama + usomda tazelenir.
+    const mevcut = await getDoc(ref);
+    if (mevcut.exists()) {
+      await setDoc(ref, { sonTarama: Date.now(), usomda: a.usomda, engelli: a.engelli ?? null, guven: a.guven }, { merge: true });
+    } else {
+      await setDoc(ref, { ...a, engelli: a.engelli ?? null, zaman: a.zaman || Date.now(), sonTarama: Date.now() });
+    }
+  } catch { /* kurallar yoksa sessiz */ }
+}
+export async function bahisAdaylariGetir(n = 200): Promise<BahisAday[]> {
+  if (!firebaseHazir || !db) return [];
+  try {
+    const snap = await getDocs(query(collection(db, "bahis_adaylari"), orderBy("zaman", "desc"), fbLimit(n)));
+    return snap.docs.map((d) => d.data() as BahisAday);
+  } catch {
+    return [];
+  }
+}
+
+// TR-hedefli bahis adaylarının TAMAMI (liste/PDF için) — where trHedefli==true.
+// KRİTİK: orderBy("zaman") composite index (trHedefli+zaman) ister → yoksa failed-precondition
+// ile sessizce 0 döner. Bunun yerine orderBy(documentId) + startAfter ile SAYFALA:
+// tek-alan eşitlik + belge-adı sıralaması otomatik indexlidir, composite gerektirmez.
+// Böylece ~30k TR-hedefli kaydın TAMAMI ~13sn'de çekilir (ölçüldü).
+export async function bahisTRHedefli(n = 60000): Promise<BahisAday[]> {
+  if (!firebaseHazir || !db) return [];
+  const col = collection(db, "bahis_adaylari");
+  const BATCH = 5000;
+  const cikti: BahisAday[] = [];
+  let cursor: QueryDocumentSnapshot | null = null;
+  try {
+    while (cikti.length < n) {
+      const kosullar: QueryConstraint[] = [where("trHedefli", "==", true), orderBy(documentId())];
+      if (cursor) kosullar.push(startAfter(cursor));
+      kosullar.push(fbLimit(BATCH));
+      const snap = await getDocs(query(col, ...kosullar));
+      if (snap.empty) break;
+      for (const d of snap.docs) cikti.push(d.data() as BahisAday);
+      cursor = snap.docs[snap.docs.length - 1];
+      if (snap.size < BATCH) break;
+    }
+  } catch {
+    // Beklenmedik hata: elde ne varsa onu döndür (kısmi > hiç).
+  }
+  return cikti;
+}
+
+// bahis_adaylari GERÇEK toplam sayısı — getCountFromServer (belge indirmez, ucuz aggregation).
+// "Yakalanan Bahis" sayacı bunu kullanır; okuma-limitli listeye (200) bağlı kalmasın.
+export async function bahisAdaySayisi(): Promise<number> {
+  if (!firebaseHazir || !db) return 0;
+  try {
+    const s = await getCountFromServer(collection(db, "bahis_adaylari"));
+    return s.data().count;
+  } catch {
+    return 0;
+  }
+}
+
+// bahis_adaylari KOŞULLU sayı (TR-hedefli / marka / biz-önce sayaçları gerçek olsun, örnek değil).
+// Tek-alanlı where → otomatik index; count aggregation belge indirmez (ucuz).
+export async function bahisAdaySayisiKosul(alan: string, op: WhereFilterOp, deger: unknown): Promise<number> {
+  if (!firebaseHazir || !db) return 0;
+  try {
+    const s = await getCountFromServer(query(collection(db, "bahis_adaylari"), where(alan, op, deger)));
+    return s.data().count;
+  } catch {
+    return 0;
+  }
+}
+
 // ── GOOGLE ADS (BigQuery Transparency) reklam cache'i — günlük birleşik sorgu
 // sonucunu marka başına saklar (istek-başına BigQuery çağırma = maliyet). ──
 // NOT: yeni koleksiyon (rules deploy) engelini aşmak için, zaten yazmaya-izinli
@@ -601,6 +690,20 @@ export async function markaKayitEt(m: KullaniciMarka, email?: string): Promise<v
     if (email) await addDoc(collection(db, "abone_iletisim"), { marka: m.anahtar, email, olusturma: serverTimestamp() });
   } catch {
     throw new Error("kaydedilemedi");
+  }
+}
+
+// Kullanıcının eklediği bir markayı KALDIR (yanlış/mükerrer kayıt temizliği; UI'daki marka-sil için).
+export async function kullaniciMarkaSil(anahtar: string): Promise<boolean> {
+  if (!firebaseHazir || !db || !anahtar) return false;
+  const ref = doc(db, "kullanici_markalari", belgeId("mk", anahtar.toLowerCase()));
+  try {
+    await deleteDoc(ref);
+    return true;
+  } catch {
+    // Firestore kuralları client'tan delete'e izin vermiyorsa SOFT-DELETE: onay:false →
+    // kullaniciMarkalariGetir (onay !== false) markayı gizler. Update kuralı izinli (ekleme çalışıyor).
+    try { await setDoc(ref, { onay: false }, { merge: true }); return true; } catch { return false; }
   }
 }
 

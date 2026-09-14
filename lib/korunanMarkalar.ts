@@ -3,7 +3,12 @@
 // anahtar: domainde aranan kelime (>=4 harf — kısa kelime gürültü yapar).
 // resmi: markanın GERÇEK domainleri (bunlar aday sayılmaz).
 
-export type KorunanMarka = { anahtar: string; ad: string; resmi: string[] };
+// kaliplari: anahtara EK tarama kalıpları (açılım/eş-ad). Örn. TOKİ hem "toki" hem "toplukonutidaresi"
+// ile taklit edilir. Uzun açılım kalıpları ayırt edicidir (FP yapmaz); kısa kısaltma (toki) sıkı-bağlama tabi.
+// yaygin: anahtar aynı zamanda yabancı yaygın kelime / coğrafi ad (pegasus=mitoloji, santander=şehir,
+// iberia=yarımada, albaraka=Arapça bereket, correos=İsp. posta) → o ülkedeki meşru işletmeleri yakalar.
+// İşaretli markalar, kısa anahtarlar gibi SIKI-BAĞLAM kapısına tabi (riskli TLD veya phishing bağlamı şart).
+export type KorunanMarka = { anahtar: string; ad: string; resmi: string[]; kaliplari?: string[]; yaygin?: boolean };
 
 // TEK KAYNAK: hem CertStream avcısı hem domainOsint (typosquatting + favicon
 // karşılaştırması) bu listeyi kullanır. Böylece her korunan marka için favicon
@@ -18,6 +23,20 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "halkbank", ad: "Halkbank", resmi: ["halkbank.com.tr", "halkbank.com"] },
   { anahtar: "denizbank", ad: "Denizbank", resmi: ["denizbank.com"] },
   { anahtar: "kuveytturk", ad: "Kuveyt Türk", resmi: ["kuveytturk.com.tr"] },
+  { anahtar: "finansbank", ad: "QNB Finansbank", resmi: ["qnb.com.tr", "qnbfinansbank.com", "qnbfinansbank.com.tr"] },
+  { anahtar: "sekerbank", ad: "Şekerbank", resmi: ["sekerbank.com.tr"] },
+  { anahtar: "hsbc", ad: "HSBC Türkiye", resmi: ["hsbc.com.tr"] },
+  { anahtar: "albaraka", ad: "Albaraka Türk", resmi: ["albaraka.com.tr", "albarakaturk.com.tr"], yaygin: true },
+  { anahtar: "turkiyefinans", ad: "Türkiye Finans", resmi: ["turkiyefinans.com.tr"] },
+  { anahtar: "ziraatkatilim", ad: "Ziraat Katılım", resmi: ["ziraatkatilim.com.tr"] },
+  { anahtar: "vakifkatilim", ad: "Vakıf Katılım", resmi: ["vakifkatilim.com.tr"] },
+  { anahtar: "fibabanka", ad: "Fibabanka", resmi: ["fibabanka.com.tr"] },
+  { anahtar: "odeabank", ad: "Odeabank", resmi: ["odeabank.com.tr"] },
+  { anahtar: "anadolubank", ad: "Anadolubank", resmi: ["anadolubank.com.tr"] },
+  { anahtar: "alternatifbank", ad: "Alternatif Bank", resmi: ["alternatifbank.com.tr", "abank.com.tr"] },
+  { anahtar: "burganbank", ad: "Burgan Bank", resmi: ["burgan.com.tr"] },
+  { anahtar: "icbc", ad: "ICBC Turkey", resmi: ["icbc.com.tr"] },
+  { anahtar: "aktifbank", ad: "Aktif Bank", resmi: ["aktifbank.com.tr", "nkolay.com"] },
   { anahtar: "papara", ad: "Papara", resmi: ["papara.com"] },
   { anahtar: "enpara", ad: "Enpara", resmi: ["enpara.com"] },
   { anahtar: "trendyol", ad: "Trendyol", resmi: ["trendyol.com", "trendyolmilla.com"] },
@@ -28,7 +47,7 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "turktelekom", ad: "Türk Telekom", resmi: ["turktelekom.com.tr"] },
   { anahtar: "telefonica", ad: "Telefónica", resmi: ["telefonica.com", "telefonica.es"] },
   // İspanya — bankalar, enerji, perakende, havayolu, kamu kurumları
-  { anahtar: "santander", ad: "Banco Santander", resmi: ["santander.com", "bancosantander.es"] },
+  { anahtar: "santander", ad: "Banco Santander", resmi: ["santander.com", "bancosantander.es"], yaygin: true },
   { anahtar: "bbva", ad: "BBVA", resmi: ["bbva.com", "bbva.es"] },
   { anahtar: "caixabank", ad: "CaixaBank", resmi: ["caixabank.es", "caixabank.com"] },
   { anahtar: "sabadell", ad: "Banco Sabadell", resmi: ["bancsabadell.com", "bancosabadell.es"] },
@@ -39,9 +58,9 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "endesa", ad: "Endesa", resmi: ["endesa.com", "endesa.es"] },
   { anahtar: "inditex", ad: "Inditex", resmi: ["inditex.com"] },
   { anahtar: "mercadona", ad: "Mercadona", resmi: ["mercadona.es"] },
-  { anahtar: "iberia", ad: "Iberia", resmi: ["iberia.com"] },
-  { anahtar: "movistar", ad: "Movistar", resmi: ["movistar.es", "movistar.com"] },
-  { anahtar: "correos", ad: "Correos", resmi: ["correos.es"] },
+  { anahtar: "iberia", ad: "Iberia", resmi: ["iberia.com"], yaygin: true },
+  { anahtar: "movistar", ad: "Movistar", resmi: ["movistar.es", "movistar.com"], yaygin: true },
+  { anahtar: "correos", ad: "Correos", resmi: ["correos.es"], yaygin: true },
   { anahtar: "agenciatributaria", ad: "Agencia Tributaria", resmi: ["agenciatributaria.gob.es", "agenciatributaria.es"] },
   { anahtar: "pttavm", ad: "PTT AVM", resmi: ["pttavm.com"] },
   { anahtar: "edevlet", ad: "e-Devlet", resmi: ["turkiye.gov.tr"] },
@@ -79,7 +98,7 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   // ── Hava yolu şirketleri ──
   { anahtar: "turkishairlines", ad: "Türk Hava Yolları (THY)", resmi: ["turkishairlines.com", "thy.com"] },
   { anahtar: "flypgs", ad: "Pegasus Hava Yolları", resmi: ["flypgs.com"] },
-  { anahtar: "pegasus", ad: "Pegasus Hava Yolları", resmi: ["flypgs.com", "pegasusair.com"] },
+  { anahtar: "pegasus", ad: "Pegasus Hava Yolları", resmi: ["flypgs.com", "pegasusair.com"], yaygin: true },
   { anahtar: "anadolujet", ad: "AnadoluJet / AJet", resmi: ["anadolujet.com", "ajet.com"] },
   { anahtar: "sunexpress", ad: "SunExpress", resmi: ["sunexpress.com"] },
   { anahtar: "corendon", ad: "Corendon Airlines", resmi: ["corendonairlines.com"] },
@@ -94,12 +113,25 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "uyap", ad: "UYAP (Ulusal Yargı Ağı)", resmi: ["uyap.gov.tr", "vatandas.uyap.gov.tr", "adalet.gov.tr"] },
   { anahtar: "orphion", ad: "Orphion Pharma", resmi: ["orphionpharma.com"] },
   { anahtar: "etimaden", ad: "Eti Maden", resmi: ["etimaden.gov.tr"] },
+  // ── Otomotiv / sanayi tedarikçileri ──
+  // Beycelik Gestamp: Beycelik Holding (Bursa) × Gestamp (İspanya) ortak girişimi, otomotiv metal/şasi.
+  // "beycelik" ayırt edici Türkçe kök (kalıp olarak eklenir); "gestamp" TEK BAŞINA eklenmez —
+  // küresel İspanyol Gestamp'ı (gestamp.com) yanlış-pozitif yakalamamak için.
+  { anahtar: "beycelikgestamp", ad: "Beycelik Gestamp", resmi: ["beycelikgestamp.com.tr", "beycelik.com.tr"], kaliplari: ["beycelik"] },
   // ── Konut / gayrimenkul (sıkça taklit edilir: sahte TOKİ/konut başvuru-çekiliş siteleri) ──
-  { anahtar: "toki", ad: "TOKİ (Toplu Konut İdaresi)", resmi: ["toki.gov.tr"] },
+  { anahtar: "toki", ad: "TOKİ (Toplu Konut İdaresi)", resmi: ["toki.gov.tr"], kaliplari: ["toplukonutidaresi", "toplukonut", "konutidaresi"] },
   { anahtar: "emlakkonut", ad: "Emlak Konut GYO", resmi: ["emlakkonut.com.tr"] },
   { anahtar: "emlakyonetim", ad: "Emlak Yönetim", resmi: ["emlakyonetim.com.tr"] },
   { anahtar: "emlakkatilim", ad: "Emlak Katılım (Katılım Bankası)", resmi: ["emlakkatilim.com.tr"] },
   { anahtar: "sehircilik", ad: "Çevre, Şehircilik ve İklim Değişikliği Bakanlığı", resmi: ["csb.gov.tr"] },
+  // ── Perakende / sivil toplum / kamu ──
+  { anahtar: "migros", ad: "Migros", resmi: ["migros.com.tr", "sanalmarket.com.tr"] },
+  { anahtar: "losev", ad: "LÖSEV (Lösemili Çocuklar Vakfı)", resmi: ["losev.org.tr"] },
+  { anahtar: "diyanet", ad: "Diyanet İşleri Başkanlığı", resmi: ["diyanet.gov.tr"] },
+  // Kültür ve Turizm Bakanlığı — anahtar "ktb" DEĞİL (3 harf → taranamaz/gürültü); ayırt edici
+  // "kulturturizm" kalıbı. Resmî domainler doğrulandı: ktb.gov.tr + kulturturizm.gov.tr (ikincisi
+  // ktb.gov.tr'ye yönleniyor). Müze bileti / turizm başvurusu dolandırıcılıkları bu bakanlığı taklit eder.
+  { anahtar: "kulturturizm", ad: "Kültür ve Turizm Bakanlığı", resmi: ["ktb.gov.tr", "kulturturizm.gov.tr"] },
 ];
 
 // Marka logosu — resmî domainin faviconu (Google favicon servisi). Tüm markalar için
@@ -236,7 +268,7 @@ function tekEditGorsel(label: string, k: string): boolean {
 // meşru kelime (guarani≈garanti, abbank≈akbank) baştan ayrışır → eşik-içi olsa da elenmeli.
 // İstisna: erken konumda görsel-aldatan tek harf (4kbank≈akbank) yine typosquat sayılır.
 function yakinTypo(label: string, k: string): boolean {
-  if (k.length < 5) return false; // 4-harf anahtarda edit-distance çok yanlış-pozitif
+  if (k.length < 6) return false; // <6 harf edit-distance FP üretir: 5-harf anahtar yaygın kelimeye 1-yakın olur (losev↔loser, canik↔canim) → typo yalnız ≥6 harf
   const esik = k.length >= 7 ? 2 : 1;
   if (Math.abs(label.length - k.length) > esik) return false;
   const d = duzenlemeMesafesi(label, k);
@@ -247,16 +279,35 @@ function yakinTypo(label: string, k: string): boolean {
 }
 
 // domain, verilen marka anahtarının GERÇEK taklidi mi? (kendi domaini/kelime-içi değil)
-export function gercekTaklit(domain: string, anahtar: string): boolean {
-  const d = domainSade(domain);
-  const k = String(anahtar || "").toLowerCase();
-  if (!k || k.length < 4 || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)) return false;
+// KISA (≤4 harf) anahtarların yaygın-dizge FP'sini süzmek için bağlam: gerçek taklit domaini
+// Türkçe konut/finans/resmî ya da phishing kelimesi taşır; meşru yabancı site (ibis-toki.co.jp,
+// hoikuen-toki, eyelash-salon-toki) taşımaz. Ek sinyal = bu bağlam VEYA riskli TLD.
+const TR_BAGLAM = /proje|konut|basvuru|basvur|kampanya|cekilis|kura|tapu|daire|kredi|resmi|giris|destek|musteri|hesap|odeme|randevu|evim|bakanlik|idare|sorgu|login|secure|verify|account|onlin|bank|card|kart|mobil|wallet|\bpay\b|\btc\b|gov|bilet|ucus|ucak|rezervasyon|seyahat|checkin|acceso|banca|cliente|particular|premi|bonus|hediye/;
+
+// Tek bir kalıp için taklit kontrolü (mevcut mantık + SIKI-BAĞLAM kapısı: kısa anahtar veya yaygın-kelime).
+function taklitKalip(d: string, k: string, yaygin?: boolean): boolean {
   const { label, altAlan, tld } = tescilliBilgi(d);
   const riskliTld = TAKLIT_RISKLI_TLD.has(tld) || TAKLIT_RISKLI_TLD.has(tld.split(".").pop() || "");
   if (label === k) return !altAlan && riskliTld; // kendi domaini/alt alanı değil, sadece garanti.xyz gibi
-  if (label.includes(k) && sinirdaGecer(label, k)) return true;
+  if (label.includes(k) && sinirdaGecer(label, k)) {
+    // SIKI-BAĞLAM: KISA ANAHTAR (≤4, toki/hsbc) VEYA YAYGIN-KELİME marka (pegasus/santander/iberia)
+    // tire-sınırlı içermede meşru yabancı işletmeleri yakalar (ibis-toki, donerkebab-santander) →
+    // tek başına yetmez, ek sinyal şart: riskli TLD VEYA phishing/Türkçe bağlamı.
+    if ((k.length <= 4 || yaygin) && !riskliTld && !TR_BAGLAM.test(d)) return false;
+    return true;
+  }
   // Harf-oyunu typosquat (anadolumet, aselan, turkcel…) — alt-dize DEĞİL ama çok benziyor.
   return yakinTypo(label, k);
+}
+
+export function gercekTaklit(domain: string, anahtar: string): boolean {
+  const d = domainSade(domain);
+  const k0 = String(anahtar || "").toLowerCase();
+  if (!k0 || k0.length < 4 || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)) return false;
+  // Markanın TÜM kalıplarını dene (anahtar + açılım kalıpları: toki + toplukonutidaresi…).
+  const marka = KORUNAN_MARKALAR.find((m) => m.anahtar === k0);
+  const kaliplar = marka ? [marka.anahtar, ...(marka.kaliplari || [])] : [k0];
+  return kaliplar.some((k) => k.length >= 4 && taklitKalip(d, k, marka?.yaygin));
 }
 
 // Bir domain, verilen resmî listede mi? (allowlist kontrolü — kendi/alt-alan adları dahil)

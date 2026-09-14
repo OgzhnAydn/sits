@@ -125,7 +125,7 @@ type ReklamSonuc = { yapilandirildi: boolean; reklamlar: Reklam[]; supheli: numb
 type GReklam = { reklamveren: string; yasal?: string; konum?: string; dogrulama: string; url?: string; supheli: boolean; tur?: "tehdit" | "inceleme" | "ilgisiz" | "resmi"; konu?: string };
 type GReklamSonuc = { yapilandirildi: boolean; reklamlar: GReklam[]; supheli: number; guncelleme: number; not: string };
 
-export default function AnalitikPanel({ marka }: { marka: string }) {
+export default function AnalitikPanel({ marka, bolum = "tam" }: { marka: string; bolum?: string }) {
   const [veri, setVeri] = useState<Panel | null>(null);
   const [yuk, setYuk] = useState(true);
   const [app, setApp] = useState<AppSonuc | null>(null);
@@ -160,9 +160,20 @@ export default function AnalitikPanel({ marka }: { marka: string }) {
   if (yuk && !veri) return <Flex align="center" justify="center" style={{ minHeight: 300 }}><Spin tip="Panel yükleniyor…"><div style={{ padding: 40 }} /></Spin></Flex>;
   if (!veri) return <Card style={KART}><Text style={{ color: "var(--c-8fa6bd)" }}>Panel verisi alınamadı.</Text></Card>;
 
+  // Bölüm süzgeci — mercek menüsü hangi grubu istediyse yalnız o bölümler çizilir (aynı yerde
+  // sekme gibi). "tam" = hepsi (tek başına /panel için). KPI şeridi her bölümde bağlam verir.
+  const GRUP: Record<string, string[]> = {
+    tam: ["kpi", "tempo", "komp", "kume", "ortak", "mobil", "reklam", "hiz", "oncelik"],
+    ortak: ["kpi", "kume", "ortak"],
+    mobilreklam: ["kpi", "mobil", "reklam"],
+    oncelik: ["kpi", "oncelik", "hiz"],
+  };
+  const G = (id: string) => (GRUP[bolum] || GRUP.tam).includes(id);
+
   return (
     <Flex vertical gap={12}>
       {/* KPI şeridi */}
+      {G("kpi") && (
       <Row gutter={[12, 12]}>
         {[
           { t: "Toplam Gözlem", v: veri.toplam, i: <EyeOutlined />, c: "var(--c-4d9fe0)" },
@@ -180,14 +191,18 @@ export default function AnalitikPanel({ marka }: { marka: string }) {
           </Col>
         ))}
       </Row>
+      )}
 
       {/* Tempo + Saat ısı */}
+      {G("tempo") && (
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={16}><Card style={KART} styles={{ body: { padding: 18 } }}><Baslik ikon={<RiseOutlined />}>Tespit temposu — son 30 gün</Baslik><TempoBar veri={veri.tempo} /></Card></Col>
         <Col xs={24} lg={8}><Card style={KART} styles={{ body: { padding: 18 } }}><Baslik ikon={<ClockCircleOutlined />}>Saatlik yoğunluk</Baslik><SaatIsi veri={veri.saatDagilim} /></Card></Col>
       </Row>
+      )}
 
       {/* Kompozisyon */}
+      {G("komp") && (
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={9}><Card style={KART} styles={{ body: { padding: 18 } }}><Baslik ikon={<DashboardOutlined />}>Durum dağılımı</Baslik><Donut veri={veri.durum} /></Card></Col>
         <Col xs={24} sm={12} lg={8}>
@@ -210,15 +225,17 @@ export default function AnalitikPanel({ marka }: { marka: string }) {
         </Col>
         <Col xs={24} sm={12} lg={7}><Card style={KART} styles={{ body: { padding: 18 } }}><Baslik ikon={<EyeOutlined />}>Tespit kaynağı</Baslik><YatayBar veri={Object.entries(veri.kaynak).map(([ad, sayi]) => ({ ad, sayi })).sort((a, b) => b.sayi - a.sayi)} renk="var(--c-7c5cff)" /></Card></Col>
       </Row>
+      )}
 
       {/* Küme uyarısı */}
-      {veri.kume && (
+      {G("kume") && veri.kume && (
         <Card style={{ ...KART, borderColor: "var(--c-3a2a12)", background: "var(--c-1a1206)" }} styles={{ body: { padding: "12px 16px" } }}>
           <Flex align="center" gap={10}><ClusterOutlined style={{ color: "var(--c-f2a33c)", fontSize: 18 }} /><Text style={{ color: "var(--c-f6c877)" }}>En büyük tek-operasyon kümesi: <b>{veri.kume.adet} adet .{veri.kume.tld}</b> aynı desende — tekil tehdit değil, tek operasyonun toplu kaydı olarak değerlendirilir.</Text></Flex>
         </Card>
       )}
 
       {/* ORTAK NOKTA */}
+      {G("ortak") && (<>
       <Baslik ikon={<ClusterOutlined />}>Ortak nokta &amp; atıf — bu tehditler neyi paylaşıyor</Baslik>
       <Row gutter={[12, 12]}>
         <Col xs={24} sm={12} lg={8}><Card style={KART} styles={{ body: { padding: 18 } }}><Text strong style={{ color: "var(--c-8fa6bd)", fontSize: 12 }}>Ortak IP adresleri</Text><div style={{ height: 10 }} /><YatayBar veri={veri.ortak.ip} renk="var(--c-f5222d)" /></Card></Col>
@@ -229,8 +246,10 @@ export default function AnalitikPanel({ marka }: { marka: string }) {
         <Col xs={24} sm={12} lg={8}><Card style={KART} styles={{ body: { padding: 18 } }}><Text strong style={{ color: "var(--c-8fa6bd)", fontSize: 12 }}>Ortak takip kimliği (operatör)</Text><div style={{ height: 10 }} /><YatayBar veri={veri.ortak.takip} renk="var(--c-eb2f96)" bos="Henüz takip kimliği eşleşmesi yok (yeni taramalarla dolar)" /></Card></Col>
       </Row>
 
+      </>)}
+
       {/* Mobil uygulama taraması (iOS App Store) */}
-      {app && (
+      {G("mobil") && app && (
         <Card style={KART} styles={{ body: { padding: 18 } }}>
           <Flex align="center" justify="space-between" style={{ marginBottom: 14 }}>
             <Baslik ikon={<AppleOutlined />}>Mobil uygulama taraması — iOS + Android</Baslik>
@@ -265,7 +284,7 @@ export default function AnalitikPanel({ marka }: { marka: string }) {
       )}
 
       {/* Reklam izleme (Meta Ad Library) */}
-      {reklam && (
+      {G("reklam") && reklam && (
         <Card style={KART} styles={{ body: { padding: 18 } }}>
           <Flex align="center" justify="space-between" style={{ marginBottom: reklam.yapilandirildi ? 14 : 0 }}>
             <Baslik ikon={<NotificationOutlined />}>Reklam izleme — Meta (Facebook / Instagram)</Baslik>
@@ -301,7 +320,7 @@ export default function AnalitikPanel({ marka }: { marka: string }) {
       )}
 
       {/* Reklam izleme (Google Ads Transparency) */}
-      {greklam && (
+      {G("reklam") && greklam && (
         <Card style={KART} styles={{ body: { padding: 18 } }}>
           {(() => {
             const tur = (r: GReklam) => r.tur || (r.supheli ? "inceleme" : "resmi");
@@ -355,7 +374,7 @@ export default function AnalitikPanel({ marka }: { marka: string }) {
       )}
 
       {/* Tespit hızı — çıkış (ilk sertifika) → bizim tespit gecikmesi */}
-      {veri.tespitHizi && (
+      {G("hiz") && veri.tespitHizi && (
         <Card style={{ ...KART, borderColor: "var(--c-123a2a)", background: "var(--c-0a1a14)" }} styles={{ body: { padding: 18 } }}>
           <Baslik ikon={<ClockCircleOutlined />}>Tespit hızı — sahte adres doğduktan ne kadar sonra yakaladık</Baslik>
           <Flex gap={28} wrap align="flex-end">
@@ -375,6 +394,7 @@ export default function AnalitikPanel({ marka }: { marka: string }) {
       )}
 
       {/* Yükselmeler + USOM öndelik */}
+      {G("oncelik") && (
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={16}>
           <Card style={KART} styles={{ body: { padding: 18 } }}>
@@ -403,6 +423,7 @@ export default function AnalitikPanel({ marka }: { marka: string }) {
           </Card>
         </Col>
       </Row>
+      )}
     </Flex>
   );
 }

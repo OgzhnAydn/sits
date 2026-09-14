@@ -10,7 +10,9 @@ primary_region = "fra"   # Frankfurt — Türkiye'ye en yakın bölge
 
 [env]
   SITS_URL = "https://siber-bildir-web.vercel.app"
-  CT_MAX_LOG = "6"   # takip edilecek log sayısı (çok-operatör, yedeklilik)
+  # DAĞITIK KAPSAM: Frankfurt YALNIZ Cloudflare (Nimbus — en yüksek-hacimli tek log; kendine
+  # ayrılmış makine yetişir). Google/DigiCert/Sectigo ayrı worker'larda, TrustAsia Singapur'da.
+  CT_ONLY_OP = "Cloudflare"
   PORT = "8080"
   # MARKA_ADAY_SECRET burada DEĞİL — gizli olduğu için `fly secrets set` ile verilir.
 
@@ -35,8 +37,8 @@ primary_region = "fra"   # Frankfurt — Türkiye'ye en yakın bölge
   source = "ct_data"
   destination = "/data"
 
-# Tek makine yeter; bağlantı kesilince kod otomatik yeniden dener + watchdog toparlar.
-# 2 vCPU: 6 eşzamanlı CT log döngüsü + DER taraması throughput'u için (operatörlere yetiş).
+# 18 log eşzamanlı takip. DER ön-filtresi ucuz olduğu için 2x/1GB deneriz; KAÇIRMA RİSKİ
+# çıkarsa ya makineyi büyüt (fly scale) ya da operatör-başı worker'lara böl.
 [[vm]]
   size = "shared-cpu-2x"
   memory = "1024mb"

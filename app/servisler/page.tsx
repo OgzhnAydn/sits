@@ -17,6 +17,8 @@ const KURUMSAL: Servis[] = [
   { href: "/marka-koruma", ikon: "verified_user", baslik: "Marka Koruma", alt: "Markanı taklit eden sahte siteleri tara + her gün rapor al.", rozet: "kurumsal" },
   { href: "/kampanya", ikon: "hub", baslik: "Kampanya Çözümleme", alt: "Bir sahte siteden tüm operasyonu çıkar: kardeş domainler, IP/ASN, ne topluyor.", rozet: "yeni" },
   { href: "/canli", ikon: "radar", baslik: "Canlı Tehdit İstihbaratı", alt: "Dünyada yayınlanan sahte siteleri yayınlandıkları an yakalayan gerçek-zamanlı operasyon paneli.", rozet: "canlı" },
+  { href: "/bahis", ikon: "casino", baslik: "Yasa Dışı Bahis Radarı", alt: "Sertifika akışından yeni bahis/kumar sitelerini doğdukları an yakalar — imza + canlı radar.", rozet: "canlı" },
+  { href: "/bahis-merkez", ikon: "casino", baslik: "Bahis Operasyon Merkezi", alt: "Operatör paneli: canlı tespit akışı + biz-önce (USOM'da yok) + marka dağılımı + tek-tık USOM bildirim.", rozet: "operatör" },
   { href: "/marka-avci", ikon: "radar", baslik: "Marka Avcısı", alt: "yakalanan sahte-site adayları (inceleme kuyruğu) — park/aktif ayrımıyla.", rozet: "operatör" },
   { href: "/kayitlar", ikon: "inventory_2", baslik: "Kanıt Deposu", alt: "Yakaladığımız ve analiz ettiğimiz her adres — kalıcı kayıt, geçmişe dönük erişim.", rozet: "operatör" },
   { href: "/kalibrasyon", ikon: "fact_check", baslik: "Kalibrasyon", alt: "Motor bilinen temiz/kötü sitelerde doğru mu? Yanlış-pozitif/negatif raporu.", rozet: "operatör" },

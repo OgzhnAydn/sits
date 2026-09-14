@@ -34,55 +34,48 @@ async function batch<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Pro
   return out;
 }
 
-export async function markalariTara(): Promise<{ taranan: number; yeni: number }> {
+// TEK MARKAYI aktif tara — urlscan'de marka adını taşıyan resmî-olmayan domainleri bul,
+// aday kuyruğuna yaz. Operatör "Tara" butonu + toplu tarama ikisi de bunu kullanır.
+export async function markaTaraTekil(m: { anahtar: string; ad: string; resmi?: string[] }): Promise<{ taranan: number; yeni: number }> {
   const tarih = new Date().toISOString().slice(0, 10);
-  let taranan = 0;
-  let yeni = 0;
+  let taranan = 0, yeni = 0;
+  const res = await urlscanAra(`page.domain:${m.anahtar}*`, 40);
+  const gorulen = new Set<string>();
+  for (const r of res) {
+    const dom = (r.page?.domain || "").toLowerCase().replace(/^www\./, "");
+    if (!dom || gorulen.has(dom) || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) continue;
+    gorulen.add(dom);
+    taranan++;
+    // ALLOWLIST: markanın kendi resmî domaini → aday DEĞİL.
+    if (!dom.includes(m.anahtar) || resmiMarkaDomaini(dom) || resmiListedeMi(dom, m.resmi || []) || itibarliMi(dom)) continue;
 
+    let skor = 42; // marka adını taşıyan + resmî değil
+    const tld = dom.split(".").pop() || "";
+    if (RISKLI_TLD.includes(tld)) skor += 14;
+    const yas = r.page?.domainAgeDays;
+    if (typeof yas === "number" && yas < 90) skor += 16;
+    if (typeof yas === "number" && yas < 30) skor += 8;
+    skor = Math.min(100, skor);
+
+    try {
+      await markaGunlukArtir(m.anahtar, tarih, true);
+      await markaAdayKaydet({
+        domain: dom, marka: m.anahtar, markaAdi: m.ad, skor, seviye: seviye(skor),
+        sinyaller: ["urlscan taramasında bulundu — marka adını taşıyan, resmî olmayan domain."],
+        kaynak: "vercel-tarama", zaman: Date.now(),
+      });
+      yeni++;
+    } catch { /* yazma başarısızsa geç */ }
+  }
+  return { taranan, yeni };
+}
+
+export async function markalariTara(): Promise<{ taranan: number; yeni: number }> {
   // Hardcoded markalar + KULLANICI'nın kaydettiği markalar (kısa anahtar hariç → gürültü olmasın).
   const ozel = (await kullaniciMarkalariGetir())
     .filter((m) => m.anahtar.length >= 4)
     .map((m) => ({ anahtar: m.anahtar, ad: m.ad, resmi: m.resmi }));
   const hedefler = [...AVCI_MARKALAR, ...ozel];
-
-  await batch(hedefler, 6, async (m) => {
-    const res = await urlscanAra(`page.domain:${m.anahtar}*`, 40);
-    const gorulen = new Set<string>();
-    for (const r of res) {
-      const dom = (r.page?.domain || "").toLowerCase().replace(/^www\./, "");
-      if (!dom || gorulen.has(dom) || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) continue;
-      gorulen.add(dom);
-      taranan++;
-      // ALLOWLIST: markanın kendi resmî domaini (hardcoded ya da kullanıcının kaydettiği) → aday DEĞİL.
-      if (!dom.includes(m.anahtar) || resmiMarkaDomaini(dom) || resmiListedeMi(dom, m.resmi) || itibarliMi(dom)) continue;
-
-      // Hafif skor (aday kuyruğu için — kesin karar değil; "incele"de tam analiz yapılır).
-      let skor = 42; // marka adını taşıyan + resmî değil
-      const tld = dom.split(".").pop() || "";
-      if (RISKLI_TLD.includes(tld)) skor += 14;
-      const yas = r.page?.domainAgeDays;
-      if (typeof yas === "number" && yas < 90) skor += 16;
-      if (typeof yas === "number" && yas < 30) skor += 8;
-      skor = Math.min(100, skor);
-
-      try {
-        await markaGunlukArtir(m.anahtar, tarih, true);
-        await markaAdayKaydet({
-          domain: dom,
-          marka: m.anahtar,
-          markaAdi: m.ad,
-          skor,
-          seviye: seviye(skor),
-          sinyaller: ["urlscan taramasında bulundu — marka adını taşıyan, resmî olmayan domain."],
-          kaynak: "vercel-tarama",
-          zaman: Date.now(),
-        });
-        yeni++;
-      } catch {
-        /* yazma başarısızsa geç */
-      }
-    }
-  });
-
-  return { taranan, yeni };
+  const res = await batch(hedefler, 6, markaTaraTekil);
+  return res.reduce((a, s) => ({ taranan: a.taranan + s.taranan, yeni: a.yeni + s.yeni }), { taranan: 0, yeni: 0 });
 }

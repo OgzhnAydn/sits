@@ -20,12 +20,14 @@ export type OsintRapor = {
 import tls from "node:tls";
 import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import { tehditKontrol } from "./tehditListeleri";
+import { tehditKontrol, type TehditSonuc } from "./tehditListeleri";
 import { itibarliMi } from "./itibarli";
 import { seonTelefon } from "./seon";
 import { AVCI_MARKALAR, resmiMarkaDomaini, KAMU_KURUMLARI, tescilliBilgi } from "./korunanMarkalar";
 import { geminiVarMi, geminiGorselJson } from "./gemini";
 import { faviconMarkaEslesme } from "./faviconMarka";
+import { etbisSorgu } from "./etbis";
+import { etbisYerel } from "./etbisYerel";
 
 // Canlı TLS sertifikasını okur: CA (issuer), geçerlilik başlangıcı ve
 // sertifikanın geçerli/güvenilir olup olmadığı (kendinden-imzalı/uyumsuz = risk).
@@ -736,8 +738,20 @@ export function saldiriAsamasi(r: OsintRapor): number {
   let s = 0; // 0: kayıtlı (varlık var)
   if (ad("IP adresi") || ad("Ad sunucusu (NS)") || ad("E-posta (MX)") || ad("CNAME")) s = 1;            // DNS aktif
   if (ad("SSL veren") || ad("En yeni sertifika") || ad("Sertifika") || ad("CT kayıt")) s = Math.max(s, 2); // TLS
-  if (r.sayfa || ad("Sayfa başlığı") || ad("Güvenli bağlantı") || ad("Görsel analiz")) s = Math.max(s, 3); // Web yayında
-  if (ad("Logo taklidi (görsel)") || ad("İçerikte kurum taklidi") || ad("Klon kaynağı") || ad("Marka taklidi güveni") || ad("Favicon")) s = Math.max(s, 4); // marka varlıkları
+  // Web yayında: SADECE sayfayı GERÇEKTEN okuyabildiysek say. Sayfa okunamadıysa (park/
+  // bot-duvarı) "yayında" DEME — "Güvenli bağlantı" (TLS yanıtı) içerik var demek değildir.
+  if (r.sayfa?.baslik || ad("Sayfa başlığı") || ad("Görsel analiz")) s = Math.max(s, 3);                 // Web yayında (doğrulandı)
+  // Marka varlıkları: GERÇEK kanıt gerekir. "İsim geçiyor" (güven = yalnız alan adı = 25/100)
+  // TEK BAŞINA marka-varlığı DEĞİLDİR — yoksa her marka-adı taşıyan park domain "saldırı
+  // gelişiyor" görünür (halkbankcocukkumbarasi vakası). Logo/klon/içerik-taklidi VEYA
+  // çok-modlu güven ≥50 (≥2 bağımsız kanıt) VEYA favicon birebir → gerçekten yerleşmiş.
+  const guvenM = ad("Marka taklidi güveni").match(/(\d+)\s*\/\s*100/);
+  const markaGuven = guvenM ? Number(guvenM[1]) : 0;
+  const gercekMarkaVarligi =
+    Boolean(ad("Logo taklidi (görsel)") || ad("İçerikte kurum taklidi") || ad("Klon kaynağı")) ||
+    markaGuven >= 50 ||
+    /favicon.*birebir|birebir aynı|favicon\/logo birebir/.test(havuz);
+  if (gercekMarkaVarligi) s = Math.max(s, 4);                                                            // marka varlıkları (gerçekten yerleşti)
   if (/şifre giriş alanı|giriş\/oturum|login formu|type=["']?password|kullanıcı.*şifre/.test(havuz)) s = Math.max(s, 5); // login formu
   if (/kart bilgisi isteniyor|kimlik av|üçüncü bir tarafa aktarılıyor|dış veri hedefi|kimlik toplama/.test(havuz)) s = Math.max(s, 6); // kimlik toplama
   return s;
@@ -826,7 +840,62 @@ export function domainDurumu(rapor: OsintRapor): { durum: DomainDurum; etiket: s
   return { durum: "canli", etiket: "Canlı — içerik yayında", ikon: "public" };
 }
 
-export async function domainOsint(domain: string, tamUrl?: string): Promise<OsintRapor> {
+// HIZLI SKOR — CertStream worker'ının ADAY AKIŞI için (firehose ölçeği). Tam domainOsint
+// 40-60s süren SIRALI derin analizdir → worker akışında her POST 504 yapar (fonksiyon ölür,
+// aday HİÇ kaydolmaz). Bu, yalnız EN GÜÇLÜ 3 sinyali PARALEL toplar (~6s): kayıt yaşı (RDAP),
+// canlılık (DNS A kaydı), kara liste (USOM/global). Ağır pivotlar (favicon/redirect/greynoise/
+// certspotter/crt.sh/kampanya) adaya mercek'te TIKLANINCA tam domainOsint ile yapılır. Böylece
+// aday KAYBOLMAZ (hiç kaçırma), skor makul dolar, endpoint hızlı → 504 biter.
+export async function hizliDomainSkor(
+  domain: string
+): Promise<{ skor: number; durum: DomainDurum; sinyaller: string[] }> {
+  domain = domain.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+  let skor = 0;
+  const sinyaller: string[] = [];
+  // ZAMAN-AŞIMI GUARD: bir alt-çağrı iç-timeout'suz hang ederse .catch onu YAKALAMAZ (sonsuz bekler)
+  // → endpoint 60s'de 504 olur. Bu, her promise'i yarışa sokar: ms içinde bitmezse yedek değerle döner.
+  const zamanAsimi = <T,>(p: Promise<T>, ms: number, yedek: T): Promise<T> =>
+    Promise.race([p, new Promise<T>((r) => setTimeout(() => r(yedek), ms))]);
+  const bosTehdit: TehditSonuc = { kaynaklar: [], usom: false };
+  const [t, rd, dns] = await Promise.all([
+    zamanAsimi(tehditKontrol(domain).catch(() => bosTehdit), 7000, bosTehdit),
+    zamanAsimi(json(`https://rdap.org/domain/${encodeURIComponent(domain)}`, 6000).catch(() => null), 7000, null),
+    zamanAsimi(json(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`, 5000).catch(() => null), 6000, null),
+  ]);
+
+  // Kara liste — en güçlü tek sinyal (USOM = devlet onaylı)
+  if (t.kaynaklar.length) {
+    skor += t.usom ? 70 : 60;
+    sinyaller.push(
+      t.usom
+        ? "Bu adres T.C. Siber Güvenlik Başkanlığı (USOM) resmi zararlı bağlantı listesinde."
+        : `Bilinen dolandırıcılık/zararlı listelerinde: ${t.kaynaklar.join(", ")}.`
+    );
+  }
+
+  // Kayıt yaşı — dolandırıcı domainler neredeyse her zaman çok yenidir
+  const events = ((rd?.events as { eventAction: string; eventDate: string }[]) || []);
+  const kayit = events.find((e) => e.eventAction === "registration")?.eventDate;
+  let yasGun: number | null = null;
+  if (kayit) {
+    yasGun = Math.floor((Date.now() - Date.parse(kayit)) / 86400000);
+    if (yasGun < 7) { skor += 40; sinyaller.push("Domain 1 haftadan yeni — dolandırıcı siteler neredeyse her zaman çok yenidir."); }
+    else if (yasGun < 30) { skor += 25; sinyaller.push("Domain 1 aydan yeni — temkinli ol."); }
+    else if (yasGun < 90) { skor += 10; sinyaller.push("Domain 90 günden yeni."); }
+  }
+
+  // Canlılık — A kaydı yoksa henüz yayında değil (izleme adayı, aktif tuzak değil)
+  const ans = ((dns?.Answer as { type: number; data: string }[]) || []);
+  const ip = ans.find((a) => a.type === 1)?.data;
+  let durum: DomainDurum = ip ? "canli" : "yayinda-degil";
+  if (t.usom || (ip && yasGun !== null && yasGun < 30)) durum = "aktif-tuzak";
+  if (!ip) sinyaller.push("Şu an A kaydı yok — kayıtlı ama henüz yayında değil (izleme adayı).");
+
+  if (!sinyaller.length) sinyaller.push("Marka adını içeren, resmî olmayan domain.");
+  return { skor: Math.min(100, skor), durum, sinyaller };
+}
+
+export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu = false): Promise<OsintRapor> {
   // www. ve olası şema/yol kalıntısını ayıkla — RDAP/DNS registrable domain ister
   // (www.haberturk.com için RDAP başarısız olup yanlış "yeni domain" sinyali üretiyordu).
   domain = domain.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
@@ -1635,6 +1704,49 @@ export async function domainOsint(domain: string, tamUrl?: string): Promise<Osin
     }
   }
 
+  // ── ETBİS (Ticaret Bakanlığı e-ticaret sicili) — resmî MEŞRUİYET sinyali ──────────────
+  // Yalnız derin/tekil analizde (etbisSorgusu) — kitlesel CertStream taramasında değil (dış
+  // servise saygı + hız). Kayıtlı+doğrulanmış → meşru işletme; e-ticaret görünümlü ama
+  // kayıtsız → kayıt-dışı mağaza şüphesi. DÜRÜST: banka/kamu için "kayıtsız" NORMAL (ceza yok).
+  if (etbisSorgusu) {
+    try {
+      const usomVar = /USOM/i.test(r.alanlar.find((a) => a.ad === "Kara liste")?.deger || "");
+      const yerel = etbisYerel(domain); // ANINDA (yerel beyaz-liste, canlı fetch yok)
+      if (yerel.kayitliMi) {
+        // Listede VAR → güvenilir meşruiyet sinyali (canlı sorguya gerek yok).
+        if (yerel.dogrulanmisMi) {
+          r.alanlar.push({ ad: "ETBİS", deger: "Kayıtlı · doğrulanmış" });
+          r.bulgular.unshift("Bu adres Ticaret Bakanlığı ETBİS sicilinde KAYITLI ve DOĞRULANMIŞ — resmî bir e-ticaret işletmesi. (Kayıt, sitenin güvenli olduğunu garanti etmez ama güçlü bir meşruiyet işaretidir.)");
+          if (!usomVar) r.risk = Math.max(0, r.risk - 18);
+        } else {
+          r.alanlar.push({ ad: "ETBİS", deger: "Kayıtlı" });
+          r.bulgular.push("Bu adres Ticaret Bakanlığı ETBİS sicilinde kayıtlı.");
+          if (!usomVar) r.risk = Math.max(0, r.risk - 8);
+        }
+      } else {
+        // Listede YOK → TEK BAŞINA kesin değil (yerel liste eksik olabilir). Yalnız e-ticaret
+        // GÖRÜNÜMÜ varsa (banka/kamu için ETBİS beklenmez) CANLI teyit iste; ceza ancak canlı
+        // da "kayıtsız" derse. Canlı erişilemezse ceza YOK (yanlış-pozitif üretme).
+        const metin = `${r.sayfa?.baslik || ""} ${r.sayfa?.ozetMetin || ""}`.toLowerCase();
+        const eticaretIz = /sepet|sepete ekle|ödeme|checkout|add.?to.?cart|satın al|kredi kart|taksit|kargo|iyzico|paytr|sipariş|indirim kodu|stokta|ürün ekle/.test(metin);
+        if (eticaretIz) {
+          let canli; try { canli = await etbisSorgu(domain); } catch { canli = undefined; }
+          if (canli && !canli.hata && canli.kayitli) {
+            r.alanlar.push({ ad: "ETBİS", deger: `Kayıtlı${canli.dogrulanmis ? " · doğrulanmış" : ""}` });
+            if (!usomVar) r.risk = Math.max(0, r.risk - (canli.dogrulanmis ? 18 : 8));
+          } else if (canli && !canli.hata) {
+            r.alanlar.push({ ad: "ETBİS", deger: "Kayıtlı DEĞİL — e-ticaret görünümlü" });
+            r.bulgular.push("Site alışveriş/ödeme sayfası görünümünde ama Ticaret Bakanlığı ETBİS sicilinde KAYITLI DEĞİL. Türkiye'de e-ticaret için ETBİS kaydı zorunludur — kayıt-dışı/sahte mağaza olabilir; kart/kişisel bilgi girmeden dikkatli ol.");
+            r.risk += 12;
+          } else {
+            r.alanlar.push({ ad: "ETBİS", deger: "Listede yok (canlı teyit edilemedi)" });
+          }
+        }
+        // e-ticaret göstergesi yoksa (banka/kamu/kurumsal) → ETBİS beklenmez, sessiz geç.
+      }
+    } catch { /* ETBİS katmanı hatası → sessiz geç, diğer sinyaller geçerli */ }
+  }
+
   // ── ENGELLEME / KALDIRILMA DURUMU: bu adres ZATEN mi biliniyor/engelli, yoksa YENİ mi? ──
   // "Bulduklarımızın bir kısmı zaten engellenmiş" sorusunun cevabı: hangi resmî/blok
   // kaynağı zaten yakalamış onu göster; hiçbiri yakalamadıysa = bunu ERKEN biz bulduk.
@@ -1719,7 +1831,17 @@ async function ipqsTelefon(num: string): Promise<IpqsTel | null> {
 export function typosquatDurustlukCap(rapor: OsintRapor): void {
   const metinHavuzu = (rapor.bulgular.join(" ") + " " + rapor.alanlar.map((a) => `${a.ad}:${a.deger}`).join(" ")).toLowerCase();
   const typosquat = rapor.alanlar.some((a) => a.ad === "Taklit uyarısı");
-  const icerikTeyitli = Boolean(rapor.sayfa?.baslik);
+  // "İçerik teyitli" = SADECE bir başlık olması DEĞİL. Park/placeholder sayfaların da
+  // başlığı olur; başlık varlığı "burası kesin aktif tuzak" demek değildir. Teyit =
+  // gerçekten TUZAK-içeriği gördük: giriş/kart formu VEYA marka varlığı (logo/klon/
+  // içerik-taklidi) VEYA çok-modlu marka güveni ≥50 (isimden fazlası, ≥2 bağımsız kanıt).
+  // Yoksa marka-adı taşıyan boş/park domain haksız yere "AKTİF TEHDİT" (60+) görünürdü.
+  const mgTeyit = rapor.alanlar.find((a) => a.ad === "Marka taklidi güveni")?.deger?.match(/(\d+)\s*\/\s*100/);
+  const markaGuven = mgTeyit ? Number(mgTeyit[1]) : 0;
+  const icerikTeyitli =
+    /şifre giriş alanı|type=["']?password|kart bilgisi|giriş\/oturum|banka giriş|ödeme\/kart/.test(metinHavuzu) ||
+    rapor.alanlar.some((a) => ["Logo taklidi (görsel)", "İçerikte kurum taklidi", "Klon kaynağı"].includes(a.ad)) ||
+    markaGuven >= 50;
   const teyitliKotucul =
     /usom|urlscan.*zararl|tehdit listesi|dolandırıcı olarak bildirdi|güvenli bağlantı.*yok/.test(metinHavuzu) ||
     /virustotal[^;]*?([3-9]|\d\d)\s*\/\s*\d+\s*firma/.test(metinHavuzu) ||

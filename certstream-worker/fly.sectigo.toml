@@ -1,0 +1,37 @@
+# SİTS CT worker — YALNIZ Sectigo operatörü (dağıtık zero-miss kurulumu).
+# Sectigo'ın TÜM loglarını takip eder; kendine ayrılmış makine → yetişir, kaçırmaz.
+# Kurulum: fly apps create sits-ct-sectigo ; fly volumes create ct_data_sectigo --region fra --size 1 -a sits-ct-sectigo
+#          fly secrets set MARKA_ADAY_SECRET=<sır> -a sits-ct-sectigo ; fly deploy -c fly.sectigo.toml
+app = "sits-ct-sectigo"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  SITS_URL = "https://siber-bildir-web.vercel.app"
+  CT_ONLY_OP = "Sectigo"
+  PORT = "8080"
+  BAHIS_AKTIF = "1"    # Blaze sonrası: bahis TÜM operatör-worker'larında açık (kapsam maksimum). AKTIF_TARAMA tek worker'da kalır (urlscan mükerrer olmasın).
+  AKTIF_TARAMA = "0"
+
+[http_service]
+  internal_port = 8080
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/health"
+
+[mounts]
+  source = "ct_data_sectigo"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

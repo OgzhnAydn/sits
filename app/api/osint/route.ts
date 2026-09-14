@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
   if (!rapor) {
     // Tam URL'yi (yol dahil) içerik analizi için geçir — paylaşılan belirli
     // sayfayı (haber makalesi gibi) tanımlayabilelim.
-    if (tip === "url") rapor = await domainOsint(deger, giris.trim());
+    if (tip === "url") rapor = await domainOsint(deger, giris.trim(), true); // true = ETBİS resmî sicil sorgusu (derin/tekil analiz)
     else if (tip === "telefon") rapor = await telefonOsint(deger);
     else if (tip === "kripto") rapor = await kriptoOsint(deger);
     else rapor = ibanOsint(deger);

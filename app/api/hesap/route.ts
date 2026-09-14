@@ -102,7 +102,7 @@ function seviye(risk: number) {
 async function infraRapor(domain: string, tamUrl: string): Promise<OsintRapor> {
   let r = (await cacheOku("url", domain)) as OsintRapor | null;
   if (!r) {
-    r = await domainOsint(domain, tamUrl);
+    r = await domainOsint(domain, tamUrl, true); // ETBİS resmî sicil sorgusu dahil
     await cacheYaz("url", domain, r);
   }
   return r;

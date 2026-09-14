@@ -14,6 +14,8 @@ primary_region = "sin"   # Singapur — TrustAsia (HK/Asya) endpoint'ine yakın
   CT_ONLY_OP = "TrustAsia"   # yalnız TrustAsia operatörünün loglarını dinle
   CT_MAX_LOG = "4"           # TrustAsia'nın tüm usable logları sığsın
   PORT = "8080"
+  BAHIS_AKTIF = "1"    # Blaze sonrası: bahis TÜM operatör-worker'larında açık (kapsam maksimum). AKTIF_TARAMA tek worker'da kalır (urlscan mükerrer olmasın).
+  AKTIF_TARAMA = "0"
   # MARKA_ADAY_SECRET → `fly secrets set` ile (Frankfurt ile AYNI sır olmalı).
 
 [http_service]

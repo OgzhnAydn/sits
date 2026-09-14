@@ -18,7 +18,7 @@ type Mesaj = { role: "user" | "assistant"; content: string };
 async function gostergeKontrolAraci(girisDeger: string) {
   const { deger, tip } = normalize(girisDeger);
   let rapor;
-  if (tip === "url") rapor = await domainOsint(deger);
+  if (tip === "url") rapor = await domainOsint(deger, undefined, true); // ETBİS sicil sorgusu dahil
   else if (tip === "telefon") rapor = await telefonOsint(deger);
   else rapor = ibanOsint(deger);
   const crowd = await gostergeSorgula(deger, tip);

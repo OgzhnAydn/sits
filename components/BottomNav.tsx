@@ -12,7 +12,7 @@ const ITEMS = [
 ];
 
 // Tam-ekran immersive rotalar (kendi kabuğu var) — global nav/başlık gizlenir.
-const IMMERSIVE = ["/canli", "/mercek", "/panel", "/kontrol"];
+const IMMERSIVE = ["/canli", "/mercek", "/panel", "/kontrol", "/bahis-merkez"];
 export function immersiveMi(path: string | null): boolean {
   return !!path && IMMERSIVE.some((r) => path === r || path.startsWith(r + "/"));
 }

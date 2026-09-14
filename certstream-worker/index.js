@@ -24,14 +24,23 @@ const path = require("path");
 
 const SITS = (process.env.SITS_URL || "https://siber-bildir-web.vercel.app").replace(/\/$/, "");
 const SECRET = process.env.MARKA_ADAY_SECRET;
-const CT_MAX_LOG = Math.max(1, Number(process.env.CT_MAX_LOG) || 6);
+// GÖREV AYRIMI (dağıtık worker'lar): marka-sertifikası yakalama HER worker'da açık (zero-miss kapsam).
+// Ama bahis feed'i + aktif urlscan taraması 5 makinede MÜKERRER olursa Firestore kotasını patlatır ve
+// çıkış bağlantılarını boğar (gönderim timeout). Bunları YALNIZ tek worker'da (Cloudflare/sits-marka-avci)
+// açık tut; operatör-worker'larında BAHIS_AKTIF=0 / AKTIF_TARAMA=0 ile kapat.
+const BAHIS_AKTIF = process.env.BAHIS_AKTIF !== "0";   // vars açık; operatör-worker'da "0"
+const AKTIF_TARAMA = process.env.AKTIF_TARAMA !== "0"; // vars açık; operatör-worker'da "0"
+const CT_MAX_LOG = Math.max(1, Number(process.env.CT_MAX_LOG) || 24); // vars: TÜM usable loglar (21) tek worker'da; zero-miss için
 const PORT = Number(process.env.PORT) || 8080;
 const LOG_LIST_URL = "https://www.gstatic.com/ct/log_list/v3/log_list.json";
 
 const CHUNK = 1000;            // get-entries başına istenecek entry (log daha azını dönebilir).
                               // 256→1000: round-trip başına ~4x throughput → operatörlere yetiş.
 const KEEPUP_TAVAN = 20000;    // bir tik'te bir logdan işlenecek en fazla entry (event-loop'u aç tut)
-const KOPMA_ESIK = 200000;     // bundan fazla geride kalındıysa (uzun kesinti) uca resync — GÜRÜLTÜLÜ loglanır
+// HİÇ KAÇIRMAMA: eskiden 200k'da uca resync edip ARASI ATLIYORDU (kaçırma!). Artık çok yüksek
+// (env CT_KOPMA_ESIK, vars 5M) → uzun kesinti sonrası bile ATLAMADAN yakalamaya çalışır; yalnız
+// felaket senaryosunda (aylarca geride) resync. Zero-miss önceliği: atlamak yerine geriden gel.
+const KOPMA_ESIK = Number(process.env.CT_KOPMA_ESIK) || 5000000;
 const TIK_MS = 3000;           // yeni entry yoksa bir logun yoklama aralığı
 const STALL_MS = 5 * 60 * 1000; // hiçbir logdan 5 dk başarılı yanıt gelmezse → yeniden başlat
 
@@ -55,10 +64,26 @@ let MARKALAR = [
 const SUPHELI_TOKENS = ["login", "signin", "secure", "verify", "dogrulama", "hesap", "banka", "bank", "giris", "odeme", "payment", "wallet", "cuzdan", "guvenli", "guvenlik", "onay", "kampanya", "hediye", "bonus"];
 const SUPHELI = new RegExp("(" + SUPHELI_TOKENS.join("|") + ")");
 
-// Ön-filtre needle'ları (küçük harf Buffer): marka anahtarları (≥4) + şüpheli token'lar.
+// ── YASA DIŞI BAHİS tespiti (lib/bahis.ts imzasının worker aynası) ──────────────
+// Ön-filtre token'ları (DER'de aranır) — generic + uydurma marka adları (slotio, casibom…).
+const BAHIS_TOKENS = ["bet", "bahis", "casino", "kumar", "slot", "rulet", "iddaa", "poker", "jackpot", "spin", "slotio", "casibom", "wonodds", "pashagaming", "favori", "onwin", "sahabet", "tipobet", "jojobet", "holiganbet", "matadorbet", "pusulabet", "bettilt", "betwoon", "artemisbet", "grandpasha", "betwild", "bahisnow", "asyabahis", "tarafbet", "paribahis"];
+const BET_MARKA_W = /(bet(turkey|boo|nano|park|tilt|win|ist|gram|matik|orspar|ada|line|per|cio|sat|zula|puan|order|moon|kanyon|baba)|sahabet|tipobet|jojobet|holiganbet|mars?bahis|sekabet|pinbahis|bahsegel|s[üu]perbahis|casinomaxi|casinometropol|mobilbahis|matadorbet|restbet|dinamobet|elexbet|betmatik|nakitbahis|imajbet|onwin|xslot|pusulabet|betwoon|maltcasino|artemisbet|grand ?pasha|pashagaming|betgaranti|betwinner|1xbet|mostbet|melbet|jetbahis|hovarda|betpas|milanobet|piabella|bettilt|slotio|casibom|wonodds|red ?win|favori(sen|bahis)?|bahisnow|asyabahis|tarafbet|extrabet|gorabet|galabet|ligobet|tulipbet|corlobet|betwild|starzbet|paribahis|bets10|youwin|bycasino|casinolevant)/i;
+const BAHIS_TERIM_W = /bahis|casino|kumar|iddaa|rulet|slotlar|slots|jackpot|freespin|free ?spin|sportsbook|betting|deneme ?bonus/i;
+const BET_SONEK_W = /^[a-z]{3,}bet\d{0,4}$/;
+const MESRU_BET_W = /^(alphabet|sherbet|tibet|beta|abet|corbet|colbert|cabinet|sunbet|nisbet)$/;
+function bahisEslesen(domain) {
+  const d = kok(domain);
+  const et = d.split(".")[0];
+  if (BET_MARKA_W.test(d)) return true;
+  if (BAHIS_TERIM_W.test(d)) return true;               // NOT: bare "slot" DEĞİL (slot-manager FP) — "slots"/"slotlar" var
+  if (BET_SONEK_W.test(et) && !MESRU_BET_W.test(et)) return true;
+  return false;
+}
+
+// Ön-filtre needle'ları (küçük harf Buffer): marka anahtarları (≥4) + şüpheli + BAHİS token'ları.
 let NEEDLES = [];
 function needlesKur() {
-  const kel = new Set(SUPHELI_TOKENS);
+  const kel = new Set([...SUPHELI_TOKENS, ...BAHIS_TOKENS]);
   for (const m of MARKALAR) if (m.anahtar && m.anahtar.length >= 4) kel.add(m.anahtar.toLowerCase());
   NEEDLES = [...kel].map((s) => Buffer.from(s, "ascii"));
 }
@@ -139,7 +164,7 @@ async function markalariYukle() {
     const r = await fetch(`${SITS}/api/markalar`, { signal: AbortSignal.timeout(10000) });
     const j = await r.json();
     if (Array.isArray(j.markalar) && j.markalar.length) {
-      MARKALAR = j.markalar.map((m) => ({ anahtar: m.anahtar, resmi: m.resmi || [] }));
+      MARKALAR = j.markalar.map((m) => ({ anahtar: m.anahtar, resmi: m.resmi || [], kaliplari: m.kaliplari || [], yaygin: !!m.yaygin }));
       console.log(`[markalar] ${MARKALAR.length} korunan marka yüklendi`);
     }
   } catch {
@@ -193,12 +218,16 @@ function duzenlemeMesafesi(a, b) {
   return dp[m][n];
 }
 function yakinTypo(label, k) {
-  if (k.length < 5) return false;
+  if (k.length < 6) return false; // <6 harf edit-distance FP üretir: 5-harf anahtar yaygın kelimeye 1-yakın olur (losev↔loser, canik↔canim) → typo yalnız ≥6 harf
   const esik = k.length >= 7 ? 2 : 1;
   if (Math.abs(label.length - k.length) > esik) return false;
   const d = duzenlemeMesafesi(label, k);
   return d > 0 && d <= esik;
 }
+
+// KISA (≤4 harf) anahtar FP kapısı: gerçek taklit domaini Türkçe konut/finans/resmî ya da phishing
+// kelimesi taşır; meşru yabancı (ibis-toki.co.jp, hoikuen-toki) taşımaz. lib/korunanMarkalar ile aynı.
+const TR_BAGLAM = /proje|konut|basvuru|basvur|kampanya|cekilis|kura|tapu|daire|kredi|resmi|giris|destek|musteri|hesap|odeme|randevu|evim|bakanlik|idare|sorgu|login|secure|verify|account|onlin|bank|card|kart|mobil|wallet|\bpay\b|\btc\b|gov|bilet|ucus|ucak|rezervasyon|seyahat|checkin|acceso|banca|cliente|particular|premi|bonus|hediye/;
 
 function eslesenMarka(domain) {
   const d = kok(domain);
@@ -206,23 +235,59 @@ function eslesenMarka(domain) {
   const { label, altAlan, tld } = tescilliBilgi(d);
   const riskliTld = RISKLI_TLD_SET.has(tld) || RISKLI_TLD_SET.has(tld.split(".").pop());
   for (const m of MARKALAR) {
-    const k = m.anahtar;
-    if (!k || k.length < 4) continue;
     if ((m.resmi || []).some((r) => d === r || d.endsWith("." + r))) continue; // resmî → atla
-    if (label === k) {
-      // Tescilli ad markanın KENDİSİ (vodafone.com / vodafone.gr / api.x.vodafone.com).
-      // Alt alan varsa ya da normal uzantıysa → markanın kendi domaini, ATLA.
-      // Sadece risksiz-olmayan (garanti.xyz) + alt-alansız hali gerçek typosquat adayı.
-      if (altAlan || !riskliTld) continue;
-      return k;
+    // Anahtar + AÇILIM kalıpları (toki + toplukonutidaresi…) — her biri denenir, eşleşen marka anahtarını döndürür.
+    for (const k of [m.anahtar, ...(m.kaliplari || [])]) {
+      if (!k || k.length < 4) continue;
+      if (label === k) {
+        // Tescilli ad markanın KENDİSİ; alt alan/normal uzantı = kendi domaini, ATLA. Sadece garanti.xyz.
+        if (altAlan || !riskliTld) continue;
+        return m.anahtar;
+      }
+      // Marka adı tescilli etiketin İÇİNDE, gerçek taklit sınırında mı? (garanti-kredi, garantibbva…)
+      if (label.includes(k) && sinirdaGecer(label, k)) {
+        // SIKI-BAĞLAM: KISA ANAHTAR (≤4) VEYA YAYGIN-KELİME marka (pegasus/santander/iberia) tire-sınırlı
+        // içermede meşru yabancı işletme yakalar (ibis-toki, donerkebab-santander) → ek sinyal şart:
+        // riskli TLD VEYA Türkçe/phishing bağlamı. Yoksa ATLA.
+        if ((k.length <= 4 || m.yaygin) && !riskliTld && !TR_BAGLAM.test(d)) continue;
+        return m.anahtar;
+      }
+      // Harf-oyunu typosquat (anadolumet, turkcel…) — alt-dize değil ama çok benziyor.
+      if (yakinTypo(label, k)) return m.anahtar;
     }
-    // Marka adı tescilli etiketin İÇİNDE, gerçek taklit sınırında mı? (garanti-kredi, garantibbva…)
-    if (label.includes(k) && sinirdaGecer(label, k)) return k;
-    // Harf-oyunu typosquat (anadolumet, turkcel…) — alt-dize değil ama çok benziyor.
-    if (yakinTypo(label, k)) return k;
-    // Aksi (alt alanda / kelime ortasında) → markanın taklidi değil, ATLA.
   }
   return null;
+}
+
+// ── GÖNDERİM EŞZAMANLILIK SINIRI ────────────────────────────────────────────────
+// CT akışı saniyede yüzlerce eşleşme üretebilir. domainIsle bu gönderimleri await ETMEDEN
+// (fire-and-forget) tetikler → hepsi AYNI ANDA açılırsa worker'ın çıkış soket havuzu + DNS
+// boğulur → Vercel milisaniyede yanıt verse bile POST'lar 30s'de "aborted due to timeout".
+// Çözüm: en fazla GONDER_ES eşzamanlı POST; gerisi kuyrukta sıra bekler (aday KAYBOLMAZ).
+const GONDER_ES = Math.max(1, Number(process.env.GONDER_ES) || 4);
+let _aktifGonderim = 0;
+const _gonderKuyruk = [];
+function _gonderKapisi() {
+  if (_aktifGonderim < GONDER_ES) { _aktifGonderim++; return Promise.resolve(); }
+  return new Promise((coz) => _gonderKuyruk.push(coz));
+}
+function _gonderBirak() {
+  const s = _gonderKuyruk.shift();
+  if (s) s(); else _aktifGonderim--;
+}
+// Tek kapı + tek fetch kalıbı: kotalı, sıralı, DRY. Başarısızlıkta çağıran dedup'ı geri alır.
+async function sitsGonder(yol, govde) {
+  await _gonderKapisi();
+  try {
+    const r = await fetch(`${SITS}${yol}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(govde),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!r.ok) throw new Error(`http ${r.status}`);
+    return await r.json().catch(() => ({}));
+  } finally { _gonderBirak(); }
 }
 
 async function adayGonder(domain, marka) {
@@ -231,15 +296,9 @@ async function adayGonder(domain, marka) {
   if (gorulen.has(key) && now - gorulen.get(key) < DEDUP_TTL) return;
   gorulen.set(key, now);
   try {
-    const r = await fetch(`${SITS}/api/marka-aday`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domain: key, marka, secret: SECRET }),
-      signal: AbortSignal.timeout(30000),
-    });
-    if (!r.ok) throw new Error(`http ${r.status}`);
-    const j = await r.json().catch(() => ({}));
+    const j = await sitsGonder("/api/marka-aday", { domain: key, marka, secret: SECRET });
     if (j.kaydedildi) { sayac.aday++; console.log(`ADAY: ${key}  (${marka})  skor ${j.skor}`); }
+    else if (j.yazDurum === "zamanasimi") { sayac.kotaDolu = (sayac.kotaDolu || 0) + 1; console.log(`[KOTA DOLU] ${key} (${marka}) skor ${j.skor} — Firestore yazılamadı (kota); dedup TTL sonra yeniden denenir`); }
   } catch (e) {
     gorulen.delete(key); // başarısız gönderim → dedup'a takılma, tekrar görülünce yeniden dene (aday kaçmasın)
     console.log(`[gönderim hatası] ${key}: ${e.message}`);
@@ -252,22 +311,30 @@ async function faviconGonder(domain) {
   if (gorulen.has(key) && now - gorulen.get(key) < DEDUP_TTL) return;
   gorulen.set(key, now);
   try {
-    const r = await fetch(`${SITS}/api/favicon-tara`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domain: key, secret: SECRET }),
-      signal: AbortSignal.timeout(30000),
-    });
-    if (!r.ok) throw new Error(`http ${r.status}`);
-    const j = await r.json().catch(() => ({}));
+    const j = await sitsGonder("/api/favicon-tara", { domain: key, secret: SECRET });
     if (j.eslesme) { sayac.aday++; console.log(` FAVICON-KOPYA: ${key}  (${j.marka})  skor ${j.skor}`); }
   } catch { gorulen.delete(key); }
+}
+
+async function bahisGonder(domain) {
+  const key = kok(domain);
+  const now = Date.now();
+  if (gorulen.has(key) && now - gorulen.get(key) < DEDUP_TTL) return;
+  gorulen.set(key, now);
+  try {
+    const j = await sitsGonder("/api/bahis-aday", { domain: key, secret: SECRET });
+    if (j.kaydedildi) { sayac.aday++; console.log(`BAHİS: ${key}  skor ${j.guven}${j.bizOnce ? "  BİZ-ÖNCE(USOM'da yok)" : ""}${j.trHedefli ? "  TR" : ""}`); }
+  } catch (e) {
+    gorulen.delete(key); // başarısız → dedup'a takılma, tekrar görülünce yeniden dene
+    console.log(`[bahis gönderim hatası] ${key}: ${e.message}`);
+  }
 }
 
 function domainIsle(dom) {
   sayac.domain++;
   const marka = eslesenMarka(dom);
   if (marka) { adayGonder(dom, marka); return; }
+  if (bahisEslesen(dom)) { if (BAHIS_AKTIF) bahisGonder(dom); return; } // yasa dışı bahis → kalıcı feed'e (yalnız bahis-worker'ı)
   if (SUPHELI.test(kok(dom))) faviconGonder(dom);
 }
 
@@ -279,6 +346,43 @@ function entryIsle(e) {
   if (!onFiltreGecer(der)) return; // çok büyük çoğunluk burada, parse ETMEDEN elenir
   sayac.parse++;
   for (const dom of derDomainleri(der)) domainIsle(dom);
+}
+
+// ── SÜREKLİ AKTİF TARAMA (urlscan) ─────────────────────────────────────────────
+// CertStream PASİF'tir (yeni sertifika = yeni domain). Bu döngü AKTİF'tir: tüm markaları
+// sürekli urlscan'de tarar → MEVCUT/eski sahteleri de bulur. İkisi birlikte = her marka 7/24
+// canlı izlenir. Kibar hız (marka başına ~4sn) → ~100 marka ~7dk/tur, urlscan limitine saygı.
+const URLSCAN_KEY = process.env.URLSCAN_KEY;
+async function urlscanAra(q) {
+  try {
+    const r = await fetch(`https://urlscan.io/api/v1/search/?q=${encodeURIComponent(q)}&size=40`, {
+      headers: URLSCAN_KEY ? { "API-Key": URLSCAN_KEY } : { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!r.ok) return [];
+    return (await r.json()).results || [];
+  } catch { return []; }
+}
+async function aktifTaramaDongu() {
+  console.log("[aktif] sürekli marka taraması başladı (urlscan)");
+  for (;;) {
+    const markalar = MARKALAR.filter((m) => m.anahtar && m.anahtar.length >= 4);
+    let tur = 0;
+    for (const m of markalar) {
+      try {
+        const res = await urlscanAra(`page.domain:${m.anahtar}*`);
+        for (const r of res) {
+          const dom = kok(r.page?.domain || "");
+          if (!dom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) continue;
+          if ((m.resmi || []).some((x) => dom === x || dom.endsWith("." + x))) continue; // resmî → atla
+          if (eslesenMarka(dom) === m.anahtar) { adayGonder(dom, m.anahtar); tur++; } // guardrail'den geçir
+        }
+      } catch { /* bu marka atla */ }
+      await bekle(4000); // kibar: urlscan hız-sınırına saygı
+    }
+    console.log(`[aktif] tam tur bitti — ${markalar.length} marka tarandı, ${tur} aday`);
+    await bekle(30000);
+  }
 }
 
 // ── CT log keşfi + takibi ───────────────────────────────────────────────────
@@ -304,7 +408,10 @@ async function kullanilabilirLoglar() {
     }
     if (grup.length) perOp.push(grup);
   }
-  // Operatörler arasında SIRAYLA seç (yedeklilik: tek operatöre bağımlı kalma).
+  // HİÇ KAÇIRMAMA: bir operatöre sabitlendiyse (CT_ONLY_OP) o operatörün TÜM loglarını takip et
+  // (o operatörün tek sertifikasını bile kaçırma). Aksi halde operatörler arası SIRAYLA CT_MAX_LOG
+  // kadar seç. Zero-miss için: her operatöre bir worker (CT_ONLY_OP) → 21 logun TAMAMI kapsanır.
+  if (ONLY_OP.length) return perOp.flat();
   const secili = [];
   for (let i = 0; secili.length < CT_MAX_LOG; i++) {
     let eklendi = false;
@@ -464,7 +571,7 @@ process.on("uncaughtException", (e) => console.error("[uncaughtException]", e &&
   }
   console.log(`[başlıyor] SİTS = ${SITS}`);
   await markalariYukle();
-  setInterval(markalariYukle, 6 * 3600 * 1000);
+  setInterval(markalariYukle, 30 * 60 * 1000); // 30 dk — yeni eklenen markalar hızlı devreye girsin
 
   let loglar = await kullanilabilirLoglar();
   if (!loglar.length) { console.error("HATA: kullanılabilir CT log bulunamadı."); process.exit(1); }
@@ -472,4 +579,6 @@ process.on("uncaughtException", (e) => console.error("[uncaughtException]", e &&
   const opSayisi = new Set(loglar.map((l) => l.op)).size;
   console.log(`[ct] ${loglar.length} log / ${opSayisi} operatör takip edilecek: ${loglar.map((l) => `${l.ad}(${l.op})`).join(", ")}`);
   for (const log of loglar) logTakip(log); // paralel, sonsuz döngüler
+  if (AKTIF_TARAMA) aktifTaramaDongu(); // SÜREKLİ aktif marka taraması (urlscan) — yalnız tek worker'da (mükerrer değil)
+  else console.log("[aktif] AKTIF_TARAMA=0 → bu worker salt-CT (aktif urlscan taraması kapalı)");
 })();

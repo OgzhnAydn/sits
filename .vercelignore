@@ -1,1 +1,5 @@
 certstream-worker
+
+# ETBİS ham indirme (yalnız script üretir; app lib/etbisData.json kullanır)
+data/etbis-siteler.jsonl
+data/etbis-cek-durum.json

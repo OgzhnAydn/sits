@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { KORUNAN_MARKALAR } from "@/lib/korunanMarkalar";
-import { aboneKaydet, aboneGetir, kullaniciMarkalariGetir } from "@/lib/store";
+import { aboneKaydet, aboneGetir, kullaniciMarkalariGetir, kullaniciMarkaSil } from "@/lib/store";
 import { limitAsildi } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
@@ -37,6 +37,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ hata: "Şu an kaydedilemedi (veritabanı kuralları henüz yayınlanmamış olabilir)." }, { status: 503 });
   }
   return NextResponse.json({ ok: true, markaAdi: marka.ad });
+}
+
+// Kullanıcının eklediği markayı KALDIR (bakım/marka-yönetimi). Secret korumalı — yanlış/mükerrer
+// kayıt temizliği (ör. 3-harf "ktb" gibi taranamayan hatalı ekleme).
+export async function DELETE(req: NextRequest) {
+  const sir = process.env.MARKA_ADAY_SECRET;
+  let body: { marka?: string; secret?: string };
+  try { body = await req.json(); } catch { return NextResponse.json({ hata: "Geçersiz istek." }, { status: 400 }); }
+  if (!sir || body.secret !== sir) return NextResponse.json({ hata: "Yetkisiz." }, { status: 401 });
+  const anahtar = String(body.marka || "").toLowerCase().trim();
+  if (!anahtar) return NextResponse.json({ hata: "marka gerekli." }, { status: 400 });
+  const ok = await kullaniciMarkaSil(anahtar);
+  return NextResponse.json({ ok });
 }
 
 // Bir markanın aboneli olup olmadığını sorgula (pano için).

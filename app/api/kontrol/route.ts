@@ -25,6 +25,12 @@ export async function POST(req: NextRequest) {
   }
   const soranId = typeof cihazId === "string" && cihazId ? cihazId : "anon";
 
+  // DAYANIKLILIK GUARD: derin OSINT (40-60s) veya kota-dolu Firestore yazması HANG ederse tüm
+  // yanıt bloke olur → vatandaş "Kontrol ediliyor…" ekranında sonsuza kadar takılır. Bu yardımcı
+  // her yavaş çağrıyı ms içinde yedek değere düşürür → analiz sonucu HER ZAMAN döner.
+  const sure = <T,>(p: Promise<T>, ms: number, yedek: T): Promise<T> =>
+    Promise.race([p.catch(() => yedek), new Promise<T>((r) => setTimeout(() => r(yedek), ms))]);
+
   const g = gostergeCikar(metin);
   let { kategori } = siniflandir(metin, g); // kategori adı için (kural)
 
@@ -84,10 +90,14 @@ export async function POST(req: NextRequest) {
     try {
       const { deger, tip } = normalize(g.url[0]);
       if (tip === "url") {
-        const rap = await domainOsint(deger);
-        birincilUrlRisk = rap.risk;
-        if (rap.risk >= 55) tehlike = true;
-        else if (rap.risk >= 22) dikkat = true;
+        // Derin OSINT 20s guard: hang/aşırı-yavaşta null döner, mevcut karar geçerli kalır (aşağıdaki
+        // marka-taklit/kampanya/kara-liste sinyalleri ana koruma; OSINT ek katman).
+        const rap = await sure(domainOsint(deger, undefined, true), 20000, null); // ETBİS resmî sicil kontrolü de dahil
+        if (rap) {
+          birincilUrlRisk = rap.risk;
+          if (rap.risk >= 55) tehlike = true;
+          else if (rap.risk >= 22) dikkat = true;
+        }
       }
     } catch {
       // OSINT başarısızsa mevcut karar geçerli
@@ -165,7 +175,9 @@ export async function POST(req: NextRequest) {
   // ÖZ-ÖĞRENME: motor bunu tehlikeli bulduysa imzasını kaydet ki dolandırıcı
   // yarın domaini değiştirdiğinde ilk saniyeden yakalayalım.
   if (imza && genel === "tehlikeli") {
-    await kampanyaKaydet(imza, metin, yol, soranId);
+    // Fire-and-forget + guard: öz-öğrenme yazması best-effort. Kota-dolu/hang'de sonucu BLOKE ETME —
+    // vatandaş kararını beklemesin. Yazma olursa gelecekte fayda, olmazsa karar yine döner.
+    void sure(kampanyaKaydet(imza, metin, yol, soranId), 8000, undefined);
   }
 
   // Derin OSINT için birincil gösterge (varsa site, yoksa ilk gösterge)
@@ -175,7 +187,9 @@ export async function POST(req: NextRequest) {
   let sosyal: { oncekiSoran: number; benzersizBildiren: number } | null = null;
   if (birincil) {
     const bTip = kayitlar.find((k) => k.deger === birincil)?.tip || "url";
-    sosyal = await sorguKaydet(birincil, bTip, soranId);
+    // 6s guard: sorguKaydet hem yazma hem sosyal-kanıt okuması yapar; kota-dolu/hang'de null döner
+    // (sosyal kanıt gösterilmez ama sonuç döner) — sayfa asla takılmaz.
+    sosyal = await sure(sorguKaydet(birincil, bTip, soranId), 6000, null);
   }
 
   // Geriye-dönük "güven" alanı artık AI yorumundan türer (eski kelime-skoruna değil).

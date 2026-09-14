@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { domainOsint, domainDurumu, type DomainDurum } from "@/lib/osint";
-import { kampanyaCozumle } from "@/lib/kampanya";
+import { hizliDomainSkor, type DomainDurum } from "@/lib/osint";
 import { itibarliMi } from "@/lib/itibarli";
 import { resmiMarkaDomaini, KORUNAN_MARKALAR } from "@/lib/korunanMarkalar";
 import { markaAdayKaydet, markaGunlukArtir, type MarkaAday } from "@/lib/store";
@@ -40,29 +39,45 @@ export async function POST(req: NextRequest) {
   const markaAnahtar = String(body.marka || "").toLowerCase();
   const marka = KORUNAN_MARKALAR.find((m) => m.anahtar === markaAnahtar);
 
-  // Gerçek analiz — motoru bu adaya uygula (typosquatting + yaş + tehdit + CT…).
+  // HIZLI ANALİZ — worker ADAY AKIŞI firehose ölçeğinde (saniyede yüzlerce). Tam domainOsint
+  // 40-60s süren sıralı derin analizdir → her POST 504 yapardı (aday hiç kaydolmaz). Bunun yerine
+  // en güçlü 3 sinyali paralel toplarız (~6s): yaş + canlılık + kara liste. Derin pivot (favicon/
+  // redirect/CT/kampanya) mercek'te adaya tıklanınca tam domainOsint ile yapılır. Aday KAÇMAZ.
   let skor = 0;
   let sinyaller: string[] = [];
   let durum: DomainDurum = "canli";
   try {
-    const rapor = await domainOsint(domain);
-    skor = Math.min(100, rapor.risk);
-    sinyaller = rapor.bulgular.slice(0, 6);
-    durum = domainDurumu(rapor).durum; // aktif-tuzak / park / yayında-değil / canlı
+    const h = await hizliDomainSkor(domain);
+    skor = h.skor;
+    sinyaller = h.sinyaller.slice(0, 6);
+    durum = h.durum;
   } catch {
     return NextResponse.json({ ok: true, kaydedildi: false, sebep: "analiz başarısız" });
+  }
+  // MARKA-TAKLİT TABANI: worker guardrail'inden geçmiş (marka adını RESMÎ-OLMAYAN bağlamda, kelime
+  // sınırında içeren) domain zaten güçlü aday. RDAP'siz TLD (.ph) / USOM'suz yabancı hedefte yaş ve
+  // kara-liste sinyali gelmese de skor 0 kalmamalı → yoksa gerçek taklit KAÇAR. Taban 25 = kaydedilir
+  // ama mercek'te "Düşük" öncelik; YÜKSEK-alarm (60+) yalnız yaş/USOM ile → FP operatörce elenir.
+  if (marka && skor < 25) {
+    skor = 25;
+    if (!sinyaller.some((s) => s.includes("Marka adını"))) sinyaller.unshift("Marka adını içeren, resmî olmayan domain — worker taklit filtresinden geçti.");
   }
 
   const tarih = new Date().toISOString().slice(0, 10);
 
-  // Güven eşiği: düşük skorlu (muhtemelen alakasız) adayları KAYDETME — gürültü olmasın.
-  // Ama günlük "eşleşme" sayacına yaz (rapor "şu kadar domaini analiz ettik" desin).
+  // Firestore yazması kota-dolu/hang'de endpoint'i 504'e sürüklemesin: 8s guard. Guard'a takılırsa
+  // yazma başarısız sayılır (worker dedup'ı geri alıp yeniden dener) ama endpoint hızlı döner.
+  const yaz = <T,>(p: Promise<T>, ms = 8000): Promise<T | "ZAMANASIMI"> =>
+    Promise.race([p, new Promise<"ZAMANASIMI">((r) => setTimeout(() => r("ZAMANASIMI"), ms))]);
+
+  // Güven eşiği: düşük skorlu adayı KAYDETME. KOTA KORUMASI: firehose'da binlerce düşük-skorlu
+  // domain (yabancı/alakasız) yalnız "günlük analiz sayacı" için yazma yapıyordu → Firestore
+  // free-tier ~20k yazma/gün limitini bu tüketiyor. Düşük-skorluda HİÇ yazma yapma (sayaç dahil):
+  // istatistik kaybı, kotanın korunmasından çok daha ucuz. Gerçek aday (skor≥25) sayılmaya devam.
   if (skor < 25) {
-    await markaGunlukArtir(markaAnahtar, tarih, false);
     return NextResponse.json({ ok: true, kaydedildi: false, sebep: `düşük skor (${skor})` });
   }
 
-  await markaGunlukArtir(markaAnahtar, tarih, true);
   const aday: MarkaAday = {
     domain,
     marka: markaAnahtar,
@@ -74,29 +89,16 @@ export async function POST(req: NextRequest) {
     durum, // AKTİF tuzak mı yoksa PARK/izleme adayı mı — ayrı takip için
     zaman: Date.now(),
   };
-  await markaAdayKaydet(aday); // önce yakalamayı kuyruğa yaz (kampanya çözümleme uzun sürebilir)
+  // İki yazma PARALEL (seri değil): kota-dolu/hang'de her biri 8s guard'a takılırsa seri 16s olurdu;
+  // paralel tek 8s. Günlük sayaç + aday kaydı birbirinden bağımsız.
+  const [yg, yk] = await Promise.all([
+    yaz(markaGunlukArtir(markaAnahtar, tarih, true)),
+    yaz(markaAdayKaydet(aday)),
+  ]);
 
-  // KAMPANYA ÇÖZÜMLEME (otomatik): yüksek-güvenli AKTİF yakalamalarda tüm operasyonu haritala
-  // (kardeş domainler + ortak IP/ASN + favicon-kit + iletişim kanalları) ve kuyruğa iliştir.
-  let kampanya: MarkaAday["kampanya"] | undefined;
-  if (durum === "aktif-tuzak" && skor >= 60) {
-    try {
-      const k = (await Promise.race([kampanyaCozumle(domain), new Promise<null>((r) => setTimeout(() => r(null), 22000))])) as Awaited<ReturnType<typeof kampanyaCozumle>> | null;
-      if (k && k.domainler.length > 1) {
-        kampanya = {
-          domainSayisi: k.domainler.length,
-          ipler: (k.ipler || []).slice(0, 3),
-          asnler: (k.asnler || []).slice(0, 3),
-          iletisimKanallari: (k.iletisimKanallari || []).slice(0, 3),
-          exfilVar: (k.exfil || []).length > 0,
-          ozet: k.ozet || "",
-        };
-        await markaAdayKaydet({ ...aday, kampanya }); // merge: operasyon haritasını iliştir
-      }
-    } catch {
-      /* kampanya çözümleme başarısız — yakalama zaten kuyrukta */
-    }
-  }
-
-  return NextResponse.json({ ok: true, kaydedildi: true, skor, durum, kampanya: kampanya ? { domainSayisi: kampanya.domainSayisi } : undefined });
+  // NOT: Kampanya çözümleme + tam OSINT burada YAPILMAZ (firehose ölçeğinde 504). Operatör mercek'te
+  // adaya tıklayınca derin analiz o an çalışır. Aday kaydedildi → hiçbir şey kaçmaz.
+  // yazDurum: kota-nabzı — worker/izleme "ok" görürse Firestore yazması sağlıklı, "zamanasimi" ise kota dolu.
+  const zamanAsimi = yg === "ZAMANASIMI" || yk === "ZAMANASIMI";
+  return NextResponse.json({ ok: true, kaydedildi: !zamanAsimi, skor, durum, yazDurum: zamanAsimi ? "zamanasimi" : "ok" });
 }

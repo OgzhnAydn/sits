@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // PDF raporu için gömülü font dosyaları serverless fonksiyona dahil edilsin (Vercel).
+  // PDF raporları için gömülü font dosyaları serverless fonksiyona dahil edilsin (Vercel).
+  // TÜM api rotaları kapsanır: /api/rapor, /api/marka-rapor-pdf, /api/bahis-liste-pdf hepsi Tinos/Roboto okur.
   outputFileTracingIncludes: {
-    "/api/rapor": ["./assets/fonts/**"],
+    "/api/**": ["./assets/fonts/**"],
   },
 };
 

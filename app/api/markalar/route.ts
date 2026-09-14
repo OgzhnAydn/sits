@@ -16,6 +16,6 @@ export async function GET(req: Request) {
     .filter((m) => !anahtarlar.has(m.anahtar) && (tumu || m.anahtar.length >= 4))
     .map((m) => ({ anahtar: m.anahtar, ad: m.ad, resmi: m.resmi }));
   return NextResponse.json({
-    markalar: [...temel.map((m) => ({ anahtar: m.anahtar, ad: m.ad, resmi: m.resmi })), ...ozel],
+    markalar: [...temel.map((m) => ({ anahtar: m.anahtar, ad: m.ad, resmi: m.resmi, kaliplari: m.kaliplari || [], yaygin: !!m.yaygin })), ...ozel],
   });
 }

@@ -52,6 +52,16 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // --- Yasa Dışı Bahis Radarı — CT akışından yakalanan bahis siteleri (kalıcı feed) ---
+    // Herkese açık okuma (radar/operatör paneli); yazma geçerli şekle bağlı (domain + güven).
+    match /bahis_adaylari/{doc} {
+      allow read: if true;
+      allow create, update: if request.resource.data.domain is string
+                            && request.resource.data.domain.size() < 200
+                            && request.resource.data.guven is number;
+      allow delete: if false;
+    }
+
     // --- Günlük marka sayaçları (rapordaki gerçek sayılar) ---
     match /gunluk_marka_stat/{doc} {
       allow read: if true;
