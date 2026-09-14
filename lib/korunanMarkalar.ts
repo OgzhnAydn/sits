@@ -132,6 +132,10 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   // "kulturturizm" kalıbı. Resmî domainler doğrulandı: ktb.gov.tr + kulturturizm.gov.tr (ikincisi
   // ktb.gov.tr'ye yönleniyor). Müze bileti / turizm başvurusu dolandırıcılıkları bu bakanlığı taklit eder.
   { anahtar: "kulturturizm", ad: "Kültür ve Turizm Bakanlığı", resmi: ["ktb.gov.tr", "kulturturizm.gov.tr"] },
+  // YTB — kısaltma "ytb" DEĞİL (3 harf → taranamaz/gürültü; sayısız domainde geçer). Ayırt edici
+  // açılım kalıpları taranır: "yurtdisiturkler" + "akrabatopluluklar". Yurtdışı vatandaş başvuru /
+  // burs / soydaş dolandırıcılıkları bu başkanlığı taklit eder. Resmî domain: ytb.gov.tr.
+  { anahtar: "yurtdisiturkler", ad: "Yurtdışı Türkler ve Akraba Topluluklar Başkanlığı", resmi: ["ytb.gov.tr"], kaliplari: ["akrabatopluluklar", "yurtdisiturk"] },
 ];
 
 // Marka logosu — resmî domainin faviconu (Google favicon servisi). Tüm markalar için
