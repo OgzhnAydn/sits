@@ -243,7 +243,9 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
     inceleme: markaAdaylari.filter((a) => !aktifTuzakMi(a) && !parkPasifMi(a)).length,
     yeni: markaAdaylari.filter((a) => yeniSet.current.has(a.domain)).length,
   };
-  const markaAdi = markaFiltre ? buyukHarf(markaFiltre) : (hesapAdi || "Tüm Markalar");
+  // Panel başlığı markanın TAM ADINI (ad) göstersin — anahtar değil (ör. "yurtdisiturkler" →
+  // "YURTDISITURKLER" yerine "Yurtdışı Türkler ve Akraba Topluluklar Başkanlığı"). Ad yoksa anahtara düş.
+  const markaAdi = markaFiltre ? (markaListe.find((m) => m.anahtar === markaFiltre)?.ad || buyukHarf(markaFiltre)) : (hesapAdi || "Tüm Markalar");
 
   if (oturum !== true) {
     return <Flex vertical align="center" justify="center" gap={14} style={{ position: "fixed", inset: 0, zIndex: 60, background: "var(--c-080f1a)", color: "var(--c-8fa6bd)" }}><Spin size="large" /><span>{oturum === false ? "Yönlendiriliyor…" : "Oturum kontrol ediliyor…"}</span></Flex>;
