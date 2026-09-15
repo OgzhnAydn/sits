@@ -500,6 +500,54 @@ function nedenTehdit(r: Rapor | null) {
   return out.slice(0, 6);
 }
 
+// Altyapı İzi (Passive DNS): domainin geçmiş IP'leri + aynı ADANMIŞ IP'yi paylaşan kardeş
+// domainler. Paylaşımlı/CDN altyapı kapısı /api/pasif-dns'te → burada yalnız gerçek bağ gösterilir.
+function PasifDnsBolum({ domain }: { domain: string }) {
+  const [veri, setVeri] = useState<null | { gecmisIpler: { ip: string; sonGorulen?: number }[]; kardesDomainler: { domain: string; pivot: string }[]; paylasimliAltyapi: boolean; pivotSayisi: number; not?: string }>(null);
+  const [yuk, setYuk] = useState(false);
+  useEffect(() => {
+    let iptal = false; setVeri(null); setYuk(true);
+    fetch(`/api/pasif-dns?domain=${encodeURIComponent(domain)}`)
+      .then((r) => r.json()).then((j) => { if (!iptal) setVeri(j); }).catch(() => {}).finally(() => { if (!iptal) setYuk(false); });
+    return () => { iptal = true; };
+  }, [domain]);
+  const gecmis = veri?.gecmisIpler || [], kardes = veri?.kardesDomainler || [];
+  if (!yuk && !gecmis.length && !kardes.length && !veri?.paylasimliAltyapi) return null; // gösterecek gerçek bir şey yoksa hiç çizme
+  return (
+    <div>
+      <Text strong style={{ fontSize: 11, letterSpacing: ".05em" }}>Altyapı İzi (Passive DNS) {yuk && <Spin size="small" />}</Text>
+      <Flex vertical gap={5} style={{ marginTop: 8 }}>
+        {gecmis.length > 0 && (
+          <Flex align="center" gap={8}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-5c748b)" }}>dns</span>
+            <Text style={{ fontSize: 12, color: "var(--c-a7bccf)" }}>Geçmiş IP çözümlemesi</Text>
+            <Text strong style={{ marginLeft: "auto", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5 }}>{gecmis.length}</Text>
+          </Flex>
+        )}
+        {kardes.length > 0 ? (
+          <>
+            <Flex align="center" gap={8}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-4d9fe0)" }}>hub</span>
+              <Text style={{ fontSize: 12, color: "var(--c-a7bccf)" }}>Aynı altyapıdaki kardeş domain</Text>
+              <Text strong style={{ marginLeft: "auto", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, color: "var(--c-4d9fe0)" }}>{kardes.length}</Text>
+            </Flex>
+            <Flex vertical gap={2} style={{ paddingLeft: 22 }}>
+              {kardes.slice(0, 6).map((k, i) => (
+                <Text key={i} style={{ fontSize: 11, fontFamily: "'IBM Plex Mono',monospace", color: "var(--c-cfe0ef)", wordBreak: "break-all" }} title={`ortak IP: ${k.pivot}`}>· {k.domain}</Text>
+              ))}
+              {kardes.length > 6 && <Text style={{ fontSize: 10.5, color: "var(--c-5c748b)" }}>+{kardes.length - 6} daha</Text>}
+            </Flex>
+          </>
+        ) : veri?.paylasimliAltyapi ? (
+          <Text style={{ fontSize: 11, color: "var(--c-5c748b)" }}>Altyapı paylaşımlı (CDN/ortak barındırma) — aynı IP'deki domainler alakalı sayılmaz.</Text>
+        ) : (!yuk && gecmis.length > 0) ? (
+          <Text style={{ fontSize: 11, color: "var(--c-5c748b)" }}>Adanmış IP'de başka domain görülmedi.</Text>
+        ) : null}
+      </Flex>
+    </div>
+  );
+}
+
 function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }: { aday: Aday | null; rapor: Rapor | null; yukleniyor: boolean; markaAdi: string; resmiDom?: string; onYenile?: () => void }) {
   if (!aday) return <Empty description={<span style={{ color: "var(--c-8fa6bd)" }}><b style={{ color: "var(--c-31c8a0)" }}>{markaAdi} için tehdit yok</b><br />Sistem izlemeye devam ediyor.</span>} />;
   const risk = rapor?.risk ?? aday.skor;
@@ -562,6 +610,7 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
           />
         );
       })()}
+      <PasifDnsBolum domain={aday.domain} />
       <KarsilastirGorsel resmiDom={resmiDom} fakeDom={aday.domain} fakeShot={rapor?.ekranGoruntusu} benzerlik={benzerlik} markaAdi={markaAdi} />
 
       <Flex vertical gap={8}>
