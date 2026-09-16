@@ -295,9 +295,10 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
               : <Text style={{ color: "#fff", fontSize: 30, fontWeight: "bold" }}>{v.markaAd}</Text>}
             <Text style={{ color: ALTIN, fontSize: 9.5, letterSpacing: 1.5, marginTop: 10 }}>{(v.markaResmi || v.markaAd).toUpperCase()} · {v.aralikEtiket.toUpperCase()}</Text>
             <Text style={{ color: "#fff", fontSize: 30, fontWeight: "bold", marginTop: 10 }}>Marka Koruma Bülteni</Text>
+            <Text style={{ color: "#9fb4d8", fontSize: 10.5, lineHeight: 1.5, marginTop: 12, maxWidth: 355 }}>Markanızın dijital kimliğine yönelik tehditleri anlık olarak tespit ediyor; analiz ediyor, sınıflandırıyor, ilişkili tehditlerle eşleştiriyor, raporluyor ve 7/24 takip ediyoruz.</Text>
           </View>
           {/* Süreç akışı — İnternetten aksiyona metodoloji (referans kapak öğesi) */}
-          <View style={{ marginTop: 26 }}>
+          <View style={{ marginTop: 18 }}>
             <Text style={{ color: "#7d93b3", fontSize: 8, letterSpacing: 2.5 }}>YÖNTEM · İNTERNETTEN TAKİBE</Text>
             <View style={{ marginTop: 10 }}>
               {["KEŞFET", "İZLE", "ANALİZ ET", "İLİŞKİLENDİR", "RİSKLENDİR", "UYAR", "AKSİYON", "RAPORLA", "TAKİP ET"].map((ad, i, dizi) => {
