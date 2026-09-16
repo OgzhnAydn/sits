@@ -296,6 +296,27 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             <Text style={{ color: ALTIN, fontSize: 9.5, letterSpacing: 1.5, marginTop: 10 }}>{(v.markaResmi || v.markaAd).toUpperCase()} · {v.aralikEtiket.toUpperCase()}</Text>
             <Text style={{ color: "#fff", fontSize: 30, fontWeight: "bold", marginTop: 10 }}>Marka Koruma Bülteni</Text>
           </View>
+          {/* Süreç akışı — İnternetten aksiyona metodoloji (referans kapak öğesi) */}
+          <View style={{ marginTop: 26 }}>
+            <Text style={{ color: "#7d93b3", fontSize: 8, letterSpacing: 2.5 }}>YÖNTEM · İNTERNETTEN TAKİBE</Text>
+            <View style={{ marginTop: 10 }}>
+              {["KEŞFET", "İZLE", "ANALİZ ET", "İLİŞKİLENDİR", "RİSKLENDİR", "UYAR", "AKSİYON", "RAPORLA", "TAKİP ET"].map((ad, i, dizi) => {
+                const son = i === dizi.length - 1; // TAKİP ET → döngüyü kapatır (altın)
+                const renk = son ? ALTIN : TEAL;
+                return (
+                  <View key={ad}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
+                      <View style={{ width: 15, height: 15, borderRadius: 8, borderColor: renk, borderWidth: 1.1, alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ fontSize: 7, color: renk, fontWeight: "bold" }}>{i + 1}</Text>
+                      </View>
+                      <Text style={{ fontSize: 11, color: son ? ALTIN : "#fff", fontWeight: "bold", letterSpacing: 1.4 }}>{ad}</Text>
+                    </View>
+                    {!son && <View style={{ width: 1.1, height: 7, backgroundColor: "#2b4a6b", marginLeft: 7 }} />}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
         </View>
         <View style={{ position: "absolute", bottom: 44, left: 44, right: 44, flexDirection: "row", alignItems: "center", borderTopColor: "#26456a", borderTopWidth: 1, paddingTop: 12 }}>
           <View style={{ flex: 1 }}><Text style={{ color: "#7d93b3", fontSize: 7.5, letterSpacing: 1.5 }}>RAPOR NO</Text><Text style={{ color: "#fff", fontSize: 11, fontWeight: "bold", marginTop: 3 }}>{v.refNo}</Text></View>
