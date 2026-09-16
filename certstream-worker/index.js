@@ -217,23 +217,43 @@ function duzenlemeMesafesi(a, b) {
       dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
   return dp[m][n];
 }
+function ortakOnek(a, b) { let i = 0; const n = Math.min(a.length, b.length); while (i < n && a[i] === b[i]) i++; return i; }
+// Görsel-aldatan harf/rakam çiftleri (l↔1, o↔0…) — lib/korunanMarkalar ile aynı.
+const GORSEL_CIFT = { "0": "o", o: "0", "1": "l", l: "1", i: "1", "5": "s", s: "5", "3": "e", e: "3", "4": "a", a: "4", "9": "g", g: "9", "6": "b", b: "6", "7": "t", t: "7", "2": "z", z: "2" };
+function tekEditGorsel(label, k) {
+  if (label.length !== k.length) return false;
+  let fark = -1;
+  for (let i = 0; i < k.length; i++) if (label[i] !== k[i]) { if (fark >= 0) return false; fark = i; }
+  return fark >= 0 && GORSEL_CIFT[k[fark]] === label[fark];
+}
+// lib/korunanMarkalar.yakinTypo ile BİREBİR aynı: ≥4 ortak önek (diyet↔diyanet, burnbank↔burganbank
+// gibi 3-önek FP'lerini eler) VEYA erken görsel-aldatan tek harf (4kbank↔akbank).
 function yakinTypo(label, k) {
-  if (k.length < 6) return false; // <6 harf edit-distance FP üretir: 5-harf anahtar yaygın kelimeye 1-yakın olur (losev↔loser, canik↔canim) → typo yalnız ≥6 harf
+  if (k.length < 6) return false;
   const esik = k.length >= 7 ? 2 : 1;
   if (Math.abs(label.length - k.length) > esik) return false;
   const d = duzenlemeMesafesi(label, k);
-  return d > 0 && d <= esik;
+  if (d === 0 || d > esik) return false;
+  if (ortakOnek(label, k) >= 4) return true;
+  if (esik === 1 && d === 1 && tekEditGorsel(label, k)) return true;
+  return false;
 }
 
 // KISA (≤4 harf) anahtar FP kapısı: gerçek taklit domaini Türkçe konut/finans/resmî ya da phishing
 // kelimesi taşır; meşru yabancı (ibis-toki.co.jp, hoikuen-toki) taşımaz. lib/korunanMarkalar ile aynı.
-const TR_BAGLAM = /proje|konut|basvuru|basvur|kampanya|cekilis|kura|tapu|daire|kredi|resmi|giris|destek|musteri|hesap|odeme|randevu|evim|bakanlik|idare|sorgu|login|secure|verify|account|onlin|bank|card|kart|mobil|wallet|\bpay\b|\btc\b|gov|bilet|ucus|ucak|rezervasyon|seyahat|checkin|acceso|banca|cliente|particular|premi|bonus|hediye/;
+// "gov" yalnız ETİKET içinde (-gov/gov-/govtr/gov.tr) yakalanır; meşru ".gov" TLD (southwindsor-ct.gov)
+// tetiklemez. Türk devlet/adli phishing (uyap-gov, vatandas-uyap-gov) + Türkçe resmî/adli bağlam kelimeleri.
+const TR_BAGLAM = /proje|konut|basvuru|basvur|kampanya|cekilis|kura|tapu|daire|kredi|resmi|giris|destek|musteri|hesap|odeme|randevu|evim|bakanlik|idare|sorgu|login|secure|verify|account|onlin|bank|card|kart|mobil|wallet|\bpay\b|\btc\b|bilet|ucus|ucak|rezervasyon|seyahat|checkin|acceso|banca|cliente|particular|premi|bonus|hediye|-gov|gov-|govtr|gov\.tr|vatandas|tebligat|mahkeme|adalet|evrak|dava|icra|vergi/;
 
 function eslesenMarka(domain) {
   const d = kok(domain);
   if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)) return null;
   const { label, altAlan, tld } = tescilliBilgi(d);
   const riskliTld = RISKLI_TLD_SET.has(tld) || RISKLI_TLD_SET.has(tld.split(".").pop());
+  // Bağlam sinyali YALNIZ tescilli alanda (label+tld) aransın — rastgele alt-alan (account., eu-login.)
+  // meşru siteyi (pegasusnest.com, garantisjekk.no) phishing gibi göstermesin.
+  const kayitliAlan = tld ? `${label}.${tld}` : label;
+  const baglamVar = riskliTld || TR_BAGLAM.test(kayitliAlan);
   for (const m of MARKALAR) {
     if ((m.resmi || []).some((r) => d === r || d.endsWith("." + r))) continue; // resmî → atla
     // Anahtar + AÇILIM kalıpları (toki + toplukonutidaresi…) — her biri denenir, eşleşen marka anahtarını döndürür.
@@ -246,14 +266,17 @@ function eslesenMarka(domain) {
       }
       // Marka adı tescilli etiketin İÇİNDE, gerçek taklit sınırında mı? (garanti-kredi, garantibbva…)
       if (label.includes(k) && sinirdaGecer(label, k)) {
-        // SIKI-BAĞLAM: KISA ANAHTAR (≤4) VEYA YAYGIN-KELİME marka (pegasus/santander/iberia) tire-sınırlı
-        // içermede meşru yabancı işletme yakalar (ibis-toki, donerkebab-santander) → ek sinyal şart:
-        // riskli TLD VEYA Türkçe/phishing bağlamı. Yoksa ATLA.
-        if ((k.length <= 4 || m.yaygin) && !riskliTld && !TR_BAGLAM.test(d)) continue;
+        // SIKI-BAĞLAM: KISA ANAHTAR (≤4) VEYA YAYGIN-KELİME marka → ek sinyal şart (riskli TLD VEYA
+        // tescilli alanda phishing/Türkçe bağlamı). Yoksa ATLA (garantisjekk.no, tailwindtech.ai).
+        if ((k.length <= 4 || m.yaygin) && !baglamVar) continue;
         return m.anahtar;
       }
       // Harf-oyunu typosquat (anadolumet, turkcel…) — alt-dize değil ama çok benziyor.
-      if (yakinTypo(label, k)) return m.anahtar;
+      // YAYGIN markada typo'ya da bağlam kapısı: transvaro↔transparo/transpar FP'sini eler.
+      if (yakinTypo(label, k)) {
+        if (m.yaygin && !baglamVar) continue;
+        return m.anahtar;
+      }
     }
   }
   return null;
