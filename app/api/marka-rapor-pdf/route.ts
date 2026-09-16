@@ -12,18 +12,21 @@ import { canlilikProbe } from "@/lib/canlilik";
 async function ipApi(ip: string): Promise<{ as?: string; country?: string; org?: string; isp?: string; hosting?: boolean }> {
   try { const r = await fetch(`http://ip-api.com/json/${ip}?fields=country,as,org,isp,hosting`, { signal: AbortSignal.timeout(5000) }); return await r.json(); } catch { return {}; }
 }
-async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string }> {
+async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; usomda?: boolean | null; engelli?: boolean | null }> {
   try {
-    const c = await canlilikProbe(domain);
+    // canlılık + USOM PARALEL — her adrese "canlı mı + USOM'da mı" birlikte bakılır (bildir kararı için).
+    const [c, usomda] = await Promise.all([canlilikProbe(domain), usomBiliniyor(domain).catch(() => null)]);
     const g = c.dns.ip ? await ipApi(c.dns.ip) : {};
     const org = (g.org || g.isp || "").slice(0, 26);
     const asnNo = String(g.as || "").split(" ")[0];
+    // BTK engel-sayfası da HTTP 200 döner (canlı görünür) → yalnız CANLI adreste BTK'ya bak; ölüde boşa 8sn harcama.
+    const engelli = c.durum === "live" ? await btkEngelli(domain).catch(() => null) : null;
     return {
       ip: c.dns.ip || "", ca: c.ssl.veren || "",
       asn: [org, asnNo].filter(Boolean).join(" · "),
       ulke: g.country || "",
       altyapi: g.hosting ? "CDN/proxy" : (org ? "Veri merkezi" : ""),
-      canliDurum: c.durum,
+      canliDurum: c.durum, usomda, engelli,
     };
   } catch { return {}; }
 }
@@ -109,11 +112,8 @@ export async function GET(req: NextRequest) {
 
   // Öne çıkanlar için GERÇEK ekran görüntüsü + USOM/BTK/ETBİS durumu (hepsi paralel, best-effort).
   const [oneCikanHam, envMap] = await Promise.all([
-    Promise.all(oneCikanKay.map(async (a) => {
-      const [usomda, engelli] = await Promise.all([usomBiliniyor(a.domain), btkEngelli(a.domain)]);
-      const etbis = etbisYerel(a.domain).kayitliMi;
-      return { ...tesp(a), usomda, engelli, etbis };
-    })),
+    // usomda/engelli artık hizliTeknik (envMap) ile top-40'ta hesaplanıyor → burada yalnız ETBİS.
+    Promise.all(oneCikanKay.map(async (a) => ({ ...tesp(a), etbis: etbisYerel(a.domain).kayitliMi }))),
     envanterIsi,
   ]);
   const zengin = (t: RaporTespit): RaporTespit => ({ ...t, ...(envMap.get(t.domain) || {}) });

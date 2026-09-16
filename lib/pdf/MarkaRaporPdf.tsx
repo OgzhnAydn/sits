@@ -1,6 +1,6 @@
 import path from "path";
 import React from "react";
-import { Document, Page, Text, View, Image, Font, StyleSheet, Svg, Circle, Line, Path, Text as SvgText } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, Font, StyleSheet, Svg, Circle, Line, Path, Link, Text as SvgText } from "@react-pdf/renderer";
 
 const fontYol = (p: string) => path.join(process.cwd(), "assets/fonts", p);
 // Times New Roman metrik-eşdeğeri (Tinos) — Türkçe tam destekli, ücretsiz gömülebilir.
@@ -76,6 +76,14 @@ const alan = (t: RaporTespit, adBas: string) => (t.alanlar || []).find((f) => f.
 const canliDurumAd = (d?: string) => d === "live" ? "Canlı · içerik var" : d === "dead" ? "Kaldırılmış · erişilemez" : d === "parked" ? "Park · pasif" : d === "redirect" ? "Yönlendiriyor" : d === "bilinmiyor" ? "Doğrulanamadı" : "—";
 // Dar tablo sütunu için kısa etiket (tam anlam müşteri lejantında açıklanır).
 const canliDurumKisa = (d?: string) => d === "live" ? "Canlı" : d === "dead" ? "Kaldırılmış" : d === "parked" ? "Park" : d === "redirect" ? "Yönlendirme" : d === "bilinmiyor" ? "Doğrulanamadı" : "—";
+
+const BILDIR_URL = "https://www.ihbarweb.org.tr/"; // USOM/BTK resmî İhbar Web portalı — ihbarı operatör/müşteri gönderir.
+// "Bildir" aksiyonu gereken link: CANLI + USOM'da YOK + BTK engeli GÖRÜLMEMİŞ → yetkililerce henüz
+// durdurulmamış aktif tehdit (üç sinyal de güvenilir kaynaktan). engelli/usomda true ise gerekmez.
+const aksiyonGerekli = (t: RaporTespit) => t.canliDurum === "live" && t.usomda === false && t.engelli !== true;
+// Birleşik durum: BTK engeli GÖRÜLDÜYSE canlılıktan önce onu göster (engel sayfası da HTTP 200 döner).
+const durumTam = (t: RaporTespit) => t.engelli === true ? "BTK tarafından engelli" : canliDurumAd(t.canliDurum);
+const durumKisa = (t: RaporTespit) => t.engelli === true ? "BTK engelli" : canliDurumKisa(t.canliDurum);
 
 // Risk düzeyi (0-100) — gerçek dağılımdan: aktif tuzak ağır, canlı orta, park hafif.
 function riskPuan(v: MarkaRaporVeri): number {
@@ -203,8 +211,9 @@ function TehditHarita({ v }: { v: MarkaRaporVeri }) {
 // Bir tespit için kural-tabanlı ÖNERİ (gerçek USOM/BTK/durum verisinden — uydurma yok).
 function oneriUret(t: RaporTespit): { neden: string; oneri: string; oncelik: string } {
   const aktif = t.durum === "aktif-tuzak", canli = t.durum === "canli";
+  if (t.engelli === true) return { neden: "BTK erişim engeli tespit edildi (engel sayfası görüldü).", oneri: "Zaten engelli; kesintisiz izleme yeterli.", oncelik: "Bilgi" };
   if (t.usomda === true) return { neden: "USOM resmî zararlı bağlantı listesinde kayıtlı; devlet tarafından işaretlenmiş.", oneri: "Kayıt mevcut, yeni bildirim gerekmez; kurumsal DNS'te engelleme + hukuki takip.", oncelik: "Yüksek" };
-  if (t.engelli === true) return { neden: "BTK erişim engeli tespit edildi (engel sayfasına yönleniyor).", oneri: "Zaten engelli; kesintisiz izleme yeterli.", oncelik: "Bilgi" };
+  if (aksiyonGerekli(t)) return { neden: "Adres CANLI, USOM listesinde YOK ve BTK engeli görülmedi — yetkililerce henüz durdurulmamış aktif tehdit.", oneri: "ACİL: USOM/İhbarweb'e bildir (yandaki bağlantı) + BTK'ya erişim engeli (tedbir) başvurusu + alan adı kayıt firmasına (Registrar) abuse bildirimi önerilir.", oncelik: "ACİL" };
   if (aktif) return { neden: "Aktif tuzak: marka adını taşıyan, resmî olmayan canlı adres.", oneri: "USOM'a bildirim (henüz kayıtlı değil) + kesintisiz izleme.", oncelik: "Yüksek" };
   if (canli) return { neden: "Canlı adres; marka adını izinsiz kullanıyor, içerik doğrulanmalı.", oneri: "Günlük izleme; içerik/logo taklidi belirirse aynı gün bildirim.", oncelik: "Orta · izleme" };
   return { neden: "Kayıtlı ancak içerik yayında değil (park/izleme).", oneri: "Aksiyon gerekmez; Türkçe adlı kayıtlar öncelikli izlemede.", oncelik: "Düşük · artan" };
@@ -215,7 +224,7 @@ function detayMetin(t: RaporTespit): string {
   const parca: string[] = [];
   const durum = DURUM_AD[t.durum || ""] || "İnceleniyor";
   parca.push(`${t.domain}, otomatik ön-değerlendirmede ${t.skor}/100 skorla "${durum}" olarak sınıflandırıldı.`);
-  if (t.canliDurum) parca.push(`Canlı doğrulama: ${canliDurumAd(t.canliDurum)}.`);
+  if (t.engelli === true || t.canliDurum) parca.push(`Canlı doğrulama: ${durumTam(t)}.`);
   if (t.ip || t.asn) parca.push(`Barındırma: ${[t.asn, t.ulke, t.altyapi].filter(Boolean).join(" · ")}${t.ip ? ` (IP ${t.ip})` : ""}${t.ca ? `; sertifika: ${t.ca}` : ""}.`);
   if (t.usomda === false) parca.push("USOM listesinde yer almıyor — bu adresi resmî radardan önce yakaladık (biz-önce).");
   if (t.usomda === true) parca.push("USOM resmî listesinde kayıtlı.");
@@ -268,7 +277,10 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
     ? `Bu dönemde ${v.markaAd} markası adına açılmış ${v.ozet.toplam} benzer adresin ${v.ozet.aktif} tanesi AKTİF tuzak olarak tespit edildi; ${v.ozet.canli} adres canlı, ${v.ozet.park} adres park/izlemede tutuldu.`
     : `Bu dönemde ${v.markaAd} markası adına açılmış ${v.ozet.toplam} benzer adres tespit edilmiş ve her biri değerlendirilmiştir; markanız adına AKTİF bir kimlik avı (phishing) tuzağına rastlanmamıştır. ${v.ozet.canli} adres canlı, ${v.ozet.park} adres park/izlemede.`;
 
-  const oneriliKay = [...v.oneCikan, ...v.digerleri.filter((t) => t.durum === "aktif-tuzak" || t.durum === "canli")].slice(0, 7);
+  const oneriliKay = [...v.oneCikan, ...v.digerleri.filter((t) => t.durum === "aktif-tuzak" || t.durum === "canli" || aksiyonGerekli(t))]
+    .filter((t, i, a) => a.findIndex((x) => x.domain === t.domain) === i) // tekilleştir
+    .sort((a, b) => (aksiyonGerekli(b) ? 1 : 0) - (aksiyonGerekli(a) ? 1 : 0)) // ACİL (bildir) öne
+    .slice(0, 10);
 
   return (
     <Document title={`${v.markaAd} — Marka Koruma Bülteni`} author="MirLeon">
@@ -390,12 +402,12 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             <View style={st.tHead}>
               <Text style={[st.th, { width: "26%" }]}>Adres</Text><Text style={[st.th, { width: "31%" }]}>Neden</Text><Text style={[st.th, { width: "31%" }]}>Önerimiz</Text><Text style={[st.th, { width: "12%" }]}>Öncelik</Text>
             </View>
-            {oneriliKay.map((t, i) => { const o = oneriUret(t); return (
+            {oneriliKay.map((t, i) => { const o = oneriUret(t); const ac = aksiyonGerekli(t); return (
               <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]} wrap={false}>
                 <Text style={[st.td, { width: "26%", fontWeight: "bold", color: LACIVERT }]}>{t.domain}</Text>
                 <Text style={[st.td, { width: "31%", paddingRight: 6 }]}>{o.neden}</Text>
-                <Text style={[st.td, { width: "31%", paddingRight: 6 }]}>{o.oneri}</Text>
-                <Text style={[st.td, { width: "12%", color: SEV(t.durum), fontWeight: "medium" }]}>{o.oncelik}</Text>
+                <Text style={[st.td, { width: "31%", paddingRight: 6 }]}>{o.oneri}{ac ? "  " : ""}{ac && <Link src={BILDIR_URL} style={{ color: KIRMIZI, fontWeight: "bold", textDecoration: "none" }}>[ BİLDİR › ]</Link>}</Text>
+                <Text style={[st.td, { width: "12%", color: o.oncelik === "ACİL" ? KIRMIZI : SEV(t.durum), fontWeight: "bold" }]}>{o.oncelik}</Text>
               </View>
             ); })}
             <Text style={[st.p, { marginTop: 8, fontSize: 9, color: GRI }]}>
@@ -419,7 +431,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             {[...v.oneCikan, ...v.digerleri.filter((t) => t.durum === "aktif-tuzak" || t.durum === "canli")].slice(0, 14).map((t, i) => { const kat = KATEGORILER[tKategori(t, kumeVar ? enKalabalik[0] : "")]; return (
               <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]} wrap={false}>
                 <Text style={[st.td, { width: "34%", fontWeight: "medium", color: LACIVERT }]}>{t.domain}</Text>
-                <Text style={[st.td, { width: "24%" }]}>{canliDurumAd(t.canliDurum)}</Text>
+                <Text style={[st.td, { width: "24%", color: aksiyonGerekli(t) ? KIRMIZI : t.engelli === true ? YESIL : "#26324a", fontWeight: aksiyonGerekli(t) ? "bold" : "normal" }]}>{durumTam(t)}</Text>
                 <Text style={[st.td, { width: "24%", fontSize: 7.8 }]}>{[t.altyapi, t.ulke].filter(Boolean).join(" · ") || "—"}</Text>
                 <Text style={[st.td, { width: "18%" }]}><Text style={{ color: kat.renk, fontSize: 7.6 }}>● </Text>{kat.ad}</Text>
               </View>
@@ -431,6 +443,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
                 { ad: "Canlı · içerik var", ac: "Sunucu şu an içerik sunuyor — AKTİF tehdit, öncelikli.", renk: KIRMIZI },
                 { ad: "Yönlendiriyor / Park", ac: "Aktif kimlik-avı içeriği yok; izlemede tutulur.", renk: TURUNCU },
                 { ad: "Kaldırılmış · erişilemez", ac: "Alan adı DNS'ten silinmiş (NXDOMAIN — iki bağımsız çözücü teyitli): tehdit ŞU AN etkisiz. Ekran görüntüsü/kanıt tespit anına ait tarihsel kayıttır.", renk: GRI },
+                { ad: "BTK engelli", ac: "Erişim, BTK engel sayfasına yönlendiği için tespit edildi (globalde görülebilen engel) — tehdit Türkiye'de erişilemez, işlem gerekmez.", renk: YESIL },
                 { ad: "Doğrulanamadı", ac: "Alan adı kayıtlı ama otomatik sonda yanıt alamadı (site sistemimizi engelliyor ya da geçici erişilemez olabilir). Bu KALDIRILDIĞI ANLAMINA GELMEZ — adres hâlâ canlı olabilir, manuel teyit önerilir.", renk: TBAS },
               ].map((x, i) => (
                 <View key={i} style={{ flexDirection: "row", marginTop: 2.5 }}>
@@ -438,6 +451,10 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
                   <Text style={{ fontSize: 8, color: "#33405c", flex: 1, lineHeight: 1.4 }}><Text style={{ fontWeight: "bold" }}>{x.ad}: </Text>{x.ac}</Text>
                 </View>
               ))}
+              <View style={{ flexDirection: "row", marginTop: 5, paddingTop: 5, borderTopColor: CIZGI, borderTopWidth: 1 }}>
+                <View style={{ backgroundColor: KIRMIZI, borderRadius: 2, paddingHorizontal: 4, paddingVertical: 1, marginRight: 6, height: 12 }}><Text style={{ fontSize: 6.5, color: "#fff", fontWeight: "bold" }}>BİLDİR</Text></View>
+                <Text style={{ fontSize: 8, color: "#33405c", flex: 1, lineHeight: 1.4 }}><Text style={{ fontWeight: "bold" }}>Kırmızı &quot;Bildir&quot; işareti: </Text>adres canlı, USOM listesinde yok ve BTK engeli görülmedi — yetkililerce henüz durdurulmamış aktif tehdit. Tıklanınca resmî İhbar Web (ihbarweb.org.tr) açılır; ihbarı kurum gönderir.</Text>
+              </View>
             </View>
             <Baslik metin="Detaylı Bulgular" ikon="▤" />
             {v.oneCikan.map((t, i) => (
@@ -446,6 +463,12 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
                   <Text style={{ color: TEAL }}>{`4.${i + 1}`}</Text>{`  ${t.domain}`}  <Text style={{ fontSize: 9, fontWeight: "normal", color: SEV(t.durum) }}>({DURUM_AD[t.durum || ""] || "İnceleniyor"} · %{t.skor})</Text>
                 </Text>
                 <Text style={{ fontSize: 9.5, lineHeight: 1.55, color: "#26324a", textAlign: "justify" }}>{detayMetin(t)}</Text>
+                {aksiyonGerekli(t) && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+                    <Link src={BILDIR_URL} style={{ fontSize: 9, color: "#fff", fontWeight: "bold", textDecoration: "none", backgroundColor: KIRMIZI, paddingVertical: 3, paddingHorizontal: 9, borderRadius: 3 }}>USOM&apos;a BİLDİR</Link>
+                    <Text style={{ fontSize: 8, color: GRI, fontStyle: "italic" }}>Canlı + USOM&apos;da yok + BTK engeli görülmedi — bildirim önerilir.</Text>
+                  </View>
+                )}
               </View>
             ))}
           </View>
@@ -465,7 +488,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             {tumTespit.sort((a, b) => (b.skor || 0) - (a.skor || 0)).slice(0, 160).map((t, i) => (
               <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]} wrap={false}>
                 <Text style={[st.td, { width: "25%", fontWeight: "medium", color: LACIVERT, fontSize: 7.8 }]}>{t.domain}</Text>
-                <Text style={[st.td, { width: "16%", fontSize: 7.4, color: t.canliDurum === "live" ? KIRMIZI : t.canliDurum === "dead" ? GRI : "#33405c" }]}>{canliDurumKisa(t.canliDurum)}</Text>
+                <Text style={[st.td, { width: "16%", fontSize: 7.4, color: aksiyonGerekli(t) ? KIRMIZI : t.engelli === true ? YESIL : t.canliDurum === "dead" ? GRI : "#33405c" }]}>{durumKisa(t)}{aksiyonGerekli(t) ? " ›Bildir" : ""}</Text>
                 <Text style={[st.td, { width: "14%", fontSize: 7.6 }]}>{t.ip || "—"}</Text>
                 <Text style={[st.td, { width: "23%", fontSize: 7.4, paddingRight: 4 }]}>{t.asn || "—"}</Text>
                 <Text style={[st.td, { width: "10%", fontSize: 7.6 }]}>{t.ulke || "—"}</Text>
