@@ -71,7 +71,11 @@ function tKategori(t: RaporTespit, kumeTld: string): number {
 const DURUM_AD: Record<string, string> = { "aktif-tuzak": "Aktif tuzak", "canli": "Canlı", "park": "Park · izlemede", "yayinda-degil": "Yayında değil" };
 const zmn = (t: number) => (t ? new Date(t).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "2-digit" }) : "—");
 const alan = (t: RaporTespit, adBas: string) => (t.alanlar || []).find((f) => f.ad.startsWith(adBas))?.deger || "";
-const canliDurumAd = (d?: string) => d === "live" ? "Canlı · içerik var" : d === "dead" ? "Erişilemez" : d === "parked" ? "Park sayfası" : d === "redirect" ? "Yönlendiriyor" : "—";
+// Müşteri-dili canlılık etiketi. KESİNLİK: "Kaldırılmış" = alan adı DNS'ten silinmiş (NXDOMAIN, iki
+// bağımsız çözücü teyitli); "Doğrulanamadı" = kayıtlı ama sonda yanıt alamadı (KALDIRILDI DEMEK DEĞİL).
+const canliDurumAd = (d?: string) => d === "live" ? "Canlı · içerik var" : d === "dead" ? "Kaldırılmış · erişilemez" : d === "parked" ? "Park · pasif" : d === "redirect" ? "Yönlendiriyor" : d === "bilinmiyor" ? "Doğrulanamadı" : "—";
+// Dar tablo sütunu için kısa etiket (tam anlam müşteri lejantında açıklanır).
+const canliDurumKisa = (d?: string) => d === "live" ? "Canlı" : d === "dead" ? "Kaldırılmış" : d === "parked" ? "Park" : d === "redirect" ? "Yönlendirme" : d === "bilinmiyor" ? "Doğrulanamadı" : "—";
 
 // Risk düzeyi (0-100) — gerçek dağılımdan: aktif tuzak ağır, canlı orta, park hafif.
 function riskPuan(v: MarkaRaporVeri): number {
@@ -420,6 +424,21 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
                 <Text style={[st.td, { width: "18%" }]}><Text style={{ color: kat.renk, fontSize: 7.6 }}>● </Text>{kat.ad}</Text>
               </View>
             ); })}
+            {/* MÜŞTERİ NOTU — canlı durum etiketlerinin anlamı (yanlış değerlendirmeyi önler) */}
+            <View style={{ marginTop: 9, backgroundColor: "#f6f9fb", borderColor: CIZGI, borderWidth: 1, borderRadius: 5, padding: 9 }}>
+              <Text style={{ fontSize: 8.6, fontWeight: "bold", color: LACIVERT, marginBottom: 4 }}>Canlı durum ne anlama gelir?</Text>
+              {[
+                { ad: "Canlı · içerik var", ac: "Sunucu şu an içerik sunuyor — AKTİF tehdit, öncelikli.", renk: KIRMIZI },
+                { ad: "Yönlendiriyor / Park", ac: "Aktif kimlik-avı içeriği yok; izlemede tutulur.", renk: TURUNCU },
+                { ad: "Kaldırılmış · erişilemez", ac: "Alan adı DNS'ten silinmiş (NXDOMAIN — iki bağımsız çözücü teyitli): tehdit ŞU AN etkisiz. Ekran görüntüsü/kanıt tespit anına ait tarihsel kayıttır.", renk: GRI },
+                { ad: "Doğrulanamadı", ac: "Alan adı kayıtlı ama otomatik sonda yanıt alamadı (site sistemimizi engelliyor ya da geçici erişilemez olabilir). Bu KALDIRILDIĞI ANLAMINA GELMEZ — adres hâlâ canlı olabilir, manuel teyit önerilir.", renk: TBAS },
+              ].map((x, i) => (
+                <View key={i} style={{ flexDirection: "row", marginTop: 2.5 }}>
+                  <Text style={{ fontSize: 8, color: x.renk, width: 9 }}>●</Text>
+                  <Text style={{ fontSize: 8, color: "#33405c", flex: 1, lineHeight: 1.4 }}><Text style={{ fontWeight: "bold" }}>{x.ad}: </Text>{x.ac}</Text>
+                </View>
+              ))}
+            </View>
             <Baslik metin="Detaylı Bulgular" ikon="▤" />
             {v.oneCikan.map((t, i) => (
               <View key={i} wrap={false} style={{ marginBottom: 9 }}>
@@ -441,16 +460,16 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             <Baslik metin={`EK: Tespit Edilen ${v.ozet.toplam} Adresin Tam Listesi`} ikon="▤" />
             <Text style={st.p}>Tüm tespitlerin temel teknik özeti. Durum ve skor otomatik ön-değerlendirmedir; kesin karar için adres ayrıca incelenir.</Text>
             <View style={st.tHead} fixed>
-              <Text style={[st.th, { width: "27%" }]}>Alan adı</Text><Text style={[st.th, { width: "15%" }]}>IP</Text><Text style={[st.th, { width: "24%" }]}>Barındırma (ASN)</Text><Text style={[st.th, { width: "11%" }]}>Ülke</Text><Text style={[st.th, { width: "12%" }]}>Altyapı</Text><Text style={[st.th, { width: "11%" }]}>CA</Text>
+              <Text style={[st.th, { width: "25%" }]}>Alan adı</Text><Text style={[st.th, { width: "16%" }]}>Durum</Text><Text style={[st.th, { width: "14%" }]}>IP</Text><Text style={[st.th, { width: "23%" }]}>Barındırma (ASN)</Text><Text style={[st.th, { width: "10%" }]}>Ülke</Text><Text style={[st.th, { width: "12%" }]}>Altyapı</Text>
             </View>
             {tumTespit.sort((a, b) => (b.skor || 0) - (a.skor || 0)).slice(0, 160).map((t, i) => (
               <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]} wrap={false}>
-                <Text style={[st.td, { width: "27%", fontWeight: "medium", color: LACIVERT, fontSize: 7.8 }]}>{t.domain}</Text>
-                <Text style={[st.td, { width: "15%", fontSize: 7.6 }]}>{t.ip || "—"}</Text>
-                <Text style={[st.td, { width: "24%", fontSize: 7.4, paddingRight: 4 }]}>{t.asn || "—"}</Text>
-                <Text style={[st.td, { width: "11%", fontSize: 7.6 }]}>{t.ulke || "—"}</Text>
+                <Text style={[st.td, { width: "25%", fontWeight: "medium", color: LACIVERT, fontSize: 7.8 }]}>{t.domain}</Text>
+                <Text style={[st.td, { width: "16%", fontSize: 7.4, color: t.canliDurum === "live" ? KIRMIZI : t.canliDurum === "dead" ? GRI : "#33405c" }]}>{canliDurumKisa(t.canliDurum)}</Text>
+                <Text style={[st.td, { width: "14%", fontSize: 7.6 }]}>{t.ip || "—"}</Text>
+                <Text style={[st.td, { width: "23%", fontSize: 7.4, paddingRight: 4 }]}>{t.asn || "—"}</Text>
+                <Text style={[st.td, { width: "10%", fontSize: 7.6 }]}>{t.ulke || "—"}</Text>
                 <Text style={[st.td, { width: "12%", fontSize: 7.6 }]}>{t.altyapi || "—"}</Text>
-                <Text style={[st.td, { width: "11%", fontSize: 7.4 }]}>{t.ca || "—"}</Text>
               </View>
             ))}
             {v.ozet.toplam > 160 && <Text style={[st.p, { marginTop: 6, fontSize: 8.5, color: GRI }]}>En yüksek skorlu 160 adres gösterildi (toplam {v.ozet.toplam}).</Text>}
