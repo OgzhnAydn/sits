@@ -45,7 +45,7 @@ const fmt = (n: number) => n.toLocaleString("tr-TR");
 const buyukHarf = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 // 4-seviye güven — "kırmızı=kesin sahte" değil; aday≠kesin ilkesiyle.
 function seviye(s: number): { renk: string; etiket: string; tag: string } {
-  if (s >= 60) return { renk: "var(--c-f5222d)", etiket: "AKTİF TEHDİT", tag: "error" };
+  if (s >= 60) return { renk: "var(--c-f5222d)", etiket: "KRİTİK RİSK", tag: "error" };
   if (s >= 45) return { renk: "var(--c-fa8c16)", etiket: "YÜKSEK GÜVEN", tag: "volcano" };
   if (s >= 30) return { renk: "var(--c-faad14)", etiket: "ŞÜPHELİ", tag: "warning" };
   return { renk: "var(--c-8c8c8c)", etiket: "İZLEMEDE", tag: "default" };
@@ -500,6 +500,39 @@ function nedenTehdit(r: Rapor | null) {
   return out.slice(0, 6);
 }
 
+// Taze canlılık damgası — domainin ŞU ANKİ durumu (/api/canlilik). Kesinlik kapısı motorda:
+// "KALDIRILMIŞ" ancak NXDOMAIN×2 (iki çözücü) ile; emin değilse "DURUM DOĞRULANAMADI" der,
+// asla canlı bir siteyi yanlışlıkla "ölü" damgalamaz. Skor=ciddiyet, bu=güncel durum (ayrı).
+function CanlilikRozet({ domain }: { domain: string }) {
+  const [v, setV] = useState<null | { durum: string; kokNeden: string }>(null);
+  const [yuk, setYuk] = useState(false);
+  useEffect(() => {
+    let iptal = false; setV(null); setYuk(true);
+    fetch(`/api/canlilik?domain=${encodeURIComponent(domain)}`)
+      .then((r) => r.json()).then((j) => { if (!iptal) setV(j); }).catch(() => {}).finally(() => { if (!iptal) setYuk(false); });
+    return () => { iptal = true; };
+  }, [domain]);
+  const M: Record<string, { ad: string; renk: string }> = {
+    live: { ad: "CANLI", renk: "#ff5468" },
+    redirect: { ad: "YÖNLENDİRİYOR", renk: "#e5772f" },
+    parked: { ad: "PARK · PASİF", renk: "#e5a53f" },
+    dead: { ad: "KALDIRILMIŞ · ERİŞİLEMEZ", renk: "#8fa6bd" },
+    bilinmiyor: { ad: "DURUM DOĞRULANAMADI", renk: "#8fa6bd" },
+  };
+  if (yuk) return <div style={{ marginTop: 6 }}><Text style={{ fontSize: 10.5, color: "var(--c-8fa6bd)" }}>Güncel durum sorgulanıyor </Text><Spin size="small" /></div>;
+  if (!v) return null;
+  const m = M[v.durum] || M.bilinmiyor;
+  return (
+    <div style={{ marginTop: 8, background: `${m.renk}1f`, border: `1px solid ${m.renk}55`, borderRadius: 6, padding: "6px 9px" }}>
+      <Flex align="center" gap={6}>
+        <span style={{ width: 7, height: 7, borderRadius: 4, background: m.renk, flexShrink: 0 }} />
+        <Text strong style={{ fontSize: 11, color: m.renk, letterSpacing: 0.5 }}>ŞU AN: {m.ad}</Text>
+      </Flex>
+      {v.kokNeden && <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)", display: "block", marginTop: 3, lineHeight: 1.4 }}>{v.kokNeden}</Text>}
+    </div>
+  );
+}
+
 // Altyapı İzi (Passive DNS): domainin geçmiş IP'leri + aynı ADANMIŞ IP'yi paylaşan kardeş
 // domainler. Paylaşımlı/CDN altyapı kapısı /api/pasif-dns'te → burada yalnız gerçek bağ gösterilir.
 function PasifDnsBolum({ domain }: { domain: string }) {
@@ -569,6 +602,7 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
             icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>refresh</span>} style={{ color: "var(--c-8fa6bd)", flexShrink: 0 }} />}
         </Flex>
         <Tag color={sev.c as string} style={{ marginTop: 8 }}>{sev.t}</Tag>
+        <CanlilikRozet domain={aday.domain} />
       </div>
       <div style={{ borderTop: "1px solid var(--c-17293c)", borderBottom: "1px solid var(--c-17293c)", padding: "10px 0" }}>
         <Statistic title="Güven Skoru" value={yukleniyor && !rapor ? "…" : risk} suffix="/100" valueStyle={{ color: renk, fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600 }} />

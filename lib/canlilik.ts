@@ -28,17 +28,34 @@ function ozelIp(ip: string): boolean {
   return /^(10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|::1|fc|fd|fe80)/i.test(ip);
 }
 
-async function dnsCoz(domain: string): Promise<{ ip: string | null; cname: string | null }> {
+// Tek çözücüye sorgu — Status kodu + A/CNAME. Bizim taraf hatasında status=null.
+async function dnsSorgu(url: string, headers?: Record<string, string>): Promise<{ status: number | null; ip: string | null; cname: string | null }> {
   try {
-    const r = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`, { signal: AbortSignal.timeout(5000) });
-    const j = (await r.json()) as { Answer?: { type: number; data: string }[] };
+    const r = await fetch(url, { signal: AbortSignal.timeout(5000), headers });
+    const j = (await r.json()) as { Status?: number; Answer?: { type: number; data: string }[] };
     const ans = j.Answer || [];
-    const ip = ans.find((a) => a.type === 1)?.data || null;
-    const cname = ans.find((a) => a.type === 5)?.data || null;
-    return { ip, cname };
-  } catch {
-    return { ip: null, cname: null };
-  }
+    return { status: typeof j.Status === "number" ? j.Status : null, ip: ans.find((a) => a.type === 1)?.data || null, cname: ans.find((a) => a.type === 5)?.data || null };
+  } catch { return { status: null, ip: null, cname: null }; }
+}
+
+// KESİNLİK KAPISI: "ölü/kaldırılmış" damgası EMİN olmalı → İKİ bağımsız çözücü (Google + Cloudflare).
+// - "var": en az bir çözücü A/CNAME döndü.
+// - "kaldirilmis": İKİSİ de NXDOMAIN (Status 3) → alan adı gerçekten silinmiş (kesin).
+// - "adres-yok": ikisi de NOERROR ama A yok → alan var, web adresi yok (yayında değil).
+// - "belirsiz": bir çözücü yanıt vermedi / uyuşmazlık → EMİN DEĞİLİZ, ölü DEME.
+type DnsDurum = { cozuldu: boolean; ip: string | null; cname: string | null; kesinlik: "var" | "kaldirilmis" | "adres-yok" | "belirsiz" };
+async function dnsCoz(domain: string): Promise<DnsDurum> {
+  const [g, c] = await Promise.all([
+    dnsSorgu(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`),
+    dnsSorgu(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=A`, { accept: "application/dns-json" }),
+  ]);
+  const ip = g.ip || c.ip, cname = g.cname || c.cname;
+  if (ip || cname) return { cozuldu: true, ip, cname, kesinlik: "var" };
+  const ikiYanit = g.status !== null && c.status !== null; // kesinlik için ikisi de konuşmalı
+  if (!ikiYanit) return { cozuldu: false, ip: null, cname: null, kesinlik: "belirsiz" }; // bizim taraf hatası
+  if (g.status === 3 && c.status === 3) return { cozuldu: false, ip: null, cname: null, kesinlik: "kaldirilmis" }; // NXDOMAIN × 2
+  if (g.status === 0 && c.status === 0) return { cozuldu: false, ip: null, cname: null, kesinlik: "adres-yok" };
+  return { cozuldu: false, ip: null, cname: null, kesinlik: "belirsiz" }; // uyuşmazlık → emin değiliz
 }
 
 // TLS el sıkışması + sertifika bilgisi (geçerlilik/veren/bitiş). Port 443 kapalıysa null.
@@ -88,12 +105,23 @@ export async function canlilikProbe(domain: string): Promise<CanlilikSonuc> {
     redirectHedef: null, kokNeden: "", zaman: Date.now(),
   };
 
-  // 1) DNS — A/CNAME çözülüyor mu? Çözülmezse domain "ölü" (kayıt düşmüş / hiç yayına çıkmamış).
+  // 1) DNS — İKİ çözücüyle kesinlik. "ölü" damgası ancak EMİN olunca (NXDOMAIN×2 veya A-yok×2).
   const dns = await dnsCoz(d);
-  sonuc.dns = { cozuldu: !!(dns.ip || dns.cname), ip: dns.ip, cname: dns.cname };
-  if (!sonuc.dns.cozuldu) {
-    sonuc.durum = "dead";
-    sonuc.kokNeden = "DNS çözülmüyor — A kaydı yok (kayıt düşmüş ya da hiç yayına alınmamış).";
+  sonuc.dns = { cozuldu: dns.cozuldu, ip: dns.ip, cname: dns.cname };
+  if (!dns.cozuldu) {
+    if (dns.kesinlik === "kaldirilmis") {
+      sonuc.durum = "dead";
+      sonuc.kokNeden = "Alan adı DNS'ten KALDIRILMIŞ (NXDOMAIN — iki bağımsız çözücü teyitli): kayıt düşmüş/silinmiş, site artık yok.";
+      return sonuc;
+    }
+    if (dns.kesinlik === "adres-yok") {
+      sonuc.durum = "dead";
+      sonuc.kokNeden = "Alan adı kayıtlı ama web adres kaydı (A) yok (iki çözücü teyitli) — şu an yayında değil.";
+      return sonuc;
+    }
+    // BELİRSİZ: çözücü yanıtı eksik/uyuşmuyor → EMİN DEĞİLİZ, "ölü" DEME.
+    sonuc.durum = "bilinmiyor";
+    sonuc.kokNeden = "DNS durumu doğrulanamadı (çözücü yanıtı belirsiz/zaman aşımı) — kesinleşmedi, tekrar denenmeli.";
     return sonuc;
   }
   if (dns.ip && ozelIp(dns.ip)) {
@@ -113,24 +141,28 @@ export async function canlilikProbe(domain: string): Promise<CanlilikSonuc> {
   sonuc.redirectHedef = httpRes.redirectHedef;
 
   // 3) SINIFLANDIRMA + KÖK NEDEN
+  // KESİNLİK: Buraya geldiysek DNS ÇÖZÜLDÜ → alan adı VAR, "kaldırılmış" DİYEMEYİZ. HTTP sondası
+  // başarısızsa bu BİZİM vantajımızdan (Vercel cloud IP) erişilememesidir — site cloud-IP'yi
+  // engelliyor / ağ yolu / geçici kapalı olabilir → "bilinmiyor" (EMİN DEĞİLİZ), asla "dead".
+  // (Gerçek örnek: tuvturk.com.tr Vercel'den timeout ama site CANLI.) Tek kesin "dead" = NXDOMAIN.
   if (httpRes.hata === "refused" || (p443 === "refused" && httpRes.status === null)) {
-    sonuc.durum = "dead";
-    sonuc.kokNeden = "Bağlantı reddedildi (ECONNREFUSED) — sunucu kapalı / port kapatılmış (hosting abuse kapaması ya da kolluk müdahalesi olabilir).";
+    sonuc.durum = "bilinmiyor";
+    sonuc.kokNeden = "Alan adı DNS'te KAYITLI ama sonda bağlantısı reddedildi (port kapalı görünüyor) — sunucu kapalı OLABİLİR ama cloud-IP engeli de olabilir; kaldırıldığı KESİN DEĞİL.";
     return sonuc;
   }
   if (httpRes.hata === "timeout" && httpRes.status === null) {
-    sonuc.durum = "dead";
-    sonuc.kokNeden = "Zaman aşımı — sunucu yanıt vermiyor (kapalı/filtreli).";
+    sonuc.durum = "bilinmiyor";
+    sonuc.kokNeden = "Alan adı DNS'te KAYITLI ama sunucu sondaya yanıt vermedi (zaman aşımı) — site cloud-IP'mizi engelliyor ya da geçici kapalı olabilir; kaldırıldığı KESİN DEĞİL.";
     return sonuc;
   }
   if (httpRes.hata === "ssl") {
-    sonuc.durum = "dead";
-    sonuc.kokNeden = "SSL el sıkışması başarısız — sertifika/TLS hatası.";
+    sonuc.durum = "bilinmiyor";
+    sonuc.kokNeden = "TLS el sıkışması başarısız — sondadan doğrulanamadı (sertifika/TLS hatası ya da engelleme).";
     return sonuc;
   }
   if (httpRes.hata && httpRes.status === null) {
-    sonuc.durum = "dead";
-    sonuc.kokNeden = "Sunucuya ulaşılamadı — bağlantı hatası (kapalı/erişilemez).";
+    sonuc.durum = "bilinmiyor";
+    sonuc.kokNeden = "Alan adı DNS'te var ama sondadan erişilemedi — kaldırıldığı KESİN DEĞİL.";
     return sonuc;
   }
   if (httpRes.redirectHedef) {
