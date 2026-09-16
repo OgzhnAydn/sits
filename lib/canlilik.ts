@@ -6,11 +6,12 @@ import net from "node:net";
 import tls from "node:tls";
 
 export type CanlilikDurum =
-  | "live"        // aktif web sunucusu, içerik sunuyor (HTTP 200 + gerçek sayfa)
-  | "redirect"    // 3xx / meta / JS ile başka adrese yönlendiriyor (cloaking)
-  | "parked"      // domain kayıtlı ama park/satılık/varsayılan sunucu sayfası
-  | "dead"        // sunucu kapalı: bağlantı reddedildi / zaman aşımı / DNS düştü
-  | "bilinmiyor"; // sonda tamamlanamadı
+  | "live"           // aktif web sunucusu, içerik sunuyor (HTTP 2xx + gerçek sayfa)
+  | "redirect"       // 3xx / meta / JS ile başka adrese yönlendiriyor (cloaking)
+  | "parked"         // domain kayıtlı ama park/satılık/varsayılan sunucu sayfası
+  | "erisim_kisitli" // sunucu ayakta ama HTTP 401/403 — bot-duvarı/cloaking ya da kilitli; içerik DOĞRULANAMADI
+  | "dead"           // sunucu kapalı: bağlantı reddedildi / zaman aşımı / DNS düştü
+  | "bilinmiyor";    // sonda tamamlanamadı
 
 export type CanlilikSonuc = {
   domain: string;
@@ -178,14 +179,21 @@ export async function canlilikProbe(domain: string): Promise<CanlilikSonuc> {
     sonuc.kokNeden = "Park/satılık ya da varsayılan sunucu sayfası — içerik yüklenmemiş, pasif izleme adayı.";
     return sonuc;
   }
-  // Herhangi bir HTTP yanıtı döndüyse SUNUCU AYAKTA = live (redirect/park yukarıda yakalandı).
+  // HTTP 401/403: sunucu ayakta ama İÇERİK YOK (Forbidden). "CANLI" DEMEK FAZLA İDDİALI — bot-duvarı
+  // ardında cloaklanmış phishing OLABİLİR ya da kilitli/kaldırılmış olabilir; ikisi de doğrulanamaz →
+  // ayrı "erisim_kisitli" durumu (ne kesin canlı ne ölü).
+  if (httpRes.status === 401 || httpRes.status === 403) {
+    sonuc.durum = "erisim_kisitli";
+    sonuc.kokNeden = `Sunucu ayakta ama erişim kısıtlı (HTTP ${httpRes.status}) — içerik bot-duvarı/cloaking ardında olabilir ya da kilitli; canlı phishing içeriği DOĞRULANAMADI.`;
+    return sonuc;
+  }
+  // Diğer HTTP yanıtları SUNUCU AYAKTA = live (redirect/park/401/403 yukarıda ayrıldı).
   if (httpRes.status && httpRes.status >= 200) {
     const st = httpRes.status;
     sonuc.durum = "live";
     const sun = httpRes.sunucu ? ", " + httpRes.sunucu : "";
     sonuc.kokNeden =
       st < 300 ? `Canlı web sunucusu (HTTP ${st}${sun}) — aktif içerik sunuyor.`
-      : st === 401 || st === 403 ? `Sunucu ayakta ama erişim kısıtlı (HTTP ${st}) — bot-duvarı/yetki koruması olabilir.`
       : st === 404 ? `Sunucu ayakta, sayfa bulunamadı (HTTP 404) — altyapı hazır, içerik henüz yüklenmemiş olabilir.`
       : st >= 500 ? `Sunucu ayakta ama uygulama hatası (HTTP ${st}) — veritabanı/kod hatası (kurulum yarım).`
       : `Sunucu ayakta (HTTP ${st}${sun}).`;

@@ -73,14 +73,16 @@ const zmn = (t: number) => (t ? new Date(t).toLocaleDateString("tr-TR", { day: "
 const alan = (t: RaporTespit, adBas: string) => (t.alanlar || []).find((f) => f.ad.startsWith(adBas))?.deger || "";
 // Müşteri-dili canlılık etiketi. KESİNLİK: "Kaldırılmış" = alan adı DNS'ten silinmiş (NXDOMAIN, iki
 // bağımsız çözücü teyitli); "Doğrulanamadı" = kayıtlı ama sonda yanıt alamadı (KALDIRILDI DEMEK DEĞİL).
-const canliDurumAd = (d?: string) => d === "live" ? "Canlı · içerik var" : d === "dead" ? "Kaldırılmış · erişilemez" : d === "parked" ? "Park · pasif" : d === "redirect" ? "Yönlendiriyor" : d === "bilinmiyor" ? "Doğrulanamadı" : "—";
+const canliDurumAd = (d?: string) => d === "live" ? "Canlı · içerik var" : d === "dead" ? "Kaldırılmış · erişilemez" : d === "parked" ? "Park · pasif" : d === "redirect" ? "Yönlendiriyor" : d === "erisim_kisitli" ? "Erişim kısıtlı (403)" : d === "bilinmiyor" ? "Doğrulanamadı" : "—";
 // Dar tablo sütunu için kısa etiket (tam anlam müşteri lejantında açıklanır).
-const canliDurumKisa = (d?: string) => d === "live" ? "Canlı" : d === "dead" ? "Kaldırılmış" : d === "parked" ? "Park" : d === "redirect" ? "Yönlendirme" : d === "bilinmiyor" ? "Doğrulanamadı" : "—";
+const canliDurumKisa = (d?: string) => d === "live" ? "Canlı" : d === "dead" ? "Kaldırılmış" : d === "parked" ? "Park" : d === "redirect" ? "Yönlendirme" : d === "erisim_kisitli" ? "Erişim kısıtlı" : d === "bilinmiyor" ? "Doğrulanamadı" : "—";
 
 const BILDIR_URL = "https://www.ihbarweb.org.tr/"; // USOM/BTK resmî İhbar Web portalı — ihbarı operatör/müşteri gönderir.
 // "Bildir" aksiyonu gereken link: CANLI + USOM'da YOK + BTK engeli GÖRÜLMEMİŞ → yetkililerce henüz
 // durdurulmamış aktif tehdit (üç sinyal de güvenilir kaynaktan). engelli/usomda true ise gerekmez.
-const aksiyonGerekli = (t: RaporTespit) => t.canliDurum === "live" && t.usomda === false && t.engelli !== true;
+// Sunucu ayakta (canlı VEYA 403/erişim-kısıtlı = cloaking ardında phishing olabilir) + USOM'da yok +
+// BTK engeli görülmemiş → bildir. (403'ü dışlamıyoruz: kaldırıldığı kesin değil, cloaklı olabilir.)
+const aksiyonGerekli = (t: RaporTespit) => (t.canliDurum === "live" || t.canliDurum === "erisim_kisitli") && t.usomda === false && t.engelli !== true;
 // Birleşik durum: BTK engeli GÖRÜLDÜYSE canlılıktan önce onu göster (engel sayfası da HTTP 200 döner).
 const durumTam = (t: RaporTespit) => t.engelli === true ? "BTK tarafından engelli" : canliDurumAd(t.canliDurum);
 const durumKisa = (t: RaporTespit) => t.engelli === true ? "BTK engelli" : canliDurumKisa(t.canliDurum);
@@ -442,6 +444,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
               {[
                 { ad: "Canlı · içerik var", ac: "Sunucu şu an içerik sunuyor — AKTİF tehdit, öncelikli.", renk: KIRMIZI },
                 { ad: "Yönlendiriyor / Park", ac: "Aktif kimlik-avı içeriği yok; izlemede tutulur.", renk: TURUNCU },
+                { ad: "Erişim kısıtlı (403)", ac: "Sunucu ayakta ama Forbidden (403) döndü — içerik bot-duvarı/cloaking ardında (gerçek kullanıcıya phishing) OLABİLİR ya da kilitli. Canlı içerik doğrulanamadı; tedbiren aktif kabul edilip bildirilir.", renk: TURUNCU },
                 { ad: "Kaldırılmış · erişilemez", ac: "Alan adı DNS'ten silinmiş (NXDOMAIN — iki bağımsız çözücü teyitli): tehdit ŞU AN etkisiz. Ekran görüntüsü/kanıt tespit anına ait tarihsel kayıttır.", renk: GRI },
                 { ad: "BTK engelli", ac: "Erişim, BTK engel sayfasına yönlendiği için tespit edildi (globalde görülebilen engel) — tehdit Türkiye'de erişilemez, işlem gerekmez.", renk: YESIL },
                 { ad: "Doğrulanamadı", ac: "Alan adı kayıtlı ama otomatik sonda yanıt alamadı (site sistemimizi engelliyor ya da geçici erişilemez olabilir). Bu KALDIRILDIĞI ANLAMINA GELMEZ — adres hâlâ canlı olabilir, manuel teyit önerilir.", renk: TBAS },

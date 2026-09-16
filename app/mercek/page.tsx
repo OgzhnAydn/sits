@@ -516,6 +516,7 @@ function CanlilikRozet({ domain }: { domain: string }) {
     live: { ad: "CANLI", renk: "#ff5468" },
     redirect: { ad: "YÖNLENDİRİYOR", renk: "#e5772f" },
     parked: { ad: "PARK · PASİF", renk: "#e5a53f" },
+    erisim_kisitli: { ad: "ERİŞİM KISITLI (403)", renk: "#e5a53f" },
     dead: { ad: "KALDIRILMIŞ · ERİŞİLEMEZ", renk: "#8fa6bd" },
     bilinmiyor: { ad: "DURUM DOĞRULANAMADI", renk: "#8fa6bd" },
   };
