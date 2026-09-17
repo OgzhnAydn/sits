@@ -218,7 +218,7 @@ function oneriUret(t: RaporTespit): { neden: string; oneri: string; oncelik: str
   const aktif = t.durum === "aktif-tuzak", canli = t.durum === "canli";
   if (t.engelli === true) return { neden: "BTK erişim engeli tespit edildi (engel sayfası görüldü).", oneri: "Zaten engelli; kesintisiz izleme yeterli.", oncelik: "Bilgi" };
   if (t.usomda === true) return { neden: "USOM resmî zararlı bağlantı listesinde kayıtlı; devlet tarafından işaretlenmiş.", oneri: "Kayıt mevcut, yeni bildirim gerekmez; kurumsal DNS'te engelleme + hukuki takip.", oncelik: "Yüksek" };
-  if (aksiyonGerekli(t)) return { neden: "Adres CANLI, USOM listesinde YOK ve BTK engeli görülmedi — yetkililerce henüz durdurulmamış aktif tehdit.", oneri: "ACİL: USOM/İhbarweb'e bildir (yandaki bağlantı) + BTK'ya erişim engeli (tedbir) başvurusu + alan adı kayıt firmasına (Registrar) abuse bildirimi önerilir.", oncelik: "ACİL" };
+  if (aksiyonGerekli(t)) return { neden: "Adres canlı, USOM listesinde yok ve BTK engeli görülmedi — yetkililerce henüz durdurulmamış aktif tehdit.", oneri: "USOM/İhbarweb'e bildirim (yandaki bağlantı) + BTK'ya erişim engeli (tedbir) başvurusu + alan adı kayıt firmasına (Registrar) abuse bildirimi önerilir.", oncelik: "Öncelikli" };
   if (aktif) return { neden: "Aktif tuzak: marka adını taşıyan, resmî olmayan canlı adres.", oneri: "USOM'a bildirim (henüz kayıtlı değil) + kesintisiz izleme.", oncelik: "Yüksek" };
   if (canli) return { neden: "Canlı adres; marka adını izinsiz kullanıyor, içerik doğrulanmalı.", oneri: "Günlük izleme; içerik/logo taklidi belirirse aynı gün bildirim.", oncelik: "Orta · izleme" };
   return { neden: "Kayıtlı ancak içerik yayında değil (park/izleme).", oneri: "Aksiyon gerekmez; Türkçe adlı kayıtlar öncelikli izlemede.", oncelik: "Düşük · artan" };
@@ -261,13 +261,13 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
 
   const Antet = () => (
     <View style={st.antet} fixed>
-      <View style={st.antetSol}><Text style={st.antetLogo}>MİRLEON</Text><Text style={st.antetAlt}>· Marka Koruma Servisi</Text></View>
+      <View style={st.antetSol}><Text style={st.antetLogo}>MİRLEON</Text><Text style={st.antetAlt}>· Dijital Varlık Koruma Servisi</Text></View>
       <Text style={st.antetSag}>{v.markaAd.toUpperCase()}</Text>
     </View>
   );
   const Footer = () => (
     <View style={st.footer} fixed>
-      <Text style={st.fMini}>MirLeon AI · Marka Koruma · {v.refNo} · Gizli, alıcıya özeldir</Text>
+      <Text style={st.fMini}>MirLeon AI · Dijital Varlık Koruma · {v.refNo} · Gizli, alıcıya özeldir</Text>
       <Text style={st.fMini} render={({ pageNumber }) => `Sayfa ${pageNumber}`} />
     </View>
   );
@@ -284,11 +284,11 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
 
   const oneriliKay = [...v.oneCikan, ...v.digerleri.filter((t) => t.durum === "aktif-tuzak" || t.durum === "canli" || aksiyonGerekli(t))]
     .filter((t, i, a) => a.findIndex((x) => x.domain === t.domain) === i) // tekilleştir
-    .sort((a, b) => (aksiyonGerekli(b) ? 1 : 0) - (aksiyonGerekli(a) ? 1 : 0)) // ACİL (bildir) öne
+    .sort((a, b) => (aksiyonGerekli(b) ? 1 : 0) - (aksiyonGerekli(a) ? 1 : 0)) // öncelikli (bildir) öne
     .slice(0, 10);
 
   return (
-    <Document title={`${v.markaAd} — Marka Koruma Bülteni`} author="MirLeon">
+    <Document title={`${v.markaAd} — Dijital Varlık Koruma Bülteni`} author="MirLeon">
       {/* ── KAPAK ── */}
       <Page size="A4" style={{ backgroundColor: KOYU, position: "relative", fontFamily: "Tinos", color: "#fff" }}>
         {/* radar halkaları — sağdan yayılan geniş halkalar (referans) */}
@@ -297,7 +297,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
             <View>
               <Text style={{ color: "#fff", fontSize: 17, fontWeight: "bold", letterSpacing: 1.5 }}>MİRLEON<Text style={{ color: "#9fb4d8" }}>  |  </Text><Text style={{ color: "#cfe0ef" }}>NAZAR</Text></Text>
-              <Text style={{ color: "#7d93b3", fontSize: 8, letterSpacing: 3, marginTop: 2 }}>MARKA KORUMA</Text>
+              <Text style={{ color: "#7d93b3", fontSize: 8, letterSpacing: 3, marginTop: 2 }}>DİJİTAL VARLIK KORUMA</Text>
             </View>
             <Text style={{ color: ALTIN, fontSize: 8.5, fontWeight: "bold", letterSpacing: 1.5, borderColor: ALTIN, borderWidth: 1, borderRadius: 3, paddingHorizontal: 8, paddingVertical: 4 }}>GİZLİ · ALICIYA ÖZEL</Text>
           </View>
@@ -315,7 +315,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
               ? <Image src={v.logoDataUri} style={{ height: 40, width: 150, objectFit: "contain", objectPosition: "left" }} />
               : <Text style={{ color: "#fff", fontSize: 30, fontWeight: "bold" }}>{v.markaAd}</Text>}
             <Text style={{ color: ALTIN, fontSize: 9.5, letterSpacing: 1.5, marginTop: 10 }}>{(v.markaResmi || v.markaAd).toUpperCase()} · {v.aralikEtiket.toUpperCase()}</Text>
-            <Text style={{ color: "#fff", fontSize: 30, fontWeight: "bold", marginTop: 10 }}>Marka Koruma Bülteni</Text>
+            <Text style={{ color: "#fff", fontSize: 30, fontWeight: "bold", marginTop: 10 }}>Dijital Varlık Koruma Bülteni</Text>
             <Text style={{ color: "#9fb4d8", fontSize: 10.5, lineHeight: 1.5, marginTop: 12, maxWidth: 355 }}>Markanızın dijital kimliğine yönelik tehditleri anlık olarak tespit ediyor; analiz ediyor, sınıflandırıyor, ilişkili tehditlerle eşleştiriyor, raporluyor ve 7/24 takip ediyoruz.</Text>
           </View>
           {/* Süreç akışı — İnternetten aksiyona metodoloji (referans kapak öğesi) */}
@@ -403,7 +403,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
           <Antet /><Footer />
           <View style={st.govde}>
             <Baslik metin="Önerilen Aksiyonlar" ikon="!" />
-            <Text style={st.p}>Aşağıdaki tabloda her satır, ilgili adresin gerçek USOM/BTK durumu ve canlılık sınıflandırmasına dayanır. Öncelikler eylem aciliyetini gösterir.</Text>
+            <Text style={st.p}>Aşağıdaki tabloda her satır, ilgili adresin gerçek USOM/BTK durumu ve canlılık sınıflandırmasına dayanır. Öncelikler eylem sırasını gösterir.</Text>
             <View style={st.tHead}>
               <Text style={[st.th, { width: "26%" }]}>Adres</Text><Text style={[st.th, { width: "31%" }]}>Neden</Text><Text style={[st.th, { width: "31%" }]}>Önerimiz</Text><Text style={[st.th, { width: "12%" }]}>Öncelik</Text>
             </View>
@@ -412,11 +412,11 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
                 <Text style={[st.td, { width: "26%", fontWeight: "bold", color: LACIVERT }]}>{t.domain}</Text>
                 <Text style={[st.td, { width: "31%", paddingRight: 6 }]}>{o.neden}</Text>
                 <Text style={[st.td, { width: "31%", paddingRight: 6 }]}>{o.oneri}{ac ? "  " : ""}{ac && <Link src={BILDIR_URL} style={{ color: KIRMIZI, fontWeight: "bold", textDecoration: "none" }}>[ BİLDİR › ]</Link>}</Text>
-                <Text style={[st.td, { width: "12%", color: o.oncelik === "ACİL" ? KIRMIZI : SEV(t.durum), fontWeight: "bold" }]}>{o.oncelik}</Text>
+                <Text style={[st.td, { width: "12%", color: o.oncelik === "Öncelikli" ? KIRMIZI : SEV(t.durum), fontWeight: "bold" }]}>{o.oncelik}</Text>
               </View>
             ); })}
             <Text style={[st.p, { marginTop: 8, fontSize: 9, color: GRI }]}>
-              <Text style={st.guclu}>Öncelik dereceleri — Yüksek:</Text> bu ay içinde bir adım önerilir. <Text style={st.guclu}>Orta:</Text> takvime bağlanabilir, acil değil. <Text style={st.guclu}>Bilgi:</Text> aksiyon değil, doğrulaması iyi olur. <Text style={st.guclu}>Düşük:</Text> MirLeon AI tarafında izlenmekte, aksiyon beklenmez.
+              <Text style={st.guclu}>Öncelik dereceleri — Öncelikli:</Text> bildirim önerilir (yetkililerce henüz durdurulmamış). <Text style={st.guclu}>Yüksek:</Text> bu ay içinde bir adım önerilir. <Text style={st.guclu}>Orta:</Text> takvime bağlanabilir. <Text style={st.guclu}>Bilgi:</Text> aksiyon değil, doğrulaması iyi olur. <Text style={st.guclu}>Düşük:</Text> MirLeon AI tarafında izlenmekte, aksiyon beklenmez.
             </Text>
           </View>
         </Page>
@@ -493,7 +493,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             </View>
             {tumTespit.sort((a, b) => (b.skor || 0) - (a.skor || 0)).slice(0, 160).map((t, i) => (
               <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]} wrap={false}>
-                <Text style={[st.td, { width: "25%", fontWeight: "medium", color: LACIVERT, fontSize: 7.8 }]}>{t.domain}</Text>
+                <Text style={[st.td, { width: "25%", fontWeight: "medium", color: LACIVERT, fontSize: t.domain.length > 34 ? 6.4 : 7.6 }]}>{t.domain}</Text>
                 <Text style={[st.td, { width: "16%", fontSize: 7.4, color: aksiyonGerekli(t) ? KIRMIZI : t.engelli === true ? YESIL : t.canliDurum === "dead" ? GRI : "#33405c" }]}>{durumKisa(t)}{aksiyonGerekli(t) ? " ›Bildir" : ""}</Text>
                 <Text style={[st.td, { width: "13%", fontSize: 7.6 }]}>{t.ip || "—"}</Text>
                 <Text style={[st.td, { width: "23%", fontSize: 7.4, paddingRight: 4 }]}>{t.asn || "—"}</Text>

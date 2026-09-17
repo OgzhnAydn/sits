@@ -76,6 +76,18 @@ export async function GET(req: NextRequest) {
   let gecerli = ham.filter((a) => gercekTaklit(a.domain, a.marka));
   if (tekDomain) gecerli = gecerli.filter((a) => a.domain === tekDomain);
   else if (aralik.ms) { const esik = Date.now() - aralik.ms; gecerli = gecerli.filter((a) => (a.zaman || 0) >= esik); }
+  // cPanel/oto alt-alan daraltması: webmail/webdisk/cpcontacts/autodiscover/autoconfig/mail… gibi
+  // HOSTING'in OTOMATİK açtığı alt-alanlar ayrı "adres" değildir; ana domain listedeyse tekilleştir
+  // (aksi halde tek bir site 8 ayrı tehdit gibi sayılır → devlet/teknik raporda "sayı şişirme" görünür).
+  const CPANEL_ALT = new Set(["cpanel", "whm", "webmail", "webdisk", "cpcalendars", "cpcontacts", "autodiscover", "autoconfig", "mail", "webmail2", "cpanelwebcall"]);
+  if (!tekDomain) {
+    const domSet = new Set(gecerli.map((a) => a.domain));
+    gecerli = gecerli.filter((a) => {
+      const p = a.domain.split(".");
+      if (p.length > 2 && CPANEL_ALT.has(p[0]) && domSet.has(p.slice(1).join("."))) return false; // ana domain var → cPanel alt-alanını at
+      return true;
+    });
+  }
   gecerli.sort((a, b) => (b.zaman || 0) - (a.zaman || 0));
 
   const sayil = (f: (a: MarkaAday) => boolean) => gecerli.filter(f).length;
