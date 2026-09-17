@@ -349,6 +349,9 @@ export function gercekTaklit(domain: string, anahtar: string): boolean {
   if (!k0 || k0.length < 4 || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)) return false;
   // Markanın TÜM kalıplarını dene (anahtar + açılım kalıpları: toki + toplukonutidaresi…).
   const marka = KORUNAN_MARKALAR.find((m) => m.anahtar === k0);
+  // RESMÎ DOMAIN ASLA TAKLİT DEĞİL (kendi + alt-alanları). Aksi halde tire-ayrık kalıp (qatar-airways),
+  // resmî glued domaine (qatarairways.com) yakinTypo ile 1-yakın olup kendi sitesini "sahte" damgalar.
+  if (marka && resmiListedeMi(d, marka.resmi)) return false;
   const kaliplar = marka ? [marka.anahtar, ...(marka.kaliplari || [])] : [k0];
   // Taban 3: 3-harf kalıp (ör. "tvf") sınır (bounded token) + sıkı-bağlam (riskli TLD/TR bağlam)
   // kapılarından geçmek zorunda → gürültü sınırlı; yalnız açıkça eklenen 3-harf kalıplar etkilenir.
