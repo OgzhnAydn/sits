@@ -53,6 +53,52 @@ const ACIK = "#f5f8fa";
 const KIRMIZI = "#c62a1f";
 const TURUNCU = "#b25e09";
 const YESIL = "#2e7d55";
+const MAVI = "#2f9bef";        // iletişim ikonları (referans tasarım)
+
+// ── İletişim sayfası ikonları (SVG, gömülü — dış görsel yok) ──
+const IPin = ({ r = MAVI }: { r?: string }) => (
+  <Svg width={12} height={15} viewBox="0 0 24 24">
+    <Path d="M12 2 C7.6 2 4 5.6 4 10 C4 16 12 22 12 22 C12 22 20 16 20 10 C20 5.6 16.4 2 12 2 Z" fill={r} />
+    <Circle cx={12} cy={10} r={3} fill={KOYU} />
+  </Svg>
+);
+const ITel = ({ r = MAVI }: { r?: string }) => (
+  <Svg width={12} height={12} viewBox="0 0 24 24">
+    <Path d="M6.6 3 L10 3 L11.5 8 L9 9.5 C9.8 12 12 14.2 14.5 15 L16 12.5 L21 14 L21 17.4 C21 19 19.6 20.2 18 20 C10.5 19 5 13.5 4 6 C3.8 4.4 5 3 6.6 3 Z" fill={r} />
+  </Svg>
+);
+const IMail = ({ r = MAVI }: { r?: string }) => (
+  <Svg width={13} height={11} viewBox="0 0 24 20">
+    <Path d="M2 3 H22 V17 H2 Z" stroke={r} strokeWidth={2} fill="none" />
+    <Path d="M2.5 4 L12 11 L21.5 4" stroke={r} strokeWidth={2} fill="none" />
+  </Svg>
+);
+const SIN = "#cfe0ef"; // sosyal ikon rengi
+const ILinkedin = () => (
+  <Svg width={16} height={16} viewBox="0 0 24 24">
+    <Path d="M4 2 H20 A2 2 0 0 1 22 4 V20 A2 2 0 0 1 20 22 H4 A2 2 0 0 1 2 20 V4 A2 2 0 0 1 4 2 Z" fill={SIN} />
+    <Circle cx={7} cy={7} r={1.7} fill={KOYU} />
+    <Path d="M5.6 10 H8.4 V18 H5.6 Z" fill={KOYU} />
+    <Path d="M10.5 10 H13 V11.4 C13.5 10.4 14.6 9.8 15.9 9.8 C17.9 9.8 18.9 11.1 18.9 13.4 V18 H16.3 V13.9 C16.3 12.8 15.9 12.1 15 12.1 C14.1 12.1 13.3 12.8 13.3 14 V18 H10.5 Z" fill={KOYU} />
+  </Svg>
+);
+const IInstagram = () => (
+  <Svg width={16} height={16} viewBox="0 0 24 24">
+    <Path d="M7 3 H17 A4 4 0 0 1 21 7 V17 A4 4 0 0 1 17 21 H7 A4 4 0 0 1 3 17 V7 A4 4 0 0 1 7 3 Z" fill="none" stroke={SIN} strokeWidth={1.9} />
+    <Circle cx={12} cy={12} r={4} fill="none" stroke={SIN} strokeWidth={1.9} />
+    <Circle cx={17.2} cy={6.8} r={1.3} fill={SIN} />
+  </Svg>
+);
+const IX = () => (
+  <Svg width={14} height={14} viewBox="0 0 24 24">
+    <Path d="M3 3 L21 21 M21 3 L3 21" stroke={SIN} strokeWidth={2.6} />
+  </Svg>
+);
+const IN = () => (
+  <Svg width={14} height={15} viewBox="0 0 24 24">
+    <Path d="M4 20 V4 L20 20 V4" stroke={SIN} strokeWidth={2.6} fill="none" />
+  </Svg>
+);
 
 const SEV = (d?: string): string =>
   d === "aktif-tuzak" ? KIRMIZI : d === "canli" ? TURUNCU : d === "park" ? "#5b7290" : d === "yayinda-degil" ? "#8a97a5" : "#6b7280";
@@ -563,6 +609,69 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
           </View>
         </Page>
       )}
+
+      {/* ── İLETİŞİM (kapanış sayfası) ── */}
+      <Page size="A4" style={{ backgroundColor: KOYU, position: "relative", fontFamily: "Tinos", color: "#fff" }}>
+        {[210, 330, 460].map((d, i) => <View key={i} style={{ position: "absolute", borderColor: i < 1 ? "#22456b" : "#1a3350", borderWidth: 1, borderRadius: 999, width: d, height: d, top: -d / 2 + 120, right: -d / 2 + 60 }} />)}
+        <View style={{ paddingHorizontal: 48, paddingTop: 56 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <View>
+              <Text style={{ color: "#fff", fontSize: 16, fontWeight: "bold", letterSpacing: 1.5 }}>MİRLEON<Text style={{ color: "#9fb4d8" }}>  |  </Text><Text style={{ color: "#cfe0ef" }}>NAZAR</Text></Text>
+              <Text style={{ color: "#7d93b3", fontSize: 8, letterSpacing: 3, marginTop: 2 }}>DİJİTAL VARLIK KORUMA</Text>
+            </View>
+            <Svg width={54} height={54} viewBox="0 0 100 100">
+              <Path d="M50 8 L82 20 L82 46 C82 68 68 84 50 92 C32 84 18 68 18 46 L18 20 Z" stroke="#fff" strokeWidth={3} fill="none" />
+              <Path d="M28 50 C36 40 64 40 72 50 C64 60 36 60 28 50 Z" stroke="#fff" strokeWidth={3} fill="none" />
+              <Circle cx={50} cy={50} r={9} stroke="#fff" strokeWidth={3} fill="none" />
+              <Circle cx={53} cy={47} r={3.2} fill="#2bb6c4" />
+            </Svg>
+          </View>
+
+          <View style={{ marginTop: 64 }}>
+            <Text style={{ color: TEAL, fontSize: 9, letterSpacing: 3.5, fontWeight: "bold" }}>İLETİŞİM · CONTACT</Text>
+            <Text style={{ color: "#fff", fontSize: 30, fontWeight: "bold", marginTop: 10 }}>Bize Ulaşın</Text>
+            <Text style={{ color: "#9fb4d8", fontSize: 10.5, lineHeight: 1.5, marginTop: 10, maxWidth: 380 }}>Bu rapor ve dijital varlık koruma hizmetlerimiz hakkında ekibimize aşağıdaki kanallardan ulaşabilirsiniz.</Text>
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 34, marginTop: 46 }}>
+            {/* Türkiye */}
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <IPin /><Text style={{ color: "#fff", fontSize: 13, fontWeight: "bold" }}>Türkiye</Text>
+              </View>
+              <Text style={{ color: "#9fb4d8", fontSize: 10.5, lineHeight: 1.6 }}>ODTÜ Teknokent CoZone No: 280/G İç Kapı, Mustafa Kemal Mahallesi, Dumlupınar Bulvarı, D: 1260, Çankaya/Ankara</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16 }}>
+                <ITel /><Text style={{ color: "#dbe6f5", fontSize: 11.5 }}>+90 312 900 15 42</Text>
+              </View>
+            </View>
+            {/* United Kingdom */}
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <IPin /><Text style={{ color: "#fff", fontSize: 13, fontWeight: "bold" }}>United Kingdom</Text>
+              </View>
+              <Text style={{ color: "#9fb4d8", fontSize: 10.5, lineHeight: 1.6 }}>1st Floor 31–33 High Holborn, London, England, WC1V 6AX</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16 }}>
+                <ITel /><Text style={{ color: "#dbe6f5", fontSize: 11.5 }}>+44 20 4538 4102</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 54, borderTopColor: "#26456a", borderTopWidth: 1, paddingTop: 20 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
+              <IMail /><Text style={{ color: "#dbe6f5", fontSize: 11.5 }}>info@mirleon.ai</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
+              <ILinkedin /><IInstagram /><IX /><IN />
+            </View>
+          </View>
+        </View>
+
+        <View style={{ position: "absolute", bottom: 44, left: 48, right: 48, flexDirection: "row", justifyContent: "space-between", borderTopColor: "#26456a", borderTopWidth: 1, paddingTop: 12 }}>
+          <Text style={{ color: "#7d93b3", fontSize: 8, letterSpacing: 1.2 }}>mirleon.ai · MirLeon Dijital Varlık Koruma</Text>
+          <Text style={{ color: "#7d93b3", fontSize: 8, letterSpacing: 1.2 }}>Rapor No: {v.refNo}</Text>
+        </View>
+        <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 6, backgroundColor: TEAL }} />
+      </Page>
     </Document>
   );
 }
