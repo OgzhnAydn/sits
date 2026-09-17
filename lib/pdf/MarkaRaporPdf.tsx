@@ -13,7 +13,9 @@ Font.register({
     { src: fontYol("Tinos-BoldItalic.ttf"), fontWeight: "bold", fontStyle: "italic" },
   ],
 });
-Font.registerHyphenationCallback((w) => [w]);
+// Kelime kırma: normal kelimeler bütün kalsın; ama UZUN domain/token'lar (16+ ve nokta/tire içeren)
+// sütuna sığmayınca YAN SÜTUNA TAŞMASIN diye nokta/tire sonrasından kırılabilsin (satır sarar).
+Font.registerHyphenationCallback((w) => (w.length > 16 && /[.-]/.test(w) ? w.split(/(?<=[.-])/) : [w]));
 
 // ── Marka Koruma Bülteni — PREMIUM (NAZAR/Turkcell referans tasarımına sadık) ──────────
 // Yalnız DEPOLANMIŞ/DOĞRULANMIŞ gerçek veri. Her cümle veriye dayanır (uydurma YOK).
@@ -179,38 +181,40 @@ function Gauge({ puan }: { puan: number }) {
 
 // ── Tehdit haritası (marka merkezde, tespitler yörüngede) ──
 function TehditHarita({ v }: { v: MarkaRaporVeri }) {
-  const tum = [...v.oneCikan, ...v.digerleri].filter((t) => t.domain).sort((a, b) => (b.skor || 0) - (a.skor || 0)).slice(0, 22);
+  const tum = [...v.oneCikan, ...v.digerleri].filter((t) => t.domain).sort((a, b) => (b.skor || 0) - (a.skor || 0)).slice(0, 16);
   if (!tum.length) return null;
-  const W = 500, H = 250, cx = W / 2, cy = H / 2, N = tum.length;
+  const W = 540, H = 330, cx = W / 2, cy = H / 2 + 2, N = tum.length;
   // Küme TLD (harita rengi için) — en kalabalık toplu-kayıt son-eki.
   const tldSay: Record<string, number> = {};
   for (const a of tum) { const tl = (a.domain.split(".").pop() || "").toLowerCase(); tldSay[tl] = (tldSay[tl] || 0) + 1; }
   const enK = Object.entries(tldSay).sort((x, y) => y[1] - x[1])[0];
   const kumeTld = enK && enK[1] >= 5 && enK[1] / tum.length > 0.35 ? enK[0] : "";
-  const seed = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = (h ^ s.charCodeAt(i)) * 16777619 >>> 0; return h; };
+  // EŞİT açısal dağılım (jitter YOK → komşu node'lar çakışmaz) + HALKA yarıçapı (80..110, merkeze
+  // yığılmaz) + etiketler node'un DIŞINA radyal yerleşir (açısal olarak ayrık → üst üste gelmez).
   const nodes = tum.map((t, i) => {
-    const h = seed(t.domain);
     const s = Math.max(0, Math.min(100, t.skor || 0));
-    const aci = (-90 + i * (360 / N) + ((h % 28) - 14)) * (Math.PI / 180);
-    const Rr = 40 + ((100 - s) / 100) * 66 + ((h >> 6) % 26);
-    const x = cx + Rr * Math.cos(aci), y = cy + Rr * Math.sin(aci);
-    const gorLbl = i < 10;
-    const sol = Math.cos(aci) < -0.25, sag = Math.cos(aci) > 0.25;
-    const anc: "start" | "end" | "middle" = sol ? "end" : sag ? "start" : "middle";
-    return { x, y, r: 4 + (s / 100) * 3.5, fill: KATEGORILER[tKategori(t, kumeTld)].renk, lbl: gorLbl ? (t.domain.length > 18 ? t.domain.slice(0, 17) + "…" : t.domain) : "", anc, lx: sol ? x - 6 : sag ? x + 6 : x, ly: y + (Math.sin(aci) >= 0 ? 9 : -4) };
+    const aci = (-90 + i * (360 / N)) * (Math.PI / 180);
+    const co = Math.cos(aci), si = Math.sin(aci);
+    const Rr = 80 + ((100 - s) / 100) * 30;              // halka: yüksek skor içte (80), düşük dışta (110)
+    const x = cx + Rr * co, y = cy + Rr * si;
+    const lblR = Rr + 9;                                  // etiket node'un hemen dışında
+    const lx = cx + lblR * co, ly = cy + lblR * si + (si >= 0 ? 5 : -1);
+    const anc: "start" | "end" | "middle" = co < -0.3 ? "end" : co > 0.3 ? "start" : "middle";
+    const lbl = t.domain.length > 20 ? t.domain.slice(0, 19) + "…" : t.domain;
+    return { x, y, r: 4 + (s / 100) * 3, fill: KATEGORILER[tKategori(t, kumeTld)].renk, lbl, anc, lx, ly };
   });
   return (
     <View style={{ position: "relative", width: W, height: H, alignSelf: "center", marginTop: 2 }}>
       <Svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
-        {[114, 83, 52].map((rr, k) => <Circle key={k} cx={cx} cy={cy} r={rr} stroke="#dce5ea" strokeWidth={0.7} fill="none" />)}
+        {[110, 88, 66].map((rr, k) => <Circle key={k} cx={cx} cy={cy} r={rr} stroke="#dce5ea" strokeWidth={0.7} fill="none" />)}
         {nodes.map((n, i) => <Line key={`l${i}`} x1={cx} y1={cy} x2={n.x} y2={n.y} stroke="#e6ebf1" strokeWidth={0.5} />)}
         {nodes.map((n, i) => <Circle key={`c${i}`} cx={n.x} cy={n.y} r={n.r} fill={n.fill} />)}
-        {nodes.map((n, i) => <SvgText key={`t${i}`} x={n.lx} y={n.ly} style={{ fontSize: 5.4 }} fill="#4a5670" textAnchor={n.anc}>{n.lbl}</SvgText>)}
+        {nodes.map((n, i) => <SvgText key={`t${i}`} x={n.lx} y={n.ly} style={{ fontSize: 5.6 }} fill="#4a5670" textAnchor={n.anc}>{n.lbl}</SvgText>)}
       </Svg>
       <View style={{ position: "absolute", left: cx - 23, top: cy - 23, width: 46, height: 46, borderRadius: 23, backgroundColor: "#fff", borderColor: TEAL, borderWidth: 1.4, alignItems: "center", justifyContent: "center", padding: 5 }}>
         {v.logoDataUri ? <Image src={v.logoDataUri} style={{ width: 34, height: 34, objectFit: "contain" }} /> : <Text style={{ fontSize: 13, fontWeight: "bold", color: LACIVERT }}>{v.markaAd.slice(0, 2).toUpperCase()}</Text>}
       </View>
-      <View style={{ position: "absolute", right: 8, top: 26, alignItems: "flex-end" }}>
+      <View style={{ position: "absolute", right: 8, top: 10, alignItems: "flex-end" }}>
         <Text style={{ fontSize: 13, fontWeight: "bold", color: LACIVERT }}>{v.ozet.toplam} alan adı</Text>
         <Text style={{ fontSize: 6.5, color: GRI }}>izlenen · marka-benzeri</Text>
       </View>
@@ -414,7 +418,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             </View>
             {oneriliKay.map((t, i) => { const o = oneriUret(t); return (
               <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]} wrap={false}>
-                <Text style={[st.td, { width: "26%", fontWeight: "bold", color: LACIVERT }]}>{t.domain}</Text>
+                <Text style={[st.td, { width: "26%", fontWeight: "bold", color: LACIVERT, fontSize: 8.5, paddingRight: 5 }]}>{t.domain}</Text>
                 <Text style={[st.td, { width: "31%", paddingRight: 6 }]}>{o.neden}</Text>
                 <Text style={[st.td, { width: "31%", paddingRight: 6 }]}>{o.oneri}</Text>
                 <Text style={[st.td, { width: "12%", color: o.oncelik === "Öncelikli" ? KIRMIZI : SEV(t.durum), fontWeight: "bold" }]}>{o.oncelik}</Text>
@@ -488,7 +492,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             </View>
             {tumTespit.sort((a, b) => (b.skor || 0) - (a.skor || 0)).slice(0, 160).map((t, i) => (
               <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]} wrap={false}>
-                <Text style={[st.td, { width: "25%", fontWeight: "medium", color: LACIVERT, fontSize: t.domain.length > 34 ? 6.4 : 7.6 }]}>{t.domain}</Text>
+                <Text style={[st.td, { width: "25%", fontWeight: "medium", color: LACIVERT, fontSize: 7.6, paddingRight: 3 }]}>{t.domain}</Text>
                 <Text style={[st.td, { width: "16%", fontSize: 7.4, color: aksiyonGerekli(t) ? KIRMIZI : t.engelli === true ? YESIL : t.canliDurum === "dead" ? GRI : "#33405c" }]}>{durumKisa(t)}</Text>
                 <Text style={[st.td, { width: "13%", fontSize: 7.6 }]}>{t.ip || "—"}</Text>
                 <Text style={[st.td, { width: "23%", fontSize: 7.4, paddingRight: 4 }]}>{t.asn || "—"}</Text>
