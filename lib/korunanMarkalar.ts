@@ -69,7 +69,10 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   // Türkiye Varlık Fonu — kısaltma "tvf" 3 harf (taranamaz/gürültü), o yüzden UZUN hali taranır:
   // "turkiyevarlikfonu" + "varlikfonu" kalıbı. Kısa hali resmî domain (tvf.com.tr) + marka adında.
   // Yatırım/hisse/başvuru dolandırıcılıkları fonu taklit eder. (turkiyevarlikfonu.com.tr çözülmüyor.)
-  { anahtar: "turkiyevarlikfonu", ad: "Türkiye Varlık Fonu (TVF)", resmi: ["tvf.com.tr"], kaliplari: ["varlikfonu"] },
+  // Kapsam: glued (varlikfonu) + tire-ayrık (varlik-fonu = "türkiye varlık fonu" domain hali) + kısaltma (tvf).
+  // "tvf" 3 harf ama sınır+sıkı-bağlam kapılı: yalnız SINIRLI token + riskli TLD/bağlamda eşleşir
+  // (tvf-yatirim.xyz ✓; "sportvf" gibi kelime-içi eşleşme YOK) → gürültü sınırlı.
+  { anahtar: "turkiyevarlikfonu", ad: "Türkiye Varlık Fonu (TVF)", resmi: ["tvf.com.tr"], kaliplari: ["varlikfonu", "varlik-fonu", "tvf"] },
   { anahtar: "aselsan", ad: "ASELSAN", resmi: ["aselsan.com", "aselsan.com.tr"] },
   { anahtar: "tusas", ad: "TUSAŞ (Türk Havacılık ve Uzay Sanayii)", resmi: ["tusas.com", "tusas.com.tr"] },
   { anahtar: "baykar", ad: "Baykar", resmi: ["baykartech.com"] },
@@ -343,7 +346,9 @@ export function gercekTaklit(domain: string, anahtar: string): boolean {
   // Markanın TÜM kalıplarını dene (anahtar + açılım kalıpları: toki + toplukonutidaresi…).
   const marka = KORUNAN_MARKALAR.find((m) => m.anahtar === k0);
   const kaliplar = marka ? [marka.anahtar, ...(marka.kaliplari || [])] : [k0];
-  return kaliplar.some((k) => k.length >= 4 && taklitKalip(d, k, marka?.yaygin));
+  // Taban 3: 3-harf kalıp (ör. "tvf") sınır (bounded token) + sıkı-bağlam (riskli TLD/TR bağlam)
+  // kapılarından geçmek zorunda → gürültü sınırlı; yalnız açıkça eklenen 3-harf kalıplar etkilenir.
+  return kaliplar.some((k) => k.length >= 3 && taklitKalip(d, k, marka?.yaygin));
 }
 
 // Bir domain, verilen resmî listede mi? (allowlist kontrolü — kendi/alt-alan adları dahil)

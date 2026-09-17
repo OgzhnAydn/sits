@@ -258,7 +258,7 @@ function eslesenMarka(domain) {
     if ((m.resmi || []).some((r) => d === r || d.endsWith("." + r))) continue; // resmî → atla
     // Anahtar + AÇILIM kalıpları (toki + toplukonutidaresi…) — her biri denenir, eşleşen marka anahtarını döndürür.
     for (const k of [m.anahtar, ...(m.kaliplari || [])]) {
-      if (!k || k.length < 4) continue;
+      if (!k || k.length < 3) continue; // taban 3: "tvf" gibi kısa kalıp sınır+sıkı-bağlam kapılarından geçmek zorunda (gürültü sınırlı)
       if (label === k) {
         // Tescilli ad markanın KENDİSİ; alt alan/normal uzantı = kendi domaini, ATLA. Sadece garanti.xyz.
         if (altAlan || !riskliTld) continue;
