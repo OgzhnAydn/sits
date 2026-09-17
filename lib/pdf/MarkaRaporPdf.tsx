@@ -19,7 +19,7 @@ Font.registerHyphenationCallback((w) => [w]);
 // Yalnız DEPOLANMIŞ/DOĞRULANMIŞ gerçek veri. Her cümle veriye dayanır (uydurma YOK).
 export type RaporTespit = { domain: string; skor: number; durum?: string; seviye?: string; zaman: number; sinyaller?: string[]; screenshot?: string | null; usomda?: boolean | null; engelli?: boolean | null; etbis?: boolean | null; alanlar?: { ad: string; deger: string }[];
   // Hafif teknik envanter (canlilikProbe + ip-api) — tam liste tablosu için
-  ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string };
+  ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; sslGuvenli?: boolean | null };
 export type MarkaRaporVeri = {
   markaAd: string;
   markaResmi?: string;         // resmî unvan/domain (kapak alt satırı)
@@ -86,6 +86,9 @@ const aksiyonGerekli = (t: RaporTespit) => (t.canliDurum === "live" || t.canliDu
 // Birleşik durum: BTK engeli GÖRÜLDÜYSE canlılıktan önce onu göster (engel sayfası da HTTP 200 döner).
 const durumTam = (t: RaporTespit) => t.engelli === true ? "BTK tarafından engelli" : canliDurumAd(t.canliDurum);
 const durumKisa = (t: RaporTespit) => t.engelli === true ? "BTK engelli" : canliDurumKisa(t.canliDurum);
+// SSL sertifikası güvenilir mi (tarayıcı gibi güvenilir CA'ya zincirleniyor mu). Geçersiz = kendinden-imzalı/
+// güvenilmez CA → phishing sinyali. null = SSL sondalanamadı (443 kapalı / doğrulanamadı).
+const sslKisa = (t: RaporTespit) => t.sslGuvenli === true ? "Geçerli" : t.sslGuvenli === false ? "Geçersiz" : "—";
 
 // Risk düzeyi (0-100) — gerçek dağılımdan: aktif tuzak ağır, canlı orta, park hafif.
 function riskPuan(v: MarkaRaporVeri): number {
@@ -227,7 +230,7 @@ function detayMetin(t: RaporTespit): string {
   const durum = DURUM_AD[t.durum || ""] || "İnceleniyor";
   parca.push(`${t.domain}, otomatik ön-değerlendirmede ${t.skor}/100 skorla "${durum}" olarak sınıflandırıldı.`);
   if (t.engelli === true || t.canliDurum) parca.push(`Canlı doğrulama: ${durumTam(t)}.`);
-  if (t.ip || t.asn) parca.push(`Barındırma: ${[t.asn, t.ulke, t.altyapi].filter(Boolean).join(" · ")}${t.ip ? ` (IP ${t.ip})` : ""}${t.ca ? `; sertifika: ${t.ca}` : ""}.`);
+  if (t.ip || t.asn) parca.push(`Barındırma: ${[t.asn, t.ulke, t.altyapi].filter(Boolean).join(" · ")}${t.ip ? ` (IP ${t.ip})` : ""}${t.ca ? `; SSL: ${t.ca}${t.sslGuvenli === false ? " — GÜVENİLMEZ sertifika (kendinden-imzalı/geçersiz CA)" : t.sslGuvenli === true ? " (geçerli)" : ""}` : ""}.`);
   if (t.usomda === false) parca.push("USOM listesinde yer almıyor — bu adresi resmî radardan önce yakaladık (biz-önce).");
   if (t.usomda === true) parca.push("USOM resmî listesinde kayıtlı.");
   if (t.engelli === true) parca.push("BTK tarafından erişime engellenmiş.");
@@ -486,20 +489,25 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             <Baslik metin={`EK: Tespit Edilen ${v.ozet.toplam} Adresin Tam Listesi`} ikon="▤" />
             <Text style={st.p}>Tüm tespitlerin temel teknik özeti. Durum ve skor otomatik ön-değerlendirmedir; kesin karar için adres ayrıca incelenir.</Text>
             <View style={st.tHead} fixed>
-              <Text style={[st.th, { width: "25%" }]}>Alan adı</Text><Text style={[st.th, { width: "16%" }]}>Durum</Text><Text style={[st.th, { width: "14%" }]}>IP</Text><Text style={[st.th, { width: "23%" }]}>Barındırma (ASN)</Text><Text style={[st.th, { width: "10%" }]}>Ülke</Text><Text style={[st.th, { width: "12%" }]}>Altyapı</Text>
+              <Text style={[st.th, { width: "25%" }]}>Alan adı</Text><Text style={[st.th, { width: "16%" }]}>Durum</Text><Text style={[st.th, { width: "13%" }]}>IP</Text><Text style={[st.th, { width: "23%" }]}>Barındırma (ASN)</Text><Text style={[st.th, { width: "10%" }]}>Ülke</Text><Text style={[st.th, { width: "13%" }]}>SSL sert.</Text>
             </View>
             {tumTespit.sort((a, b) => (b.skor || 0) - (a.skor || 0)).slice(0, 160).map((t, i) => (
               <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]} wrap={false}>
                 <Text style={[st.td, { width: "25%", fontWeight: "medium", color: LACIVERT, fontSize: 7.8 }]}>{t.domain}</Text>
                 <Text style={[st.td, { width: "16%", fontSize: 7.4, color: aksiyonGerekli(t) ? KIRMIZI : t.engelli === true ? YESIL : t.canliDurum === "dead" ? GRI : "#33405c" }]}>{durumKisa(t)}{aksiyonGerekli(t) ? " ›Bildir" : ""}</Text>
-                <Text style={[st.td, { width: "14%", fontSize: 7.6 }]}>{t.ip || "—"}</Text>
+                <Text style={[st.td, { width: "13%", fontSize: 7.6 }]}>{t.ip || "—"}</Text>
                 <Text style={[st.td, { width: "23%", fontSize: 7.4, paddingRight: 4 }]}>{t.asn || "—"}</Text>
                 <Text style={[st.td, { width: "10%", fontSize: 7.6 }]}>{t.ulke || "—"}</Text>
-                <Text style={[st.td, { width: "12%", fontSize: 7.6 }]}>{t.altyapi || "—"}</Text>
+                <Text style={[st.td, { width: "13%", fontSize: 7.6, color: t.sslGuvenli === false ? KIRMIZI : t.sslGuvenli === true ? YESIL : GRI }]}>{sslKisa(t)}</Text>
               </View>
             ))}
             {v.ozet.toplam > 160 && <Text style={[st.p, { marginTop: 6, fontSize: 8.5, color: GRI }]}>En yüksek skorlu 160 adres gösterildi (toplam {v.ozet.toplam}).</Text>}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12, borderTopColor: CIZGI, borderTopWidth: 1, paddingTop: 8 }}>
+            <View style={{ marginTop: 10, backgroundColor: "#f6f9fb", borderColor: CIZGI, borderWidth: 1, borderRadius: 5, padding: 9 }}>
+              <Text style={{ fontSize: 8.6, fontWeight: "bold", color: LACIVERT, marginBottom: 3 }}>SSL sertifikası sütunu</Text>
+              <Text style={{ fontSize: 8, color: "#33405c", lineHeight: 1.4 }}><Text style={{ color: YESIL, fontWeight: "bold" }}>Geçerli</Text>: sertifika güvenilir bir otoriteye (CA) zincirleniyor (tarayıcı kabul eder). <Text style={{ color: KIRMIZI, fontWeight: "bold" }}>Geçersiz</Text>: kendinden-imzalı ya da güvenilmez CA (tarayıcı &quot;güvenli değil&quot; uyarısı verir) — güçlü phishing sinyali. <Text style={{ color: GRI }}>—</Text>: SSL sondalanamadı.</Text>
+              <Text style={{ fontSize: 7.6, color: GRI, lineHeight: 1.4, marginTop: 3, fontStyle: "italic" }}>Not: Tarayıcıda &quot;CERT_AUTHORITY_INVALID&quot; görmeniz her zaman sitenin sertifikasının geçersiz olduğu anlamına gelmez — kurum ağınızın TLS-denetim vekili de araya girip güvenilmez sertifika sunabilir. Bu sütun sertifikayı nötr bir noktadan doğrular.</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8, borderTopColor: CIZGI, borderTopWidth: 1, paddingTop: 8 }}>
               <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: TEAL }} />
               <Text style={{ fontSize: 9, color: "#33405c" }}><Text style={st.guclu}>ÖNEMLİ NOT:</Text> Bulgular doğrulama anına ({v.tarih}) aittir; bir adresin durumu zamanla değişebilir.</Text>
             </View>

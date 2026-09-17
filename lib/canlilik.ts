@@ -18,7 +18,7 @@ export type CanlilikSonuc = {
   durum: CanlilikDurum;
   dns: { cozuldu: boolean; ip: string | null; cname: string | null };
   http: { status: number | null; sunucu: string | null; hata: string | null };
-  ssl: { gecerli: boolean | null; veren: string | null; bitis: string | null };
+  ssl: { gecerli: boolean | null; guvenilir: boolean | null; veren: string | null; bitis: string | null };
   redirectHedef: string | null;   // yönlendirme varsa nereye
   kokNeden: string;               // insan-okunur açıklama (kök neden analizi)
   zaman: number;
@@ -59,22 +59,27 @@ async function dnsCoz(domain: string): Promise<DnsDurum> {
   return { cozuldu: false, ip: null, cname: null, kesinlik: "belirsiz" }; // uyuşmazlık → emin değiliz
 }
 
-// TLS el sıkışması + sertifika bilgisi (geçerlilik/veren/bitiş). Port 443 kapalıysa null.
-function sslKontrol(host: string, ms = 6000): Promise<{ gecerli: boolean | null; veren: string | null; bitis: string | null }> {
+// TLS el sıkışması + sertifika bilgisi. gecerli=süre içinde; guvenilir=TARAYICI GİBİ güvenilir köke
+// zincirleniyor (s.authorized) → false ise kendinden-imzalı/geçersiz CA (phishing sinyali). Port 443 kapalıysa null.
+type SslSonuc = { gecerli: boolean | null; guvenilir: boolean | null; veren: string | null; bitis: string | null; hata: string | null };
+function sslKontrol(host: string, ms = 6000): Promise<SslSonuc> {
   return new Promise((coz) => {
     let bitti = false;
-    const son = (v: { gecerli: boolean | null; veren: string | null; bitis: string | null }) => { if (!bitti) { bitti = true; try { s.destroy(); } catch { /* */ } coz(v); } };
+    const bos: SslSonuc = { gecerli: null, guvenilir: null, veren: null, bitis: null, hata: null };
+    const son = (v: SslSonuc) => { if (!bitti) { bitti = true; try { s.destroy(); } catch { /* */ } coz(v); } };
     const s = tls.connect({ host, port: 443, servername: host, timeout: ms, rejectUnauthorized: false }, () => {
       try {
         const c = s.getPeerCertificate();
         const veren = c && c.issuer ? (String(c.issuer.O || c.issuer.CN || "") || null) : null;
         const bitis = c && c.valid_to ? new Date(c.valid_to).toISOString().slice(0, 10) : null;
-        const gecerli = s.authorized || (!!bitis && new Date(bitis) > new Date()); // rejectUnauthorized=false → süre ile teyit
-        son({ gecerli, veren, bitis });
-      } catch { son({ gecerli: null, veren: null, bitis: null }); }
+        const gecerli = !!bitis && new Date(bitis) > new Date(); // süre içinde mi
+        const guvenilir = s.authorized === true; // güvenilir köke zincirleniyor mu (tarayıcı davranışı)
+        const hata = s.authorized ? null : (s.authorizationError ? String(s.authorizationError) : "GÜVENİLMEZ");
+        son({ gecerli, guvenilir, veren, bitis, hata });
+      } catch { son(bos); }
     });
-    s.on("timeout", () => son({ gecerli: null, veren: null, bitis: null }));
-    s.on("error", () => son({ gecerli: null, veren: null, bitis: null }));
+    s.on("timeout", () => son(bos));
+    s.on("error", () => son(bos));
   });
 }
 
@@ -102,7 +107,7 @@ export async function canlilikProbe(domain: string): Promise<CanlilikSonuc> {
     domain: d, durum: "bilinmiyor",
     dns: { cozuldu: false, ip: null, cname: null },
     http: { status: null, sunucu: null, hata: null },
-    ssl: { gecerli: null, veren: null, bitis: null },
+    ssl: { gecerli: null, guvenilir: null, veren: null, bitis: null },
     redirectHedef: null, kokNeden: "", zaman: Date.now(),
   };
 

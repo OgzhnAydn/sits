@@ -12,7 +12,7 @@ import { canlilikProbe } from "@/lib/canlilik";
 async function ipApi(ip: string): Promise<{ as?: string; country?: string; org?: string; isp?: string; hosting?: boolean }> {
   try { const r = await fetch(`http://ip-api.com/json/${ip}?fields=country,as,org,isp,hosting`, { signal: AbortSignal.timeout(5000) }); return await r.json(); } catch { return {}; }
 }
-async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; usomda?: boolean | null; engelli?: boolean | null }> {
+async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; usomda?: boolean | null; engelli?: boolean | null; sslGuvenli?: boolean | null }> {
   try {
     // canlılık + USOM PARALEL — her adrese "canlı mı + USOM'da mı" birlikte bakılır (bildir kararı için).
     const [c, usomda] = await Promise.all([canlilikProbe(domain), usomBiliniyor(domain).catch(() => null)]);
@@ -26,7 +26,7 @@ async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string;
       asn: [org, asnNo].filter(Boolean).join(" · "),
       ulke: g.country || "",
       altyapi: g.hosting ? "CDN/proxy" : (org ? "Veri merkezi" : ""),
-      canliDurum: c.durum, usomda, engelli,
+      canliDurum: c.durum, usomda, engelli, sslGuvenli: c.ssl.guvenilir,
     };
   } catch { return {}; }
 }
