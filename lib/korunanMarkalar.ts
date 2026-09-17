@@ -66,6 +66,10 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "edevlet", ad: "e-Devlet", resmi: ["turkiye.gov.tr"] },
   { anahtar: "tcmb", ad: "TCMB (Merkez Bankası)", resmi: ["tcmb.gov.tr"] },
   { anahtar: "ilbank", ad: "İLBANK (İller Bankası)", resmi: ["ilbank.gov.tr"] },
+  // Türkiye Varlık Fonu — kısaltma "tvf" 3 harf (taranamaz/gürültü), o yüzden UZUN hali taranır:
+  // "turkiyevarlikfonu" + "varlikfonu" kalıbı. Kısa hali resmî domain (tvf.com.tr) + marka adında.
+  // Yatırım/hisse/başvuru dolandırıcılıkları fonu taklit eder. (turkiyevarlikfonu.com.tr çözülmüyor.)
+  { anahtar: "turkiyevarlikfonu", ad: "Türkiye Varlık Fonu (TVF)", resmi: ["tvf.com.tr"], kaliplari: ["varlikfonu"] },
   { anahtar: "aselsan", ad: "ASELSAN", resmi: ["aselsan.com", "aselsan.com.tr"] },
   { anahtar: "tusas", ad: "TUSAŞ (Türk Havacılık ve Uzay Sanayii)", resmi: ["tusas.com", "tusas.com.tr"] },
   { anahtar: "baykar", ad: "Baykar", resmi: ["baykartech.com"] },
