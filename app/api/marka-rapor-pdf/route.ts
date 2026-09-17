@@ -6,6 +6,8 @@ import { usomBiliniyor } from "@/lib/usom";
 import { btkEngelli } from "@/lib/btk";
 import { etbisYerel } from "@/lib/etbisYerel";
 import { canlilikProbe } from "@/lib/canlilik";
+import { appTara } from "@/lib/appTarama";
+import { reklamTara } from "@/lib/reklamTarama";
 
 // Hafif teknik envanter (tam liste için) — canlilikProbe (DNS IP + SSL CA + canlılık) + ip-api (ASN/ülke).
 // domainOsint (40-60s) yerine ~5s → tüm adreslerde batch çalışabilir.
@@ -128,6 +130,11 @@ export async function GET(req: NextRequest) {
     Promise.all(oneCikanKay.map(async (a) => ({ ...tesp(a), etbis: etbisYerel(a.domain).kayitliMi }))),
     envanterIsi,
   ]);
+  // Uygulama mağazaları + reklam izleme (paralel, best-effort) — tekDomain modunda atla.
+  const [appSonuc, reklamSonuc] = tekDomain ? [null, null] : await Promise.all([
+    appTara(marka).catch(() => null),
+    reklamTara(marka).catch(() => null),
+  ]);
   const zengin = (t: RaporTespit): RaporTespit => ({ ...t, ...(envMap.get(t.domain) || {}) });
   const oneCikan: RaporTespit[] = oneCikanHam.map(zengin);
   const digerleriZ = digerleri.map(zengin);
@@ -141,6 +148,11 @@ export async function GET(req: NextRequest) {
     aralikEtiket: tekDomain ? `Tek tespit · ${tekDomain}` : aralik.etiket,
     markaResmi: (markaObj?.resmi && markaObj.resmi[0]) || undefined,
     tarih, refNo, ozet, erkenlik, oneCikan, digerleri: digerleriZ,
+    uygulamalar: (appSonuc?.sonuc || []).slice(0, 14).map((a) => ({ platform: a.platform, ad: a.ad, gelistirici: a.gelistirici, puan: a.puan, resmiMi: a.resmiMi, durum: a.durum })),
+    appOzet: appSonuc ? { toplam: appSonuc.toplam, resmi: appSonuc.resmi, incele: appSonuc.incele } : undefined,
+    reklamlar: (reklamSonuc?.reklamlar || []).slice(0, 12),
+    reklamNotu: reklamSonuc ? (reklamSonuc.yapilandirildi ? undefined : "Reklam kampanyası izleme altyapısı (Meta / Google Ad Library) entegredir; bu marka için reklam tespiti, erişim yetkilendirmesi tamamlandığında bu bölümde raporlanacaktır.") : undefined,
+    reklamSupheli: reklamSonuc?.supheli || 0,
   });
 
   const adSlug = markaAd.replace(/[^a-zA-Z0-9]/g, "") + (tekDomain ? "-tespit" : "-" + aralikKey);

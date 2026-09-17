@@ -22,7 +22,7 @@ export type AppSonuc = { marka: string; markaAdi: string; sonuc: AppBulgu[]; top
 
 type ITunesApp = { trackName?: string; artistName?: string; bundleId?: string; trackViewUrl?: string; artworkUrl100?: string; averageUserRating?: number; userRatingCount?: number };
 
-async function itunesTara(term: string, anahtar: string, ulke: string): Promise<AppBulgu[]> {
+async function itunesTara(term: string, anahtar: string, ulke: string, resmiKokler: string[] = [anahtar]): Promise<AppBulgu[]> {
   try {
     const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&country=${ulke}&entity=software&limit=30`, { signal: AbortSignal.timeout(9000) });
     if (!r.ok) return [];
@@ -38,7 +38,8 @@ async function itunesTara(term: string, anahtar: string, ulke: string): Promise<
       // RESMÎ heuristiği: geliştirici adı ya da paket kimliği markayı içeriyorsa resmî
       // kabul edilir (ör. dev "Turkcell Iletisim...", paket com.turkcell.*). Aksi halde
       // marka adını KULLANAN başka bir geliştirici → incelenmeli.
-      const resmiMi = gelL.includes(anahtar) || paketL.includes("." + anahtar) || paketL.startsWith(anahtar + ".");
+      // Resmî: geliştirici adı/paket markayı VEYA resmî kökü (adalet gibi) taşıyor; ya da resmî gov paketi (tr.gov.<kök>.*).
+      const resmiMi = resmiKokler.some((k) => gelL.includes(k)) || paketL.includes("." + anahtar) || paketL.startsWith(anahtar + ".") || (paketL.startsWith("tr.gov.") && resmiKokler.some((k) => paketL.includes(k)));
       out.push({
         platform: "ios", ad, gelistirici: gel, paket, url: String(a.trackViewUrl || ""),
         ikon: a.artworkUrl100, puan: a.averageUserRating, sayi: a.userRatingCount, ulke,
@@ -52,7 +53,7 @@ async function itunesTara(term: string, anahtar: string, ulke: string): Promise<
 // Android — Google Play. play-scraper Play'in iç JSON API'sini kullanır (HTML
 // kazımadan güvenilir). Sunucu IP'si bloklanırsa sessizce boş döner (dürüst).
 type PlayApp = { title?: string; appId?: string; developer?: string; icon?: string; score?: number; url?: string };
-async function playTara(anahtar: string, ulke: string): Promise<AppBulgu[]> {
+async function playTara(anahtar: string, ulke: string, resmiKokler: string[] = [anahtar]): Promise<AppBulgu[]> {
   try {
     const mod = (await import("google-play-scraper")) as unknown as { default: { search: (o: Record<string, unknown>) => Promise<PlayApp[]> } };
     const r = await mod.default.search({ term: anahtar, num: 25, country: ulke, lang: "tr", throttle: 5 });
@@ -61,7 +62,8 @@ async function playTara(anahtar: string, ulke: string): Promise<AppBulgu[]> {
       const ad = String(a.title || ""), gel = String(a.developer || ""), paket = String(a.appId || "");
       if (!`${ad} ${paket}`.toLowerCase().includes(anahtar)) continue;
       const gelL = gel.toLowerCase(), paketL = paket.toLowerCase();
-      const resmiMi = gelL.includes(anahtar) || paketL.includes("." + anahtar) || paketL.startsWith(anahtar + ".");
+      // Resmî: geliştirici adı/paket markayı VEYA resmî kökü (adalet gibi) taşıyor; ya da resmî gov paketi (tr.gov.<kök>.*).
+      const resmiMi = resmiKokler.some((k) => gelL.includes(k)) || paketL.includes("." + anahtar) || paketL.startsWith(anahtar + ".") || (paketL.startsWith("tr.gov.") && resmiKokler.some((k) => paketL.includes(k)));
       out.push({ platform: "android", ad, gelistirici: gel, paket, url: String(a.url || `https://play.google.com/store/apps/details?id=${paket}`), ikon: a.icon, puan: a.score, ulke, resmiMi, durum: resmiMi ? "resmî" : "incele" });
     }
     return out;
@@ -72,11 +74,15 @@ export async function appTara(marka: string): Promise<AppSonuc> {
   const m = AVCI_MARKALAR.find((x) => x.anahtar === marka.toLowerCase());
   const anahtar = (m?.anahtar || marka).toLowerCase();
   const markaAdi = m?.ad || marka;
+  // Resmî kökler: anahtar + resmî domain etiketleri (uyap.gov.tr→uyap, adalet.gov.tr→adalet).
+  // Resmî uygulama geliştiricisi/paketi bunları taşır (ör. tr.gov.adalet.mevzuat) → "resmî" say.
+  const resmiKokler = [...new Set([anahtar, ...(m?.resmi || []).flatMap((d) => d.split("."))
+    .filter((p) => p.length >= 4 && !["gov", "com", "net", "org", "edu", "info", "gov.tr", "com.tr", "vatandas"].includes(p))])];
   // iOS (TR+US mağaza) + Android Play paralel taranır.
   const [tr, us, android] = await Promise.all([
-    itunesTara(anahtar, anahtar, "tr"),
-    itunesTara(anahtar, anahtar, "us"),
-    playTara(anahtar, "tr"),
+    itunesTara(anahtar, anahtar, "tr", resmiKokler),
+    itunesTara(anahtar, anahtar, "us", resmiKokler),
+    playTara(anahtar, "tr", resmiKokler),
   ]);
   const harita = new Map<string, AppBulgu>();
   for (const a of [...tr, ...us, ...android]) { const k = a.platform + ":" + (a.paket || a.url); if (k && !harita.has(k)) harita.set(k, a); }

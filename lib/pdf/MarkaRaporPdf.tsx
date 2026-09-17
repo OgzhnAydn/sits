@@ -1,6 +1,6 @@
 import path from "path";
 import React from "react";
-import { Document, Page, Text, View, Image, Font, StyleSheet, Svg, Circle, Line, Path, Link, Text as SvgText } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, Font, StyleSheet, Svg, Circle, Line, Path, Text as SvgText } from "@react-pdf/renderer";
 
 const fontYol = (p: string) => path.join(process.cwd(), "assets/fonts", p);
 // Times New Roman metrik-eşdeğeri (Tinos) — Türkçe tam destekli, ücretsiz gömülebilir.
@@ -31,6 +31,12 @@ export type MarkaRaporVeri = {
   erkenlik: { toplam: number; bizOnce: number; usomdaYok: number };
   oneCikan: RaporTespit[];
   digerleri: RaporTespit[];
+  // Uygulama mağazaları + reklam izleme (opsiyonel bölüm)
+  uygulamalar?: { platform: string; ad: string; gelistirici: string; puan?: number; resmiMi: boolean; durum: string }[];
+  appOzet?: { toplam: number; resmi: number; incele: number };
+  reklamlar?: { reklamveren: string; baslik?: string; platformlar?: string[]; supheli: boolean }[];
+  reklamNotu?: string;
+  reklamSupheli?: number;
 };
 
 // ── Renk paleti (referans) ──
@@ -77,7 +83,6 @@ const canliDurumAd = (d?: string) => d === "live" ? "Canlı · içerik var" : d 
 // Dar tablo sütunu için kısa etiket (tam anlam müşteri lejantında açıklanır).
 const canliDurumKisa = (d?: string) => d === "live" ? "Canlı" : d === "dead" ? "Kaldırılmış" : d === "parked" ? "Park" : d === "redirect" ? "Yönlendirme" : d === "erisim_kisitli" ? "Erişim kısıtlı" : d === "bilinmiyor" ? "Doğrulanamadı" : "—";
 
-const BILDIR_URL = "https://www.ihbarweb.org.tr/"; // USOM/BTK resmî İhbar Web portalı — ihbarı operatör/müşteri gönderir.
 // "Bildir" aksiyonu gereken link: CANLI + USOM'da YOK + BTK engeli GÖRÜLMEMİŞ → yetkililerce henüz
 // durdurulmamış aktif tehdit (üç sinyal de güvenilir kaynaktan). engelli/usomda true ise gerekmez.
 // Sunucu ayakta (canlı VEYA 403/erişim-kısıtlı = cloaking ardında phishing olabilir) + USOM'da yok +
@@ -102,7 +107,7 @@ function riskEtiket(p: number): string {
 }
 
 const st = StyleSheet.create({
-  page: { paddingBottom: 46, paddingTop: 54, fontFamily: "Tinos", fontSize: 10.5, color: LACIVERT, lineHeight: 1.4 },
+  page: { paddingBottom: 46, paddingTop: 54, fontFamily: "Tinos", fontSize: 12, color: LACIVERT, lineHeight: 1.45 },
   govde: { paddingHorizontal: 40 },
   // Antet / footer
   antet: { position: "absolute", top: 20, left: 40, right: 40, flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottomColor: LACIVERT, borderBottomWidth: 1.4, paddingBottom: 6 },
@@ -117,10 +122,10 @@ const st = StyleSheet.create({
   bolumIkon: { width: 15, height: 15, borderRadius: 3, backgroundColor: TEAL, alignItems: "center", justifyContent: "center" },
   bolumBaslik: { fontSize: 14, fontWeight: "bold", color: LACIVERT },
   bolumCizgi: { height: 2, backgroundColor: TEAL, marginBottom: 10, marginTop: 2 },
-  p: { fontSize: 10.5, lineHeight: 1.5, color: "#26324a", marginBottom: 5 },
+  p: { fontSize: 12, lineHeight: 1.5, color: "#26324a", marginBottom: 6 },
   madde: { flexDirection: "row", gap: 6, marginBottom: 4, paddingRight: 6 },
-  maddeIsaret: { fontSize: 10.5, color: TEAL },
-  maddeMetin: { fontSize: 10.5, lineHeight: 1.45, color: "#26324a", flex: 1 },
+  maddeIsaret: { fontSize: 12, color: TEAL },
+  maddeMetin: { fontSize: 12, lineHeight: 1.5, color: "#26324a", flex: 1 },
   guclu: { fontWeight: "bold", color: LACIVERT },
   sekilAlt: { fontSize: 8.5, color: GRI, fontStyle: "italic", textAlign: "center", marginTop: 3 },
   // Tablo
@@ -218,7 +223,7 @@ function oneriUret(t: RaporTespit): { neden: string; oneri: string; oncelik: str
   const aktif = t.durum === "aktif-tuzak", canli = t.durum === "canli";
   if (t.engelli === true) return { neden: "BTK erişim engeli tespit edildi (engel sayfası görüldü).", oneri: "Zaten engelli; kesintisiz izleme yeterli.", oncelik: "Bilgi" };
   if (t.usomda === true) return { neden: "USOM resmî zararlı bağlantı listesinde kayıtlı; devlet tarafından işaretlenmiş.", oneri: "Kayıt mevcut, yeni bildirim gerekmez; kurumsal DNS'te engelleme + hukuki takip.", oncelik: "Yüksek" };
-  if (aksiyonGerekli(t)) return { neden: "Adres canlı, USOM listesinde yok ve BTK engeli görülmedi — yetkililerce henüz durdurulmamış aktif tehdit.", oneri: "USOM/İhbarweb'e bildirim (yandaki bağlantı) + BTK'ya erişim engeli (tedbir) başvurusu + alan adı kayıt firmasına (Registrar) abuse bildirimi önerilir.", oncelik: "Öncelikli" };
+  if (aksiyonGerekli(t)) return { neden: "Adres canlı, USOM listesinde yok ve BTK engeli görülmedi — yetkililerce henüz durdurulmamış aktif tehdit.", oneri: "USOM/İhbar Web'e bildirim + BTK'ya erişim engeli (tedbir) başvurusu + alan adı kayıt firmasına (Registrar) abuse bildirimi önerilir.", oncelik: "Öncelikli" };
   if (aktif) return { neden: "Aktif tuzak: marka adını taşıyan, resmî olmayan canlı adres.", oneri: "USOM'a bildirim (henüz kayıtlı değil) + kesintisiz izleme.", oncelik: "Yüksek" };
   if (canli) return { neden: "Canlı adres; marka adını izinsiz kullanıyor, içerik doğrulanmalı.", oneri: "Günlük izleme; içerik/logo taklidi belirirse aynı gün bildirim.", oncelik: "Orta · izleme" };
   return { neden: "Kayıtlı ancak içerik yayında değil (park/izleme).", oneri: "Aksiyon gerekmez; Türkçe adlı kayıtlar öncelikli izlemede.", oncelik: "Düşük · artan" };
@@ -407,11 +412,11 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             <View style={st.tHead}>
               <Text style={[st.th, { width: "26%" }]}>Adres</Text><Text style={[st.th, { width: "31%" }]}>Neden</Text><Text style={[st.th, { width: "31%" }]}>Önerimiz</Text><Text style={[st.th, { width: "12%" }]}>Öncelik</Text>
             </View>
-            {oneriliKay.map((t, i) => { const o = oneriUret(t); const ac = aksiyonGerekli(t); return (
+            {oneriliKay.map((t, i) => { const o = oneriUret(t); return (
               <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]} wrap={false}>
                 <Text style={[st.td, { width: "26%", fontWeight: "bold", color: LACIVERT }]}>{t.domain}</Text>
                 <Text style={[st.td, { width: "31%", paddingRight: 6 }]}>{o.neden}</Text>
-                <Text style={[st.td, { width: "31%", paddingRight: 6 }]}>{o.oneri}{ac ? "  " : ""}{ac && <Link src={BILDIR_URL} style={{ color: KIRMIZI, fontWeight: "bold", textDecoration: "none" }}>[ BİLDİR › ]</Link>}</Text>
+                <Text style={[st.td, { width: "31%", paddingRight: 6 }]}>{o.oneri}</Text>
                 <Text style={[st.td, { width: "12%", color: o.oncelik === "Öncelikli" ? KIRMIZI : SEV(t.durum), fontWeight: "bold" }]}>{o.oncelik}</Text>
               </View>
             ); })}
@@ -457,10 +462,6 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
                   <Text style={{ fontSize: 8, color: "#33405c", flex: 1, lineHeight: 1.4 }}><Text style={{ fontWeight: "bold" }}>{x.ad}: </Text>{x.ac}</Text>
                 </View>
               ))}
-              <View style={{ flexDirection: "row", marginTop: 5, paddingTop: 5, borderTopColor: CIZGI, borderTopWidth: 1 }}>
-                <View style={{ backgroundColor: KIRMIZI, borderRadius: 2, paddingHorizontal: 4, paddingVertical: 1, marginRight: 6, height: 12 }}><Text style={{ fontSize: 6.5, color: "#fff", fontWeight: "bold" }}>BİLDİR</Text></View>
-                <Text style={{ fontSize: 8, color: "#33405c", flex: 1, lineHeight: 1.4 }}><Text style={{ fontWeight: "bold" }}>Kırmızı &quot;Bildir&quot; işareti: </Text>adres canlı, USOM listesinde yok ve BTK engeli görülmedi — yetkililerce henüz durdurulmamış aktif tehdit. Tıklanınca resmî İhbar Web (ihbarweb.org.tr) açılır; ihbarı kurum gönderir.</Text>
-              </View>
             </View>
             <Baslik metin="Detaylı Bulgular" ikon="▤" />
             {v.oneCikan.map((t, i) => (
@@ -468,13 +469,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
                 <Text style={{ fontSize: 11, fontWeight: "bold", color: LACIVERT, marginBottom: 2 }}>
                   <Text style={{ color: TEAL }}>{`4.${i + 1}`}</Text>{`  ${t.domain}`}  <Text style={{ fontSize: 9, fontWeight: "normal", color: SEV(t.durum) }}>({DURUM_AD[t.durum || ""] || "İnceleniyor"} · %{t.skor})</Text>
                 </Text>
-                <Text style={{ fontSize: 9.5, lineHeight: 1.55, color: "#26324a", textAlign: "justify" }}>{detayMetin(t)}</Text>
-                {aksiyonGerekli(t) && (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
-                    <Link src={BILDIR_URL} style={{ fontSize: 9, color: "#fff", fontWeight: "bold", textDecoration: "none", backgroundColor: KIRMIZI, paddingVertical: 3, paddingHorizontal: 9, borderRadius: 3 }}>USOM&apos;a BİLDİR</Link>
-                    <Text style={{ fontSize: 8, color: GRI, fontStyle: "italic" }}>Canlı + USOM&apos;da yok + BTK engeli görülmedi — bildirim önerilir.</Text>
-                  </View>
-                )}
+                <Text style={{ fontSize: 12, lineHeight: 1.5, color: "#26324a", textAlign: "justify" }}>{detayMetin(t)}</Text>
               </View>
             ))}
           </View>
@@ -494,7 +489,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             {tumTespit.sort((a, b) => (b.skor || 0) - (a.skor || 0)).slice(0, 160).map((t, i) => (
               <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]} wrap={false}>
                 <Text style={[st.td, { width: "25%", fontWeight: "medium", color: LACIVERT, fontSize: t.domain.length > 34 ? 6.4 : 7.6 }]}>{t.domain}</Text>
-                <Text style={[st.td, { width: "16%", fontSize: 7.4, color: aksiyonGerekli(t) ? KIRMIZI : t.engelli === true ? YESIL : t.canliDurum === "dead" ? GRI : "#33405c" }]}>{durumKisa(t)}{aksiyonGerekli(t) ? " ›Bildir" : ""}</Text>
+                <Text style={[st.td, { width: "16%", fontSize: 7.4, color: aksiyonGerekli(t) ? KIRMIZI : t.engelli === true ? YESIL : t.canliDurum === "dead" ? GRI : "#33405c" }]}>{durumKisa(t)}</Text>
                 <Text style={[st.td, { width: "13%", fontSize: 7.6 }]}>{t.ip || "—"}</Text>
                 <Text style={[st.td, { width: "23%", fontSize: 7.4, paddingRight: 4 }]}>{t.asn || "—"}</Text>
                 <Text style={[st.td, { width: "10%", fontSize: 7.6 }]}>{t.ulke || "—"}</Text>
@@ -511,6 +506,56 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
               <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: TEAL }} />
               <Text style={{ fontSize: 9, color: "#33405c" }}><Text style={st.guclu}>ÖNEMLİ NOT:</Text> Bulgular doğrulama anına ({v.tarih}) aittir; bir adresin durumu zamanla değişebilir.</Text>
             </View>
+          </View>
+        </Page>
+      )}
+
+      {/* ── UYGULAMA MAĞAZALARI + REKLAM İZLEME ── */}
+      {((v.uygulamalar && v.uygulamalar.length > 0) || v.reklamNotu || (v.reklamlar && v.reklamlar.length > 0)) && (
+        <Page size="A4" style={st.page}>
+          <Antet /><Footer />
+          <View style={st.govde}>
+            <Baslik metin="Uygulama Mağazaları ve Reklam İzleme" ikon="▤" />
+            <Text style={st.p}>Marka adını taşıyan mobil uygulamalar (App Store / Google Play) ve reklam kampanyaları taranır; resmî geliştiriciden mi yoksa üçüncü taraf mı olduğu ayrılır.</Text>
+
+            <Text style={{ fontSize: 12, fontWeight: "bold", color: LACIVERT, marginTop: 8, marginBottom: 4 }}>Mobil Uygulamalar{v.appOzet ? ` — ${v.appOzet.toplam} bulundu, ${v.appOzet.incele} incelenecek` : ""}</Text>
+            {v.uygulamalar && v.uygulamalar.length > 0 ? (
+              <>
+                <View style={st.tHead}>
+                  <Text style={[st.th, { width: "16%" }]}>Platform</Text><Text style={[st.th, { width: "30%" }]}>Uygulama</Text><Text style={[st.th, { width: "30%" }]}>Geliştirici</Text><Text style={[st.th, { width: "9%" }]}>Puan</Text><Text style={[st.th, { width: "15%" }]}>Değerlendirme</Text>
+                </View>
+                {v.uygulamalar.map((a, i) => (
+                  <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]} wrap={false}>
+                    <Text style={[st.td, { width: "16%", fontSize: 8.5 }]}>{a.platform === "ios" ? "App Store" : "Google Play"}</Text>
+                    <Text style={[st.td, { width: "30%", fontWeight: "medium", color: LACIVERT, fontSize: 8.5 }]}>{a.ad}</Text>
+                    <Text style={[st.td, { width: "30%", fontSize: 8 }]}>{a.gelistirici}</Text>
+                    <Text style={[st.td, { width: "9%", fontSize: 8.5 }]}>{typeof a.puan === "number" ? a.puan.toFixed(1) : "—"}</Text>
+                    <Text style={[st.td, { width: "15%", fontSize: 8.5, color: a.resmiMi ? YESIL : TURUNCU, fontWeight: "bold" }]}>{a.resmiMi ? "Resmî geliştirici" : "İncelenmeli"}</Text>
+                  </View>
+                ))}
+                <Text style={{ fontSize: 8, color: GRI, marginTop: 5, fontStyle: "italic" }}>&quot;İncelenmeli&quot; = resmî geliştirici hesabından yayınlanmamış; marka adını taşıyan üçüncü-taraf uygulama (taklit/yanıltıcı olabilir, elle doğrulanmalı). &quot;Resmî geliştirici&quot; = kurumun kendi hesabı.</Text>
+              </>
+            ) : <Text style={st.p}>Marka adını taşıyan mobil uygulama tespit edilmedi.</Text>}
+
+            <Text style={{ fontSize: 12, fontWeight: "bold", color: LACIVERT, marginTop: 14, marginBottom: 4 }}>Reklam Kampanyaları</Text>
+            {v.reklamlar && v.reklamlar.length > 0 ? (
+              <>
+                <View style={st.tHead}>
+                  <Text style={[st.th, { width: "34%" }]}>Reklamveren</Text><Text style={[st.th, { width: "44%" }]}>Başlık</Text><Text style={[st.th, { width: "22%" }]}>Platform</Text>
+                </View>
+                {v.reklamlar.map((r, i) => (
+                  <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]} wrap={false}>
+                    <Text style={[st.td, { width: "34%", fontSize: 8.5, color: r.supheli ? KIRMIZI : LACIVERT, fontWeight: r.supheli ? "bold" : "normal" }]}>{r.reklamveren}</Text>
+                    <Text style={[st.td, { width: "44%", fontSize: 8 }]}>{r.baslik || "—"}</Text>
+                    <Text style={[st.td, { width: "22%", fontSize: 8 }]}>{(r.platformlar || []).join(", ") || "—"}</Text>
+                  </View>
+                ))}
+              </>
+            ) : (
+              <View style={{ backgroundColor: "#f6f9fb", borderColor: CIZGI, borderWidth: 1, borderRadius: 5, padding: 10 }}>
+                <Text style={{ fontSize: 11, color: "#33405c", lineHeight: 1.5 }}>{v.reklamNotu || "Bu dönemde marka adını taşıyan reklam kampanyası tespit edilmedi."}</Text>
+              </View>
+            )}
           </View>
         </Page>
       )}
