@@ -116,6 +116,7 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "southwind", ad: "SouthWind Airlines", resmi: ["southwindairlines.com"], yaygin: true },
   { anahtar: "tailwind", ad: "Tailwind Airlines", resmi: ["tailwind.com.tr"], yaygin: true },
   { anahtar: "mngairlines", ad: "MNG Airlines", resmi: ["mngairlines.com"] },
+  { anahtar: "qatarairways", ad: "Qatar Airways", resmi: ["qatarairways.com"], kaliplari: ["qatar-airways"] },
   { anahtar: "mirleon", ad: "Mirleon", resmi: ["mirleon.ai"] },
   { anahtar: "araskargo", ad: "Aras Kargo", resmi: ["araskargo.com.tr"] },
   { anahtar: "yurticikargo", ad: "Yurtiçi Kargo", resmi: ["yurticikargo.com"] },
@@ -143,6 +144,9 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "sehircilik", ad: "Çevre, Şehircilik ve İklim Değişikliği Bakanlığı", resmi: ["csb.gov.tr"] },
   // ── Perakende / sivil toplum / kamu ──
   { anahtar: "migros", ad: "Migros", resmi: ["migros.com.tr", "sanalmarket.com.tr"] },
+  // "basil" yaygın kelime (fesleğen otu / Basil ismi — basilico, sweetbasil, basilica) → yaygin:
+  // sınır kelime-içi eşleşmeyi zaten eler, ek olarak riskli TLD/bağlam şart (sağlıklı yemek markası).
+  { anahtar: "basil", ad: "Basil (Sağlıklı Yemek)", resmi: ["basil.com.tr"], yaygin: true },
   { anahtar: "losev", ad: "LÖSEV (Lösemili Çocuklar Vakfı)", resmi: ["losev.org.tr"] },
   { anahtar: "diyanet", ad: "Diyanet İşleri Başkanlığı", resmi: ["diyanet.gov.tr"] },
   // Kültür ve Turizm Bakanlığı — anahtar "ktb" DEĞİL (3 harf → taranamaz/gürültü); ayırt edici
