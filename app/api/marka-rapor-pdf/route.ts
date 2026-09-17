@@ -14,7 +14,7 @@ import { reklamTara } from "@/lib/reklamTarama";
 async function ipApi(ip: string): Promise<{ as?: string; country?: string; org?: string; isp?: string; hosting?: boolean }> {
   try { const r = await fetch(`http://ip-api.com/json/${ip}?fields=country,as,org,isp,hosting`, { signal: AbortSignal.timeout(5000) }); return await r.json(); } catch { return {}; }
 }
-async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; usomda?: boolean | null; engelli?: boolean | null; sslGuvenli?: boolean | null }> {
+async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; canliNeden?: string; sslBitis?: string | null; usomda?: boolean | null; engelli?: boolean | null; sslGuvenli?: boolean | null }> {
   try {
     // canlılık + USOM PARALEL — her adrese "canlı mı + USOM'da mı" birlikte bakılır (bildir kararı için).
     const [c, usomda] = await Promise.all([canlilikProbe(domain), usomBiliniyor(domain).catch(() => null)]);
@@ -28,7 +28,7 @@ async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string;
       asn: [org, asnNo].filter(Boolean).join(" · "),
       ulke: g.country || "",
       altyapi: g.hosting ? "CDN/proxy" : (org ? "Veri merkezi" : ""),
-      canliDurum: c.durum, usomda, engelli, sslGuvenli: c.ssl.guvenilir,
+      canliDurum: c.durum, canliNeden: c.kokNeden, sslBitis: c.ssl.bitis, usomda, engelli, sslGuvenli: c.ssl.guvenilir,
     };
   } catch { return {}; }
 }
@@ -130,8 +130,9 @@ export async function GET(req: NextRequest) {
     Promise.all(oneCikanKay.map(async (a) => ({ ...tesp(a), etbis: etbisYerel(a.domain).kayitliMi }))),
     envanterIsi,
   ]);
-  // Uygulama mağazaları + reklam izleme (paralel, best-effort) — tekDomain modunda atla.
-  const [appSonuc, reklamSonuc] = tekDomain ? [null, null] : await Promise.all([
+  // Uygulama mağazaları + reklam izleme (paralel, best-effort) — HER raporda çalışır
+  // (iOS App Store + Android Google Play + Google/Meta reklam kütüphanesi bölümü her raporda görünür).
+  const [appSonuc, reklamSonuc] = await Promise.all([
     appTara(marka).catch(() => null),
     reklamTara(marka).catch(() => null),
   ]);
@@ -151,7 +152,7 @@ export async function GET(req: NextRequest) {
     uygulamalar: (appSonuc?.sonuc || []).slice(0, 14).map((a) => ({ platform: a.platform, ad: a.ad, gelistirici: a.gelistirici, puan: a.puan, resmiMi: a.resmiMi, durum: a.durum })),
     appOzet: appSonuc ? { toplam: appSonuc.toplam, resmi: appSonuc.resmi, incele: appSonuc.incele } : undefined,
     reklamlar: (reklamSonuc?.reklamlar || []).slice(0, 12),
-    reklamNotu: reklamSonuc ? (reklamSonuc.yapilandirildi ? undefined : "Reklam kampanyası izleme altyapısı (Meta / Google Ad Library) entegredir; bu marka için reklam tespiti, erişim yetkilendirmesi tamamlandığında bu bölümde raporlanacaktır.") : undefined,
+    reklamNotu: (reklamSonuc && reklamSonuc.yapilandirildi) ? undefined : "Reklam kampanyası izleme altyapısı (Meta Ad Library / Google Ads Transparency) entegredir; bu marka için reklam tespiti, erişim yetkilendirmesi tamamlandığında bu bölümde raporlanacaktır.",
     reklamSupheli: reklamSonuc?.supheli || 0,
   });
 

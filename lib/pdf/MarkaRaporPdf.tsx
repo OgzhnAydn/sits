@@ -21,7 +21,7 @@ Font.registerHyphenationCallback((w) => (w.length > 16 && /[.-]/.test(w) ? w.spl
 // Yalnız DEPOLANMIŞ/DOĞRULANMIŞ gerçek veri. Her cümle veriye dayanır (uydurma YOK).
 export type RaporTespit = { domain: string; skor: number; durum?: string; seviye?: string; zaman: number; sinyaller?: string[]; screenshot?: string | null; usomda?: boolean | null; engelli?: boolean | null; etbis?: boolean | null; alanlar?: { ad: string; deger: string }[];
   // Hafif teknik envanter (canlilikProbe + ip-api) — tam liste tablosu için
-  ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; sslGuvenli?: boolean | null };
+  ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; canliNeden?: string; sslBitis?: string | null; sslGuvenli?: boolean | null };
 export type MarkaRaporVeri = {
   markaAd: string;
   markaResmi?: string;         // resmî unvan/domain (kapak alt satırı)
@@ -244,9 +244,11 @@ function TehditHarita({ v }: { v: MarkaRaporVeri }) {
 
 // Bir tespit için kural-tabanlı ÖNERİ (gerçek USOM/BTK/durum verisinden — uydurma yok).
 function oneriUret(t: RaporTespit): { neden: string; oneri: string; oncelik: string } {
-  const aktif = t.durum === "aktif-tuzak", canli = t.durum === "canli";
+  const ed = etkinDurum(t); // taze sonda bayat durumu ezer
+  const aktif = ed === "aktif-tuzak", canli = ed === "canli", park = ed === "park" || t.canliDurum === "parked";
   if (t.engelli === true) return { neden: "BTK erişim engeli tespit edildi (engel sayfası görüldü).", oneri: "Zaten engelli; kesintisiz izleme yeterli.", oncelik: "Bilgi" };
   if (t.usomda === true) return { neden: "USOM resmî zararlı bağlantı listesinde kayıtlı; devlet tarafından işaretlenmiş.", oneri: "Kayıt mevcut, yeni bildirim gerekmez; kurumsal DNS'te engelleme + hukuki takip.", oncelik: "Yüksek" };
+  if (park) return { neden: "Alan adı satışa çıkarılmış / park edilmiş; şu an aktif sahte içerik yayınlamıyor (kayıtlı ama pasif).", oneri: "Aksiyon gerekmez; marka adını taşıdığı için izlemede tutulur, içerik yayınlanırsa yeniden değerlendirilir.", oncelik: "Düşük · izleme" };
   if (aksiyonGerekli(t)) return { neden: "Adres canlı, USOM listesinde yok ve BTK engeli görülmedi — yetkililerce henüz durdurulmamış aktif tehdit.", oneri: "USOM/İhbar Web'e bildirim + BTK'ya erişim engeli (tedbir) başvurusu + alan adı kayıt firmasına (Registrar) abuse bildirimi önerilir.", oncelik: "Öncelikli" };
   if (aktif) return { neden: "Aktif tuzak: marka adını taşıyan, resmî olmayan canlı adres.", oneri: "USOM'a bildirim (henüz kayıtlı değil) + kesintisiz izleme.", oncelik: "Yüksek" };
   if (canli) return { neden: "Canlı adres; marka adını izinsiz kullanıyor, içerik doğrulanmalı.", oneri: "Günlük izleme; içerik/logo taklidi belirirse aynı gün bildirim.", oncelik: "Orta · izleme" };
@@ -300,6 +302,40 @@ function detayMetin(t: RaporTespit, markaAd?: string, markaResmi?: string): stri
   P.push("Kesin sınıflandırma için adresin teknik ve içerik bazlı olarak ayrıca incelenmesi gerekmektedir. Bir adresin risk göstergeleri taşıması veya izleme listelerinde yer alması, tek başına hukuki açıdan kesin bir sahtecilik ya da dolandırıcılık tespiti anlamına gelmez.");
 
   return P.join("\n\n");
+}
+
+// ── Adres başına TEKNİK KÜNYE (mercek kartı özeti) ──────────────────────────
+// Her öne çıkan adresin YANINDA yapılandırılmış teknik veri: güven skoru, canlı
+// durum + kök-neden açıklaması, IP/ASN, sertifika, ilk gözlem, kara-liste.
+const KunyeSatir = ({ etiket, deger, renk }: { etiket: string; deger: string; renk?: string }) => (
+  <View style={{ flexDirection: "row", marginBottom: 2 }}>
+    <Text style={{ width: 92, fontSize: 8, color: GRI, fontWeight: "bold" }}>{etiket}</Text>
+    <Text style={{ flex: 1, fontSize: 8, color: renk || "#33405c" }}>{deger}</Text>
+  </View>
+);
+function Kunye({ t }: { t: RaporTespit }) {
+  const usomStr = t.usomda === true ? "USOM'da KAYITLI" : t.usomda === false ? "USOM'da yok (erken tespit)" : "USOM: bilinmiyor";
+  const btkStr = t.engelli === true ? " · BTK: engelli" : t.engelli === false ? " · BTK: engel görülmedi" : "";
+  const sert = [t.ca || null, t.sslGuvenli === true ? "geçerli" : t.sslGuvenli === false ? "GÜVENİLMEZ" : null, t.sslBitis ? `bitiş ${t.sslBitis}` : null].filter(Boolean).join(" · ") || "—";
+  return (
+    <View style={{ marginTop: 6, backgroundColor: "#f6f9fb", borderColor: CIZGI, borderWidth: 1, borderLeftColor: TEAL, borderLeftWidth: 3, borderRadius: 4, padding: 8 }} wrap={false}>
+      <Text style={{ fontSize: 8.4, fontWeight: "bold", color: LACIVERT, marginBottom: 4 }}>Teknik Künye</Text>
+      <View style={{ flexDirection: "row", gap: 14 }}>
+        <View style={{ flex: 1 }}>
+          <KunyeSatir etiket="Güven skoru" deger={`${t.skor}/100`} />
+          <KunyeSatir etiket="Canlı durum" deger={durumTam(t)} renk={aksiyonGerekli(t) ? KIRMIZI : t.engelli === true ? YESIL : "#26324a"} />
+          <KunyeSatir etiket="IP adresi" deger={t.ip || "—"} />
+          <KunyeSatir etiket="Barındırma" deger={[t.asn, t.ulke].filter(Boolean).join(" · ") || "—"} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <KunyeSatir etiket="Sertifika" deger={sert} renk={t.sslGuvenli === false ? KIRMIZI : "#33405c"} />
+          <KunyeSatir etiket="İlk gözlem" deger={zmn(t.zaman)} />
+          <KunyeSatir etiket="Kara liste" deger={usomStr + btkStr} renk={t.usomda === true || t.engelli === true ? KIRMIZI : "#33405c"} />
+        </View>
+      </View>
+      {t.canliNeden ? <Text style={{ fontSize: 8, color: "#4a5568", marginTop: 4, lineHeight: 1.4 }}><Text style={{ fontWeight: "bold", color: GRI }}>Durum açıklaması: </Text>{t.canliNeden}</Text> : null}
+    </View>
+  );
 }
 
 export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
@@ -529,6 +565,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
                 {detayMetin(t, v.markaAd, v.markaResmi).split("\n\n").map((par, pi) => (
                   <Text key={pi} style={{ fontSize: 12, lineHeight: 1.5, color: "#26324a", textAlign: "justify", marginTop: pi ? 5 : 0 }}>{par}</Text>
                 ))}
+                <Kunye t={t} />
               </View>
             ))}
           </View>
@@ -569,13 +606,13 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
         </Page>
       )}
 
-      {/* ── UYGULAMA MAĞAZALARI + REKLAM İZLEME ── */}
-      {((v.uygulamalar && v.uygulamalar.length > 0) || v.reklamNotu || (v.reklamlar && v.reklamlar.length > 0)) && (
+      {/* ── UYGULAMA MAĞAZALARI + REKLAM İZLEME (her raporda) ── */}
+      {(
         <Page size="A4" style={st.page}>
           <Antet /><Footer />
           <View style={st.govde}>
             <Baslik metin="Uygulama Mağazaları ve Reklam İzleme" ikon="▤" />
-            <Text style={st.p}>Marka adını taşıyan mobil uygulamalar (App Store / Google Play) ve reklam kampanyaları taranır; resmî geliştiriciden mi yoksa üçüncü taraf mı olduğu ayrılır.</Text>
+            <Text style={st.p}>Marka adını taşıyan mobil uygulamalar (iOS App Store / Android Google Play) ve reklam kampanyaları (Meta Ad Library / Google Ads) taranır; resmî geliştiriciden mi yoksa üçüncü taraf mı olduğu ayrılır.</Text>
 
             <Text style={{ fontSize: 12, fontWeight: "bold", color: LACIVERT, marginTop: 8, marginBottom: 4 }}>Mobil Uygulamalar{v.appOzet ? ` — ${v.appOzet.toplam} bulundu, ${v.appOzet.incele} incelenecek` : ""}</Text>
             {v.uygulamalar && v.uygulamalar.length > 0 ? (
@@ -594,7 +631,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
                 ))}
                 <Text style={{ fontSize: 8, color: GRI, marginTop: 5, fontStyle: "italic" }}>&quot;İncelenmeli&quot; = resmî geliştirici hesabından yayınlanmamış; marka adını taşıyan üçüncü-taraf uygulama (taklit/yanıltıcı olabilir, elle doğrulanmalı). &quot;Resmî geliştirici&quot; = kurumun kendi hesabı.</Text>
               </>
-            ) : <Text style={st.p}>Marka adını taşıyan mobil uygulama tespit edilmedi.</Text>}
+            ) : <Text style={st.p}>iOS App Store ve Android Google Play tarandı; bu dönemde marka adını taşıyan mobil uygulama tespit edilmedi.</Text>}
 
             <Text style={{ fontSize: 12, fontWeight: "bold", color: LACIVERT, marginTop: 14, marginBottom: 4 }}>Reklam Kampanyaları</Text>
             {v.reklamlar && v.reklamlar.length > 0 ? (
