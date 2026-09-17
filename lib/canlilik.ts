@@ -84,8 +84,10 @@ function sslKontrol(host: string, ms = 6000): Promise<SslSonuc> {
 }
 
 const TARAYICI = { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36", accept: "text/html" };
-const PARK_IMZA = /this domain (is|may be) (for sale|available)|is available to be registered|parklogic|sedoparking|parkingcrew|hugedomains|dan\.com|buy this domain|domain (is )?for sale|this (web )?page is parked|alan ad[ıi] sat[ıi]l|welcome to nginx|apache2? (ubuntu |debian )?default page|it works!|default web (page|site)|site not (yet )?configured|litespeed web server|cyberpanel|domain (default|park)/i;
+const PARK_IMZA = /this domain (is|may be) (for sale|available)|is available to be registered|parklogic|sedoparking|parkingcrew|hugedomains|dan\.com|buy this domain|domain (is )?for sale|this (web )?page is parked|alan ad[ıi] sat[ıi]l|welcome to nginx|apache2? (ubuntu |debian )?default page|it works!|default web (page|site)|site not (yet )?configured|litespeed web server|cyberpanel|domain (default|park)|location\.href\s*=\s*["']\/lander["']|img1\.wsimg\.com\/parking|caf\.godaddy/i;
 const YONLENDIR_KANAL = /t\.me\/|telegram|wa\.me\/|whatsapp|api\.whatsapp/i;
+// Park/satılık pazarları — buraya yönlendirme cloaking değil, alan adı satışta/park (aktif içerik yok).
+const PARK_PAZAR = /(?:^|\.)(?:forsale\.godaddy|sale\.godaddy|godaddy)\.com$|(?:^|\.)sedo(?:parking)?\.com$|(?:^|\.)dan\.com$|(?:^|\.)afternic\.com$|(?:^|\.)hugedomains\.com$|(?:^|\.)bodis\.com$|(?:^|\.)above\.com$|(?:^|\.)parkingcrew\.(?:net|com)$|(?:^|\.)uniregistry(?:market)?\.(?:com|link)$|(?:^|\.)buydomains\.com$|(?:^|\.)domainmarket\.com$|(?:^|\.)sav\.com$|(?:^|\.)voodoo\.com$|(?:^|\.)namebright\.com$|(?:^|\.)cashparking\.com$/i;
 
 // Ham TCP bağlanabilirlik (port 80/443 açık mı) — "connection refused" vs "timeout" ayrımı için.
 function portAcik(host: string, port: number, ms = 5000): Promise<"acik" | "refused" | "timeout"> {
@@ -172,6 +174,15 @@ export async function canlilikProbe(domain: string): Promise<CanlilikSonuc> {
     return sonuc;
   }
   if (httpRes.redirectHedef) {
+    let hedefHost = "";
+    try { hedefHost = new URL(httpRes.redirectHedef).hostname.replace(/^www\./, ""); } catch { /* */ }
+    // SATIŞ/PARK pazarına (forsale.godaddy, sedo, dan, afternic…) yönlendirme = cloaking DEĞİL:
+    // alan adı satışa çıkarılmış/park edilmiş, aktif oltalama sayfası yok → "parked".
+    if (hedefHost && PARK_PAZAR.test(hedefHost)) {
+      sonuc.durum = "parked";
+      sonuc.kokNeden = `Alan adı satışa çıkarılmış / park sayfasına (${hedefHost}) yönleniyor — aktif içerik yok, pasif izleme adayı.`;
+      return sonuc;
+    }
     const kanal = YONLENDIR_KANAL.test(httpRes.redirectHedef);
     sonuc.durum = "redirect";
     sonuc.kokNeden = kanal
@@ -241,10 +252,15 @@ async function httpProbe(domain: string): Promise<{ status: number | null; sunuc
       try {
         const html = (await r.text()).slice(0, 8000);
         park = PARK_IMZA.test(html);
-        const m = html.match(/<meta[^>]+http-equiv=["']?refresh["']?[^>]+url=([^"'>\s]+)/i);
-        if (m && m[1]) {
-          const hedef = new URL(m[1], current).toString();
-          if (new URL(hedef).hostname.replace(/^www\./, "") !== domain.replace(/^www\./, "")) {
+        // İstemci-taraflı yönlendirme: meta-refresh VEYA sayfa başındaki JS location.
+        // (GoDaddy satılık sayfası forsale.godaddy.com'a JS ile atar; yalnız meta bakmak yetmez.)
+        const meta = html.match(/<meta[^>]+http-equiv=["']?refresh["']?[^>]+url=([^"'>\s]+)/i);
+        const js = html.match(/(?:window\.|top\.|self\.|document\.)?location(?:\.href)?\s*=\s*["']([^"']+)["']/i)
+          || html.match(/location\.(?:replace|assign)\s*\(\s*["']([^"']+)["']/i);
+        const ham = (meta && meta[1]) || (js && js[1]);
+        if (ham) {
+          const hedef = new URL(ham.replace(/^['"]|['"]$/g, "").trim(), current).toString();
+          if (/^https?:/i.test(hedef) && new URL(hedef).hostname.replace(/^www\./, "") !== domain.replace(/^www\./, "")) {
             return { status: r.status, sunucu, hata: null, redirectHedef: hedef, park };
           }
         }

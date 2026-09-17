@@ -73,32 +73,6 @@ const IMail = ({ r = MAVI }: { r?: string }) => (
     <Path d="M2.5 4 L12 11 L21.5 4" stroke={r} strokeWidth={2} fill="none" />
   </Svg>
 );
-const SIN = "#cfe0ef"; // sosyal ikon rengi
-const ILinkedin = () => (
-  <Svg width={16} height={16} viewBox="0 0 24 24">
-    <Path d="M4 2 H20 A2 2 0 0 1 22 4 V20 A2 2 0 0 1 20 22 H4 A2 2 0 0 1 2 20 V4 A2 2 0 0 1 4 2 Z" fill={SIN} />
-    <Circle cx={7} cy={7} r={1.7} fill={KOYU} />
-    <Path d="M5.6 10 H8.4 V18 H5.6 Z" fill={KOYU} />
-    <Path d="M10.5 10 H13 V11.4 C13.5 10.4 14.6 9.8 15.9 9.8 C17.9 9.8 18.9 11.1 18.9 13.4 V18 H16.3 V13.9 C16.3 12.8 15.9 12.1 15 12.1 C14.1 12.1 13.3 12.8 13.3 14 V18 H10.5 Z" fill={KOYU} />
-  </Svg>
-);
-const IInstagram = () => (
-  <Svg width={16} height={16} viewBox="0 0 24 24">
-    <Path d="M7 3 H17 A4 4 0 0 1 21 7 V17 A4 4 0 0 1 17 21 H7 A4 4 0 0 1 3 17 V7 A4 4 0 0 1 7 3 Z" fill="none" stroke={SIN} strokeWidth={1.9} />
-    <Circle cx={12} cy={12} r={4} fill="none" stroke={SIN} strokeWidth={1.9} />
-    <Circle cx={17.2} cy={6.8} r={1.3} fill={SIN} />
-  </Svg>
-);
-const IX = () => (
-  <Svg width={14} height={14} viewBox="0 0 24 24">
-    <Path d="M3 3 L21 21 M21 3 L3 21" stroke={SIN} strokeWidth={2.6} />
-  </Svg>
-);
-const IN = () => (
-  <Svg width={14} height={15} viewBox="0 0 24 24">
-    <Path d="M4 20 V4 L20 20 V4" stroke={SIN} strokeWidth={2.6} fill="none" />
-  </Svg>
-);
 
 const SEV = (d?: string): string =>
   d === "aktif-tuzak" ? KIRMIZI : d === "canli" ? TURUNCU : d === "park" ? "#5b7290" : d === "yayinda-degil" ? "#8a97a5" : "#6b7280";
@@ -279,20 +253,53 @@ function oneriUret(t: RaporTespit): { neden: string; oneri: string; oncelik: str
   return { neden: "Kayıtlı ancak içerik yayında değil (park/izleme).", oneri: "Aksiyon gerekmez; Türkçe adlı kayıtlar öncelikli izlemede.", oncelik: "Düşük · artan" };
 }
 
-// Öne çıkan tespit için kural-tabanlı DETAYLI BULGU metni (gerçek verilerden).
-function detayMetin(t: RaporTespit): string {
-  const parca: string[] = [];
-  const durum = DURUM_AD[t.durum || ""] || "İnceleniyor";
-  parca.push(`${t.domain}, otomatik ön-değerlendirmede ${t.skor}/100 skorla "${durum}" olarak sınıflandırıldı.`);
-  if (t.engelli === true || t.canliDurum) parca.push(`Canlı doğrulama: ${durumTam(t)}.`);
-  if (t.ip || t.asn) parca.push(`Barındırma: ${[t.asn, t.ulke, t.altyapi].filter(Boolean).join(" · ")}${t.ip ? ` (IP ${t.ip})` : ""}${t.ca ? `; SSL: ${t.ca}${t.sslGuvenli === false ? " — GÜVENİLMEZ sertifika (kendinden-imzalı/geçersiz CA)" : t.sslGuvenli === true ? " (geçerli)" : ""}` : ""}.`);
-  if (t.usomda === false) parca.push("USOM listesinde yer almıyor — bu adresi resmî radardan önce yakaladık (biz-önce).");
-  if (t.usomda === true) parca.push("USOM resmî listesinde kayıtlı.");
-  if (t.engelli === true) parca.push("BTK tarafından erişime engellenmiş.");
-  if (t.etbis === true) parca.push("ETBİS e-ticaret sicilinde kayıtlı.");
-  if (t.sinyaller && t.sinyaller.length) parca.push("Sinyaller: " + t.sinyaller.slice(0, 3).join("; ") + ".");
-  parca.push("Kesin sahtelik sınıflandırması için adres ayrıca incelenir; listede yer alması tek başına hukuki tespit anlamına gelmez.");
-  return parca.join(" ");
+// Öne çıkan başlık/renk için ETKİN durum — taze canlılık sondası (canliDurum) bayat
+// stored durumu ezer (ör. eski kayıtta "canlı" ama şu an park/satılık ise "park" göster).
+function etkinDurum(t: RaporTespit): string {
+  if (t.canliDurum === "parked") return "park";
+  if (t.canliDurum === "dead") return "yayinda-degil";
+  return t.durum || "";
+}
+
+// Riskli/ucuz uzantılar — dolandırıcılık vakalarında sık görülür (uzantı prose bulgusu için).
+const RISKLI_UZANTI = new Set(["xyz", "top", "site", "online", "shop", "live", "click", "vip", "icu", "buzz", "cyou", "monster", "rest", "fun", "space", "website", "info", "biz", "club", "tk", "cf", "gq", "ml", "ga", "work", "sbs", "store", "pro"]);
+
+// Öne çıkan tespit için RESMÎ, akıcı 3-paragraflı bulgu metni (gerçek verilerden; teknik
+// barındırma/SSL detayı EK tam listede tablo halinde verildiği için burada tekrarlanmaz).
+function detayMetin(t: RaporTespit, markaAd?: string, markaResmi?: string): string {
+  const P: string[] = [];
+  const marka = markaAd || "ilgili kurum/marka";
+  const resmiParen = markaResmi ? ` (${markaResmi})` : "";
+  const siny = (t.sinyaller || []).join("  ");
+  const park = t.durum === "park" || t.durum === "yayinda-degil" || t.canliDurum === "parked";
+
+  // ── 1) USOM / erken tespit çerçevesi ──
+  if (t.usomda === true) {
+    P.push(`İlgili adres, T.C. Siber Güvenlik Başkanlığı (USOM) resmî zararlı bağlantı listesinde kayıtlı olup devlet tarafından tehlikeli olarak işaretlenmiştir.${t.engelli === true ? " Adrese erişim ayrıca BTK tarafından engellenmiştir." : ""}`);
+  } else if (t.usomda === false) {
+    P.push("İlgili adres, mevcut durumda USOM (Ulusal Siber Olaylara Müdahale Merkezi) listesinde yer almamaktadır. Ancak sistemimiz tarafından, resmî listelere yansımadan önce potansiyel risk sinyalleri tespit edilmiştir.");
+  } else {
+    P.push("İlgili adresin USOM listesindeki durumu bu taramada kesin olarak doğrulanamamıştır; bununla birlikte sistemimiz tarafından potansiyel risk sinyalleri tespit edilmiştir.");
+  }
+
+  // ── 2) Bulgular (akıcı) + duruma göre sonuç cümlesi ──
+  const bulg: string[] = [];
+  const tld = t.domain.split(".").slice(1).join(".");
+  if (RISKLI_UZANTI.has(tld)) bulg.push(`adresin, dolandırıcılık ve kötüye kullanım vakalarında sıklıkla karşılaşılan ".${tld}" uzantısını kullandığı`);
+  bulg.push(`${marka} ile ilişkili resmî bir adres izlenimi oluşturmasına rağmen, ${marka} tarafından kullanılan resmî alan adının${resmiParen} bu adres olmadığı`);
+  if (/yeni|1 haftadan|1 aydan|90 gün|yakın zamanda|tescil/i.test(siny)) bulg.push("alan adının yakın zamanda tescil edildiği");
+  if (park) bulg.push("adresin hâlihazırda satışa çıkarılmış / park edilmiş durumda olduğu");
+
+  const birlestir = bulg.length <= 1 ? (bulg[0] || "") : bulg.slice(0, -1).join("; ") + " ve " + bulg[bulg.length - 1];
+  const sonuc = park
+    ? "Bu göstergeler, alan adının marka adını izinsiz taşıdığına işaret etmekle birlikte; adresin, incelendiği anda aktif bir sahte veya oltalama sayfası yayınlamadığı, kayıtlı ancak pasif (park/satılık) durumda olduğu görülmüştür."
+    : "Bu göstergeler, adresin taklit veya sahte içerik amacıyla kullanılıyor olabileceğine işaret etmektedir.";
+  P.push(`Yapılan ön değerlendirmede, ${birlestir} belirlenmiştir. ${sonuc}`);
+
+  // ── 3) Hukuki çekince ──
+  P.push("Kesin sınıflandırma için adresin teknik ve içerik bazlı olarak ayrıca incelenmesi gerekmektedir. Bir adresin risk göstergeleri taşıması veya izleme listelerinde yer alması, tek başına hukuki açıdan kesin bir sahtecilik ya da dolandırıcılık tespiti anlamına gelmez.");
+
+  return P.join("\n\n");
 }
 
 export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
@@ -310,7 +317,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
   for (const t of tumTespit) katSay[tKategori(t, kumeVar ? enKalabalik[0] : "")]++;
 
   const Cip = ({ text, color }: { text: string; color: string }) => <Text style={[st.cip, { color, borderColor: color }]}>{text}</Text>;
-  const usomCip = (u?: boolean | null) => u === true ? <Cip text="USOM'da kayıtlı" color={KIRMIZI} /> : u === false ? <Cip text="USOM'da yok · biz-önce" color={YESIL} /> : <Cip text="USOM: bilinmiyor" color="#8a97a5" />;
+  const usomCip = (u?: boolean | null) => u === true ? <Cip text="USOM'da kayıtlı" color={KIRMIZI} /> : u === false ? <Cip text="USOM'da yok · erken tespit" color={YESIL} /> : <Cip text="USOM: bilinmiyor" color="#8a97a5" />;
   const btkCip = (e?: boolean | null) => e === true ? <Cip text="BTK · engelli" color="#7a4b8a" /> : e === false ? <Cip text="BTK engeli yok" color={GRI} /> : <Cip text="BTK: bilinmiyor" color="#8a97a5" />;
   const etbisCip = (t?: boolean | null) => t === true ? <Cip text="ETBİS'te kayıtlı" color={TEAL} /> : t === false ? <Cip text="ETBİS'te yok" color={GRI} /> : <Cip text="ETBİS: bilinmiyor" color="#8a97a5" />;
 
@@ -431,7 +438,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             <Text style={st.guclu}>Ham sayı yanıltıcı olabilir:</Text> {v.ozet.toplam} adresin {kumeAdet}'i tek bir <Text style={st.guclu}>.{enKalabalik[0]}</Text> toplu-kayıt kümesidir (aynı operasyon). Pratikte <Text style={st.guclu}>{ayriAdet} ayrı adres + 1 küme</Text> söz konusudur.
           </Text></View>}
           <View style={st.madde}><Text style={st.maddeIsaret}>•</Text><Text style={st.maddeMetin}>
-            <Text style={st.guclu}>{v.erkenlik.usomdaYok} adres</Text> ulusal engelleme listesinde henüz yer almıyor — bunları resmî radardan önce yakaladık (biz-önce). Erken tespit, itibara ulaşmadan müdahale imkânı verir.
+            <Text style={st.guclu}>{v.erkenlik.usomdaYok} adres</Text> ulusal engelleme (USOM) listesinde henüz yer almamaktadır; bu adresler, resmî listelere yansımadan önce sistemimiz tarafından tespit edilmiştir. Erken tespit, itibara zarar gelmeden müdahale imkânı sağlar.
           </Text></View>
           {v.ozet.canli > 0 && <View style={st.madde}><Text style={st.maddeIsaret}>•</Text><Text style={st.maddeMetin}>
             <Text style={st.guclu}>{v.ozet.canli} canlı adres izlemededir.</Text> İçerik doğrulaması sürmekte; logo/form taklidi belirirse aynı gün bildirim yapılır.
@@ -517,9 +524,11 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             {v.oneCikan.map((t, i) => (
               <View key={i} wrap={false} style={{ marginBottom: 9 }}>
                 <Text style={{ fontSize: 11, fontWeight: "bold", color: LACIVERT, marginBottom: 2 }}>
-                  <Text style={{ color: TEAL }}>{`4.${i + 1}`}</Text>{`  ${t.domain}`}  <Text style={{ fontSize: 9, fontWeight: "normal", color: SEV(t.durum) }}>({DURUM_AD[t.durum || ""] || "İnceleniyor"} · %{t.skor})</Text>
+                  <Text style={{ color: TEAL }}>{`4.${i + 1}`}</Text>{`  ${t.domain}`}  <Text style={{ fontSize: 9, fontWeight: "normal", color: SEV(etkinDurum(t)) }}>({DURUM_AD[etkinDurum(t)] || "İnceleniyor"} · %{t.skor})</Text>
                 </Text>
-                <Text style={{ fontSize: 12, lineHeight: 1.5, color: "#26324a", textAlign: "justify" }}>{detayMetin(t)}</Text>
+                {detayMetin(t, v.markaAd, v.markaResmi).split("\n\n").map((par, pi) => (
+                  <Text key={pi} style={{ fontSize: 12, lineHeight: 1.5, color: "#26324a", textAlign: "justify", marginTop: pi ? 5 : 0 }}>{par}</Text>
+                ))}
               </View>
             ))}
           </View>
@@ -656,13 +665,8 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             </View>
           </View>
 
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 54, borderTopColor: "#26456a", borderTopWidth: 1, paddingTop: 20 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
-              <IMail /><Text style={{ color: "#dbe6f5", fontSize: 11.5 }}>info@mirleon.ai</Text>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
-              <ILinkedin /><IInstagram /><IX /><IN />
-            </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 9, marginTop: 54, borderTopColor: "#26456a", borderTopWidth: 1, paddingTop: 20 }}>
+            <IMail /><Text style={{ color: "#dbe6f5", fontSize: 11.5 }}>info@mirleon.ai</Text>
           </View>
         </View>
 

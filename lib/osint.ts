@@ -413,6 +413,12 @@ function reklamAglari(ham: string): { yaygin: boolean; agresif: boolean } {
   return { yaygin: REKLAM_YAYGIN.test(ham), agresif: REKLAM_AGRESIF.test(ham) };
 }
 
+// ── PARK / SATILIK PAZARLARI ─────────────────────────────────────────────────
+// Bir alan adı BU host'lardan birine yönleniyorsa "sahte sayfayı gizleme" DEĞİL,
+// alan adı satışa çıkarılmış / park edilmiş demektir (aktif oltalama değil, pasif
+// izleme adayı). GoDaddy'nin satış sayfası (forsale.godaddy.com) dahil.
+const PARK_PAZAR = /(?:^|\.)(?:forsale\.godaddy|sale\.godaddy|godaddy)\.com$|(?:^|\.)sedo(?:parking)?\.com$|(?:^|\.)dan\.com$|(?:^|\.)afternic\.com$|(?:^|\.)hugedomains\.com$|(?:^|\.)bodis\.com$|(?:^|\.)above\.com$|(?:^|\.)parkingcrew\.(?:net|com)$|(?:^|\.)uniregistry(?:market)?\.(?:com|link)$|(?:^|\.)buydomains\.com$|(?:^|\.)domainmarket\.com$|(?:^|\.)sav\.com$|(?:^|\.)voodoo\.com$|(?:^|\.)namebright\.com$|(?:^|\.)cashparking\.com$/i;
+
 // ── VARSAYILAN / BOŞ KURULUM SAYFASI TESPİTİ ─────────────────────────────────
 // urlscan görüntüsü bazen sahte içeriği DEĞİL, hosting'in varsayılan sayfasını
 // gösterir (CyberPanel/nginx/Apache…). Sebep: zararlı içerik kaldırılmış YA DA
@@ -1096,6 +1102,13 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
         if (mesruHedef) {
           mesruYonlendirme = true;
           r.alanlar.push({ ad: "Not", deger: `Kendi/resmî marka adresine yönlendiriyor (${sonHost}) — meşru birleştirme` });
+        } else if (PARK_PAZAR.test(sonHost)) {
+          // Alan adı bir SATIŞ/park pazarına (forsale.godaddy, sedo, dan, afternic…) yönleniyor.
+          // Bu "sahte sayfayı gizleme" DEĞİLDİR — alan adı satışa çıkarılmış/park edilmiş, ŞU AN
+          // aktif bir oltalama sayfası YAYINLAMIYOR. Aktif tuzak gibi RİSK EKLEME; durumu "park"a çeken
+          // "Site durumu" alanı ekle (domainDurumu bunu okur → aktif-tuzak değil, park/izleme).
+          if (!r.alanlar.some((x) => x.ad === "Site durumu")) r.alanlar.push({ ad: "Site durumu", deger: `Park / satılık — alan adı satış sayfasına (${sonHost}) yönleniyor, aktif içerik yok` });
+          r.bulgular.push(`Bu alan adı şu anda SATIŞA çıkarılmış / park sayfasına (${sonHost}) yönleniyor — aktif bir oltalama/sahte sayfası yayınlamıyor. Kayıtlı ama pasif; marka adını taşıdığı için izlemeye alındı.`);
         } else if (hedefLabel !== kaynakLabel) {
           r.risk += 14;
           r.bulgular.push(`Bu adres seni BAŞKA bir siteye (${sonHost}) yönlendiriyor — dolandırıcılar asıl sahte sayfayı böyle gizler. Gittiğin yeri iki kez kontrol et.`);
@@ -1530,7 +1543,10 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
     // bayt, tarayıcıda 5G Saha Test giriş paneli.) FP tuzağı: normal SPA shell'i yüzlerce
     // bayttır → eşik <120 bayt + (marka VEYA mevcut şüphe) ile dar tutulur.
     const hamUz = sayfa ? sayfa.trim().length : -1;
-    if (hamUz >= 0 && hamUz < 120 && !mesruYonlendirme && !parkHostRe.test(sonUrl) && (markaEslesme || r.risk >= 25)) {
+    // Yönlendirme zinciri (ayrı, çok-adımlı) bir SATIŞ/PARK pazarını çözdüyse, bu alan adı
+    // park/satılıktır — sunucu-fetch'i boş dönse bile "cloaking/canlı tuzak" DEME (yanlış-pozitif).
+    const parkYonlendirme = !!yonlendirmeHedefi && PARK_PAZAR.test(yonlendirmeHedefi);
+    if (hamUz >= 0 && hamUz < 120 && !mesruYonlendirme && !parkHostRe.test(sonUrl) && !parkYonlendirme && (markaEslesme || r.risk >= 25)) {
       r.risk += 28;
       r.bulgular.unshift("Sayfanın içeriği tarayıcı-dışı erişime KAPALI — içerik gizleniyor (cloaking). Kimlik-avı siteleri gerçek tuzağı yalnız tarayıcıya gösterip tarayıcı-dışına boş sayfa döndürerek tespitten kaçar. Bu adres 'boş/park' değil; tarayıcıda canlı bir tuzak çalışıyor olabilir — kullanıcı adı/şifre GİRME.");
       r.alanlar.push({ ad: "İçerik gizleme (cloaking)", deger: "Sunucu erişimine boş/minik gövde döndü; içerik tarayıcıya özel — kaçınma (evasion) işareti" });
@@ -1538,7 +1554,7 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
     // PARK / SATILIK domain tespiti: (a) yönlendirilen FINAL host bilinen bir domain
     // pazarı mı (forsale.godaddy/sedo/dan.com…), VEYA (b) gövdede satış metni.
     const parkMetin = sayfa ? parkMetinRe.test(sayfa) : false;
-    if (parkHostRe.test(sonUrl) || parkMetin) parkli = true;
+    if (parkHostRe.test(sonUrl) || parkMetin || parkYonlendirme) parkli = true;
     if (sayfa) {
       iceriktenBulgu(sayfa, r, !!markaEslesme);
       // TELEGRAM EXFİL — kimlik-hırsızı kitleri bot token'ını çoğu zaman sayfa JS'ine GÖMER
