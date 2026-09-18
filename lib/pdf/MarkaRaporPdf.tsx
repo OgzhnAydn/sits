@@ -21,7 +21,7 @@ Font.registerHyphenationCallback((w) => (w.length > 16 && /[.-]/.test(w) ? w.spl
 // Yalnız DEPOLANMIŞ/DOĞRULANMIŞ gerçek veri. Her cümle veriye dayanır (uydurma YOK).
 export type RaporTespit = { domain: string; skor: number; durum?: string; seviye?: string; zaman: number; sinyaller?: string[]; screenshot?: string | null; usomda?: boolean | null; engelli?: boolean | null; etbis?: boolean | null; alanlar?: { ad: string; deger: string }[];
   // Hafif teknik envanter (canlilikProbe + ip-api) — tam liste tablosu için
-  ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; canliNeden?: string; sslBitis?: string | null; sslGuvenli?: boolean | null };
+  ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; canliNeden?: string; sslBitis?: string | null; sslGuvenli?: boolean | null; kaynak?: string; sertBaslangic?: string | null };
 export type MarkaRaporVeri = {
   markaAd: string;
   markaResmi?: string;         // resmî unvan/domain (kapak alt satırı)
@@ -257,6 +257,30 @@ function oneriUret(t: RaporTespit): { neden: string; oneri: string; oncelik: str
 
 // Öne çıkan başlık/renk için ETKİN durum — taze canlılık sondası (canliDurum) bayat
 // stored durumu ezer (ör. eski kayıtta "canlı" ama şu an park/satılık ise "park" göster).
+// Yakalama bilgisi (biz-önce hızı) — DÜRÜST: yalnız gerçekten hesaplanabileni gösterir.
+// Kaynak CT akışı ise "gerçek-zamanlı"; sertifika verilişi ilk gözlemden önceyse (yenilenmemiş
+// orijinal sertifika) "sertifika verilişinden N gün sonra" hesaplanır. Uydurma dakika YOK.
+function yakalamaBilgi(t: RaporTespit): string {
+  let gecikme = "";
+  if (t.sertBaslangic && t.zaman) {
+    const nb = Date.parse(t.sertBaslangic + "T00:00:00Z");
+    const ilkGun = Date.parse(new Date(t.zaman).toISOString().slice(0, 10) + "T00:00:00Z");
+    if (!isNaN(nb) && !isNaN(ilkGun) && nb <= ilkGun) {
+      const gun = Math.round((ilkGun - nb) / 86400000);
+      gecikme = gun <= 0 ? " · sertifika ile aynı gün yakalandı" : gun <= 45 ? ` · sertifika verilişinden ${gun} gün sonra yakalandı` : "";
+    }
+  }
+  if (t.kaynak === "certstream") return "CT sertifika akışından gerçek-zamanlı yakalandı" + gecikme;
+  if (t.kaynak === "sahte-bul" || t.kaynak === "urlscan" || t.kaynak === "vercel-tarama") return "Geçmişe dönük tarama ile bulundu" + gecikme;
+  return "İzleme kuyruğunda" + gecikme;
+}
+// Tam liste için kompakt kaynak etiketi (her tespitin yakalama yöntemi).
+function kaynakKisa(t: RaporTespit): string {
+  if (t.kaynak === "certstream") return "CT · gerçek-zamanlı";
+  if (t.kaynak === "sahte-bul" || t.kaynak === "urlscan" || t.kaynak === "vercel-tarama") return "geçmişe dönük";
+  return "";
+}
+
 function etkinDurum(t: RaporTespit): string {
   if (t.canliDurum === "parked") return "park";
   if (t.canliDurum === "dead") return "yayinda-degil";
@@ -333,6 +357,9 @@ function Kunye({ t }: { t: RaporTespit }) {
           <KunyeSatir etiket="Kara liste" deger={usomStr + btkStr} renk={t.usomda === true || t.engelli === true ? KIRMIZI : "#33405c"} />
         </View>
       </View>
+      <View style={{ marginTop: 3, borderTopColor: CIZGI, borderTopWidth: 1, paddingTop: 3 }}>
+        <KunyeSatir etiket="Yakalama" deger={yakalamaBilgi(t)} renk={t.kaynak === "certstream" ? TEAL : "#33405c"} />
+      </View>
       {t.canliNeden ? <Text style={{ fontSize: 8, color: "#4a5568", marginTop: 4, lineHeight: 1.4 }}><Text style={{ fontWeight: "bold", color: GRI }}>Durum açıklaması: </Text>{t.canliNeden}</Text> : null}
     </View>
   );
@@ -342,6 +369,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
   const puan = riskPuan(v);
   const etiket = riskEtiket(puan);
   const tumTespit = [...v.oneCikan, ...v.digerleri];
+  const ctGercekZamanli = tumTespit.filter((t) => t.kaynak === "certstream").length; // CT akışından gerçek-zamanlı yakalanan
   // Park kümesi: en kalabalık TLD toplu-kayıt (tek operasyon) — sayıyı şişirmesin.
   const tldSay: Record<string, number> = {};
   for (const a of tumTespit) { const tld = (a.domain.split(".").pop() || "").toLowerCase(); tldSay[tld] = (tldSay[tld] || 0) + 1; }
@@ -474,7 +502,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             <Text style={st.guclu}>Ham sayı yanıltıcı olabilir:</Text> {v.ozet.toplam} adresin {kumeAdet}'i tek bir <Text style={st.guclu}>.{enKalabalik[0]}</Text> toplu-kayıt kümesidir (aynı operasyon). Pratikte <Text style={st.guclu}>{ayriAdet} ayrı adres + 1 küme</Text> söz konusudur.
           </Text></View>}
           <View style={st.madde}><Text style={st.maddeIsaret}>•</Text><Text style={st.maddeMetin}>
-            <Text style={st.guclu}>{v.erkenlik.usomdaYok} adres</Text> ulusal engelleme (USOM) listesinde henüz yer almamaktadır; bu adresler, resmî listelere yansımadan önce sistemimiz tarafından tespit edilmiştir. Erken tespit, itibara zarar gelmeden müdahale imkânı sağlar.
+            <Text style={st.guclu}>{v.erkenlik.usomdaYok} adres</Text> ulusal engelleme (USOM) listesinde henüz yer almamaktadır; bu adresler, resmî listelere yansımadan önce sistemimiz tarafından tespit edilmiştir. Erken tespit, itibara zarar gelmeden müdahale imkânı sağlar.{ctGercekZamanli > 0 ? ` Bunların ${ctGercekZamanli} tanesi, Sertifika Şeffaflığı (CT) akışı sürekli izlenerek sahte adres yayına girer girmez gerçek-zamanlı yakalanmıştır.` : ""}
           </Text></View>
           {v.ozet.canli > 0 && <View style={st.madde}><Text style={st.maddeIsaret}>•</Text><Text style={st.maddeMetin}>
             <Text style={st.guclu}>{v.ozet.canli} canlı adres izlemededir.</Text> İçerik doğrulaması sürmekte; logo/form taklidi belirirse aynı gün bildirim yapılır.
@@ -584,7 +612,10 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             </View>
             {tumTespit.sort((a, b) => (b.skor || 0) - (a.skor || 0)).slice(0, 160).map((t, i) => (
               <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]} wrap={false}>
-                <Text style={[st.td, { width: "25%", fontWeight: "medium", color: LACIVERT, fontSize: 7.6, paddingRight: 3 }]}>{t.domain}</Text>
+                <View style={[st.td, { width: "25%", paddingRight: 3 }]}>
+                  <Text style={{ fontWeight: "medium", color: LACIVERT, fontSize: 7.6 }}>{t.domain}</Text>
+                  {kaynakKisa(t) ? <Text style={{ fontSize: 6.2, color: t.kaynak === "certstream" ? TEAL : GRI, marginTop: 0.5 }}>{kaynakKisa(t)}</Text> : null}
+                </View>
                 <Text style={[st.td, { width: "16%", fontSize: 7.4, color: aksiyonGerekli(t) ? KIRMIZI : t.engelli === true ? YESIL : t.canliDurum === "dead" ? GRI : "#33405c" }]}>{durumKisa(t)}</Text>
                 <Text style={[st.td, { width: "13%", fontSize: 7.6 }]}>{t.ip || "—"}</Text>
                 <Text style={[st.td, { width: "23%", fontSize: 7.4, paddingRight: 4 }]}>{t.asn || "—"}</Text>
