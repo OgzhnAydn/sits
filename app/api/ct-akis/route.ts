@@ -1,8 +1,41 @@
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { AVCI_MARKALAR, gercekTaklit } from "@/lib/korunanMarkalar";
+import { db, firebaseHazir } from "@/lib/firebase";
 
 export const runtime = "nodejs";
+
+// ── KARARLI "İZLENEN SERTİFİKA" SAYACI ───────────────────────────────────────
+// SORUN: sayı her istekte 32k↔49 milyar zıplıyordu. Neden: toplam = 6 CT logunun canlı
+// tree_size TOPLAMI; bir logun get-sth'i zaman aşımına uğrayınca boyutu 0 sayılıp toplamı
+// çökertiyordu (hangi logların yanıt verdiği her istekte değişiyor). ÇÖZÜM: CT logları yalnız
+// BÜYÜR → her logun boyutunu KALICI önbelleğe al (düşürme), toplamı MONOTON yap, Firestore'da
+// sakla (cold-start/instance farkında da aynı kalsın). Böylece sayı stabil ve yalnız artar.
+const LOG_BOYUT = new Map<string, number>(); // log url → görülen en büyük tree_size
+let SON_TOPLAM = 0;
+let SEED_YUKLENDI = false;
+let SON_YAZMA = 0;
+
+async function seedYukle(): Promise<void> {
+  if (SEED_YUKLENDI) return;
+  SEED_YUKLENDI = true;
+  if (!firebaseHazir || !db) return;
+  try {
+    const s = await getDoc(doc(db, "ct_meta", "toplam"));
+    if (s.exists()) {
+      const d = s.data() as { toplam?: number; boyutlar?: Record<string, number> };
+      for (const [u, v] of Object.entries(d.boyutlar || {})) if (typeof v === "number" && v > (LOG_BOYUT.get(u) || 0)) LOG_BOYUT.set(u, v);
+      if (typeof d.toplam === "number" && d.toplam > SON_TOPLAM) SON_TOPLAM = d.toplam;
+    }
+  } catch { /* seed alınamadı → in-memory devam */ }
+}
+async function toplamYaz(toplam: number): Promise<void> {
+  if (!firebaseHazir || !db) return;
+  if (Date.now() - SON_YAZMA < 60_000) return; // 60sn throttle (kota koruması)
+  SON_YAZMA = Date.now();
+  try { await setDoc(doc(db, "ct_meta", "toplam"), { toplam, boyutlar: Object.fromEntries(LOG_BOYUT), guncelleme: Date.now() }, { merge: true }); } catch { /* */ }
+}
 
 // CANLI CT PANELİ — 6 logun canlı boyutları + örneklem akışı + aşama sayıları.
 // Sol panel: akış · Orta: her log için tespit aşamaları · Sağ: tespitler (ayrı API).
@@ -79,6 +112,7 @@ function eslesenMarka(domain: string): string | null {
 }
 
 export async function GET() {
+  await seedYukle();
   const loglar = await loglariSec();
   if (!loglar.length) return NextResponse.json({ ok: false, loglar: [], akis: [] });
 
@@ -88,16 +122,18 @@ export async function GET() {
 
   const sonuc = await Promise.all(
     loglar.map(async (log, idx) => {
-      let toplam = 0;
+      // Boyut ASLA düşmez: get-sth başarısızsa son bilinen (önbellekli) boyut kullanılır.
+      let boyut = LOG_BOYUT.get(log.url) || 0;
       try {
-        const sth = (await (await fetch(`${log.url}/ct/v1/get-sth`, { signal: AbortSignal.timeout(7000) })).json()) as { tree_size?: number };
-        toplam = sth.tree_size || 0;
-      } catch { /* bu logun boyutu alınamadı */ }
+        const sth = (await (await fetch(`${log.url}/ct/v1/get-sth`, { signal: AbortSignal.timeout(8000) })).json()) as { tree_size?: number };
+        const ts = sth.tree_size || 0;
+        if (ts > boyut) { boyut = ts; LOG_BOYUT.set(log.url, ts); } // yalnız büyüt
+      } catch { /* boyut alınamadı → son bilinen boyut korunur (0'a düşürme) */ }
       let cekildi = 0, onFiltre = 0, eslesme = 0;
       const akis: { i: number; kisa: string; domain: string; ca: string; marka: string | null }[] = [];
-      if (orneklenecek.has(idx) && toplam > 20) {
+      if (orneklenecek.has(idx) && boyut > 20) {
         try {
-          const start = toplam - 9, end = toplam - 1;
+          const start = boyut - 9, end = boyut - 1;
           const ent = (await (await fetch(`${log.url}/ct/v1/get-entries?start=${start}&end=${end}`, { signal: AbortSignal.timeout(9000) })).json()) as { entries?: { leaf_input: string; extra_data?: string }[] };
           for (let k = 0; k < (ent.entries || []).length; k++) {
             const b = entryBilgi(ent.entries![k].leaf_input, ent.entries![k].extra_data);
@@ -111,13 +147,17 @@ export async function GET() {
           }
         } catch { /* get-entries başarısız (429?) — bu tur atla */ }
       }
-      return { log, toplam, cekildi, onFiltre, eslesme, akis };
+      return { log, boyut, cekildi, onFiltre, eslesme, akis };
     })
   );
 
-  const loglarOut = sonuc.map((s) => ({ kisa: s.log.kisa, ad: s.log.ad, op: s.log.op, toplam: s.toplam, cekildi: s.cekildi, onFiltre: s.onFiltre, eslesme: s.eslesme, orneklendi: s.cekildi > 0 }));
+  const loglarOut = sonuc.map((s) => ({ kisa: s.log.kisa, ad: s.log.ad, op: s.log.op, toplam: s.boyut, cekildi: s.cekildi, onFiltre: s.onFiltre, eslesme: s.eslesme, orneklendi: s.cekildi > 0 }));
   const akis = sonuc.flatMap((s) => s.akis).sort((a, b) => a.i - b.i);
-  const toplam = sonuc.reduce((a, s) => a + s.toplam, 0);
+  // MONOTON toplam: bu isteğin ham toplamı ile son bilinen toplamın büyüğü (asla düşme).
+  const toplamHam = sonuc.reduce((a, s) => a + s.boyut, 0);
+  const toplam = Math.max(SON_TOPLAM, toplamHam);
+  SON_TOPLAM = toplam;
+  toplamYaz(toplam).catch(() => {}); // fire-and-forget, 60sn throttle
 
   return NextResponse.json({ ok: true, toplam, loglar: loglarOut, akis });
 }
