@@ -23,8 +23,75 @@ type Ozet = {
   ozet: { toplam: number; marka: number; buGun: number; sonTespit: number; aktif: number };
   markalar: MarkaSat[]; sonlar: Son[];
   kanallar: { ios: boolean; android: boolean; google: boolean; meta: boolean };
+  durumDagilim?: { aktifTuzak: number; canli: number; park: number; pasif: number };
+  tldDagilim?: { tld: string; adet: number }[];
+  gunlukTrend?: { gun: string; adet: number }[];
+  kaynakDagilim?: { ct: number; diger: number };
 };
 const KART = { background: "var(--c-0b1726)", borderColor: "var(--c-17293c)" } as const;
+
+// ── GRAFİKLER (elle SVG/CSS — bağımlılık yok; tek-renk=magnitude, durum=ayrılmış status renkleri) ──
+const BaslikCizgi = ({ ust, alt }: { ust: string; alt?: string }) => (
+  <div style={{ marginBottom: 12 }}>
+    <Text strong style={{ color: "var(--c-c7d6e6)", fontSize: 12, letterSpacing: ".04em", textTransform: "uppercase" }}>{ust}</Text>
+    {alt ? <Text style={{ display: "block", fontSize: 11, color: "var(--c-5b6b7d)", marginTop: 2 }}>{alt}</Text> : null}
+  </div>
+);
+// Yatay bar (magnitude, tek hue) — 8px ince, yuvarlak uç, değer etiketi, tabular sayı.
+function YatayBar({ satirlar, renk }: { satirlar: { ad: string; deger: number; logo?: string | null }[]; renk: string }) {
+  const max = Math.max(1, ...satirlar.map((s) => s.deger));
+  if (!satirlar.length) return <Text style={{ fontSize: 12, color: "var(--c-5b6b7d)" }}>Henüz veri yok.</Text>;
+  return (
+    <Flex vertical gap={9}>
+      {satirlar.map((s, i) => (
+        <div key={i}>
+          <Flex justify="space-between" align="center" style={{ marginBottom: 4 }}>
+            <Flex align="center" gap={7} style={{ minWidth: 0 }}>
+              {s.logo ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={s.logo} alt="" width={16} height={16} style={{ borderRadius: 3, background: "#fff", flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} /> : null}
+              <Text ellipsis style={{ fontSize: 12.5, color: "var(--c-cfe3f5)" }}>{s.ad}</Text>
+            </Flex>
+            <Text strong style={{ fontSize: 12.5, color: "var(--c-e6eef7)", fontVariantNumeric: "tabular-nums", flexShrink: 0, marginLeft: 8 }}>{s.deger}</Text>
+          </Flex>
+          <div style={{ height: 8, background: "var(--c-17293c)", borderRadius: 4, overflow: "hidden" }}>
+            <div style={{ width: `${(s.deger / max) * 100}%`, height: "100%", background: renk, borderRadius: 4 }} />
+          </div>
+        </div>
+      ))}
+    </Flex>
+  );
+}
+// Donut (durum) — ayrılmış status renkleri + etiketli lejant (renk-tek-başına değil).
+function Donut({ dilimler }: { dilimler: { ad: string; deger: number; renk: string }[] }) {
+  const toplam = Math.max(1, dilimler.reduce((a, d) => a + d.deger, 0));
+  const gercekToplam = dilimler.reduce((a, d) => a + d.deger, 0);
+  const R = 52, sw = 15, C = 2 * Math.PI * R;
+  let ofset = 0;
+  return (
+    <Flex align="center" gap={18} wrap>
+      <svg width={132} height={132} viewBox="0 0 132 132" style={{ flexShrink: 0 }}>
+        <circle cx={66} cy={66} r={R} fill="none" stroke="var(--c-17293c)" strokeWidth={sw} />
+        {dilimler.filter((d) => d.deger > 0).map((d, i) => {
+          const uz = (d.deger / toplam) * C;
+          const bosluk = gercekToplam > 1 ? 1.5 : 0; // segmentler arası 1.5px yüzey boşluğu
+          const el = <circle key={i} cx={66} cy={66} r={R} fill="none" stroke={d.renk} strokeWidth={sw}
+            strokeDasharray={`${Math.max(0, uz - bosluk)} ${C - Math.max(0, uz - bosluk)}`} strokeDashoffset={-ofset} transform="rotate(-90 66 66)" strokeLinecap="butt" />;
+          ofset += uz;
+          return el;
+        })}
+        <text x={66} y={63} textAnchor="middle" style={{ fontSize: 21, fontWeight: 700, fill: "var(--c-e6eef7)" }}>{gercekToplam}</text>
+        <text x={66} y={80} textAnchor="middle" style={{ fontSize: 9, fill: "var(--c-8fa6bd)" }}>tespit</text>
+      </svg>
+      <Flex vertical gap={6} style={{ minWidth: 130 }}>
+        {dilimler.map((d, i) => (
+          <Flex key={i} align="center" justify="space-between" gap={10}>
+            <Flex align="center" gap={7}><span style={{ width: 9, height: 9, borderRadius: 2, background: d.renk, flexShrink: 0 }} /><Text style={{ fontSize: 12, color: "var(--c-c7d6e6)" }}>{d.ad}</Text></Flex>
+            <Text strong style={{ fontSize: 12, color: "var(--c-e6eef7)", fontVariantNumeric: "tabular-nums" }}>{d.deger}</Text>
+          </Flex>
+        ))}
+      </Flex>
+    </Flex>
+  );
+}
 const durumRenk: Record<string, string> = { "aktif-tuzak": "error", "canli": "processing", "park": "default", "yayinda-degil": "default" };
 const durumAd: Record<string, string> = { "aktif-tuzak": "aktif tuzak", "canli": "canlı", "park": "park", "yayinda-degil": "pasif" };
 
@@ -125,6 +192,48 @@ export default function KontrolOdasi() {
               ))}
             </Row>
           </Card>
+
+          {/* ── ANALİZ — en çok hedef alınan markalar + durum/uzantı/trend ── */}
+          <Row gutter={[14, 14]} style={{ marginTop: 14 }}>
+            <Col xs={24} lg={14}>
+              <Card style={{ ...KART, height: "100%" }} styles={{ body: { padding: 16 } }}>
+                <BaslikCizgi ust="En çok hedef alınan markalar" alt="Aktif izleme penceresindeki tespit sayısına göre (yüksekten düşüğe)" />
+                <YatayBar
+                  renk="#4d9fe0"
+                  satirlar={(veri.markalar || []).filter((m) => m.toplam > 0).slice(0, 10).map((m) => ({ ad: m.markaAdi || m.marka, deger: m.toplam, logo: markaLogoAnahtar(m.marka, 32) }))}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} lg={10}>
+              <Card style={{ ...KART, height: "100%" }} styles={{ body: { padding: 16 } }}>
+                <BaslikCizgi ust="Durum dağılımı" alt="Tespitlerin canlılık sınıfı" />
+                <Donut dilimler={[
+                  { ad: "Aktif tuzak", deger: veri.durumDagilim?.aktifTuzak || 0, renk: "#f5222d" },
+                  { ad: "Canlı", deger: veri.durumDagilim?.canli || 0, renk: "#4d9fe0" },
+                  { ad: "Park · izlemede", deger: veri.durumDagilim?.park || 0, renk: "#c99a3a" },
+                  { ad: "Pasif · yayında değil", deger: veri.durumDagilim?.pasif || 0, renk: "#5b6b7d" },
+                ]} />
+              </Card>
+            </Col>
+          </Row>
+
+          <Row gutter={[14, 14]} style={{ marginTop: 14 }}>
+            <Col xs={24} lg={14}>
+              <Card style={{ ...KART, height: "100%" }} styles={{ body: { padding: 16 } }}>
+                <BaslikCizgi ust="En çok kötüye kullanılan uzantılar" alt="Taklit adreslerin alan adı uzantısı (TLD)" />
+                <YatayBar renk="#31c8b0" satirlar={(veri.tldDagilim || []).map((t) => ({ ad: "." + t.tld, deger: t.adet }))} />
+              </Card>
+            </Col>
+            <Col xs={24} lg={10}>
+              <Card style={{ ...KART, height: "100%" }} styles={{ body: { padding: 16 } }}>
+                <BaslikCizgi ust="Biz-önce kapsamı" alt={(() => { const c = veri.kaynakDagilim?.ct || 0, t = c + (veri.kaynakDagilim?.diger || 0); return t ? `Tespitlerin %${Math.round((c / t) * 100)}'i CT akışından gerçek-zamanlı yakalandı` : "Yakalama kaynağı"; })()} />
+                <Donut dilimler={[
+                  { ad: "CT akışı · gerçek-zamanlı", deger: veri.kaynakDagilim?.ct || 0, renk: "#31c8b0" },
+                  { ad: "Geçmişe dönük tarama", deger: veri.kaynakDagilim?.diger || 0, renk: "#5b6b7d" },
+                ]} />
+              </Card>
+            </Col>
+          </Row>
 
           <Row gutter={[14, 14]} style={{ marginTop: 14 }}>
             {/* Markalar tablosu */}

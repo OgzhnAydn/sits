@@ -57,8 +57,37 @@ export async function GET() {
     meta: Boolean(process.env.META_AD_TOKEN),
   };
 
+  // ── ANALİZ DAĞILIMLARI (grafikler için) — hepsi gerçek `gecerli` veriden ──
+  // 1) Durum dağılımı (donut).
+  const durumDagilim = {
+    aktifTuzak: gecerli.filter((a) => a.durum === "aktif-tuzak").length,
+    canli: gecerli.filter((a) => a.durum === "canli").length,
+    park: gecerli.filter((a) => a.durum === "park").length,
+    pasif: gecerli.filter((a) => a.durum === "yayinda-degil").length,
+  };
+  // 2) En çok kötüye kullanılan uzantılar (TLD bar) — tescilli TLD bazında.
+  const tldSay: Record<string, number> = {};
+  for (const a of gecerli) {
+    let tld = "";
+    try { tld = tescilliBilgi(domainSade(a.domain)).tld || ""; } catch { /* */ }
+    if (!tld) tld = a.domain.split(".").pop() || "?";
+    tldSay[tld] = (tldSay[tld] || 0) + 1;
+  }
+  const tldDagilim = Object.entries(tldSay).map(([tld, adet]) => ({ tld, adet })).sort((x, y) => y.adet - x.adet).slice(0, 8);
+  // 3) Günlük tespit trendi — son 14 gün (son tespitlerin günlük dağılımı, 0-dolgulu).
+  const gunAnahtar = (t: number) => new Date(t).toISOString().slice(0, 10);
+  const gunSay: Record<string, number> = {};
+  for (const a of gecerli) { if (a.zaman) gunSay[gunAnahtar(a.zaman)] = (gunSay[gunAnahtar(a.zaman)] || 0) + 1; }
+  const gunlukTrend: { gun: string; adet: number }[] = [];
+  for (let i = 13; i >= 0; i--) { const g = gunAnahtar(now - i * 86400000); gunlukTrend.push({ gun: g, adet: gunSay[g] || 0 }); }
+  // 4) Kaynak dağılımı — CT gerçek-zamanlı vs geçmişe dönük (biz-önce kapsamı).
+  const kaynakDagilim = {
+    ct: gecerli.filter((a) => a.kaynak === "certstream").length,
+    diger: gecerli.filter((a) => a.kaynak && a.kaynak !== "certstream").length,
+  };
+
   return NextResponse.json({
     ozet: { toplam: gecerli.length, marka: markalar.length, buGun, sonTespit, aktif: gecerli.filter((a) => a.durum === "aktif-tuzak").length },
-    markalar, sonlar, kanallar,
+    markalar, sonlar, kanallar, durumDagilim, tldDagilim, gunlukTrend, kaynakDagilim,
   });
 }
