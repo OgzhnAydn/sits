@@ -503,15 +503,7 @@ function nedenTehdit(r: Rapor | null) {
 // Taze canlılık damgası — domainin ŞU ANKİ durumu (/api/canlilik). Kesinlik kapısı motorda:
 // "KALDIRILMIŞ" ancak NXDOMAIN×2 (iki çözücü) ile; emin değilse "DURUM DOĞRULANAMADI" der,
 // asla canlı bir siteyi yanlışlıkla "ölü" damgalamaz. Skor=ciddiyet, bu=güncel durum (ayrı).
-function CanlilikRozet({ domain }: { domain: string }) {
-  const [v, setV] = useState<null | { durum: string; kokNeden: string }>(null);
-  const [yuk, setYuk] = useState(false);
-  useEffect(() => {
-    let iptal = false; setV(null); setYuk(true);
-    fetch(`/api/canlilik?domain=${encodeURIComponent(domain)}`)
-      .then((r) => r.json()).then((j) => { if (!iptal) setV(j); }).catch(() => {}).finally(() => { if (!iptal) setYuk(false); });
-    return () => { iptal = true; };
-  }, [domain]);
+function CanlilikRozet({ v, yuk }: { v: { durum: string; kokNeden: string } | null; yuk: boolean }) {
   const M: Record<string, { ad: string; renk: string }> = {
     live: { ad: "CANLI", renk: "#ff5468" },
     redirect: { ad: "YÖNLENDİRİYOR", renk: "#e5772f" },
@@ -583,6 +575,18 @@ function PasifDnsBolum({ domain }: { domain: string }) {
 }
 
 function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }: { aday: Aday | null; rapor: Rapor | null; yukleniyor: boolean; markaAdi: string; resmiDom?: string; onYenile?: () => void }) {
+  // Taze canlılık ŞU AN durumu — TEK sefer çek; hem "ŞU AN" rozetine hem Saldırı Gelişimi
+  // uzlaştırmasına verilir (birikmiş kanıt vs güncel gerçeklik çelişkisini önler).
+  const [canliV, setCanliV] = useState<{ durum: string; kokNeden: string } | null>(null);
+  const [canliYuk, setCanliYuk] = useState(false);
+  const domainZ = aday?.domain;
+  useEffect(() => {
+    if (!domainZ) { setCanliV(null); return; }
+    let iptal = false; setCanliV(null); setCanliYuk(true);
+    fetch(`/api/canlilik?domain=${encodeURIComponent(domainZ)}`)
+      .then((r) => r.json()).then((j) => { if (!iptal) setCanliV(j); }).catch(() => {}).finally(() => { if (!iptal) setCanliYuk(false); });
+    return () => { iptal = true; };
+  }, [domainZ]);
   if (!aday) return <Empty description={<span style={{ color: "var(--c-8fa6bd)" }}><b style={{ color: "var(--c-31c8a0)" }}>{markaAdi} için tehdit yok</b><br />Sistem izlemeye devam ediyor.</span>} />;
   const risk = rapor?.risk ?? aday.skor;
   const sv = seviye(risk);
@@ -603,7 +607,7 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
             icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>refresh</span>} style={{ color: "var(--c-8fa6bd)", flexShrink: 0 }} />}
         </Flex>
         <Tag color={sev.c as string} style={{ marginTop: 8 }}>{sev.t}</Tag>
-        <CanlilikRozet domain={aday.domain} />
+        <CanlilikRozet v={canliV} yuk={canliYuk} />
       </div>
       <div style={{ borderTop: "1px solid var(--c-17293c)", borderBottom: "1px solid var(--c-17293c)", padding: "10px 0" }}>
         <Statistic title="Güven Skoru" value={yukleniyor && !rapor ? "…" : risk} suffix="/100" valueStyle={{ color: renk, fontFamily: "'IBM Plex Mono',monospace", fontWeight: 600 }} />
@@ -611,7 +615,7 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
       </div>
 
       <EtbisRozet rapor={rapor} />
-      <SaldiriGelisimi rapor={rapor} />
+      <SaldiriGelisimi rapor={rapor} canli={canliV?.durum} />
 
       <div>
         <Text strong style={{ fontSize: 11, letterSpacing: ".05em" }}>Neden Tehdit? {yukleniyor && <Spin size="small" />}</Text>
@@ -696,17 +700,27 @@ function EtbisRozet({ rapor }: { rapor: Rapor | null }) {
 
 // SALDIRI GELİŞİMİ — "saldırıyı doğmadan yakala": olgunlaşma aşaması + gerçek zaman
 // damgaları + durum bannerı ("SALDIRI GELİŞİYOR") + risk tırmanış çizgisi.
-function SaldiriGelisimi({ rapor }: { rapor: Rapor | null }) {
+function SaldiriGelisimi({ rapor, canli }: { rapor: Rapor | null; canli?: string }) {
   if (!rapor || !rapor.asamalar?.length) return null;
   const asamalar = rapor.asamalar; const asama = rapor.asama ?? 0;
   const alan = (x: string) => rapor.alanlar?.find((a) => a.ad.startsWith(x))?.deger;
-  const durum = asama >= 6
-    ? { t: "AKTİF SALDIRI", d: "Kimlik/kart toplama aşamasında — canlı tehdit.", type: "error" as const, ikon: <WarningOutlined /> }
-    : asama >= 4
-      ? { t: "SALDIRI GELİŞİYOR", d: "Sahte marka varlığı/form sitede doğrulandı — olaya dönüşmeden yakalandı.", type: "warning" as const, ikon: <ThunderboltOutlined /> }
-      : asama === 3
-        ? { t: "YAYINDA — İZLEMEDE", d: "Site yayında ama taklit içerik/marka varlığı henüz doğrulanmadı.", type: "info" as const, ikon: <ClockCircleOutlined /> }
-        : { t: "İZLEMEDE — HAZIRLIK", d: "Altyapı hazır (domain + sertifika); yayın içeriği doğrulanamadı (park/bot-duvarı olabilir).", type: "info" as const, ikon: <ClockCircleOutlined /> };
+  // ── CANLILIK UZLAŞTIRMASI (aşırı-iddia yok) ──
+  // Saldırı aşaması BİRİKMİŞ kanıttan gelir; ama "canlı tehdit / şu an burada" iddiası ancak
+  // adres ŞU AN gerçekten CANLI içerik sunuyorsa doğrudur. Yönlendiriyor/park/ölü/erişim-kısıtlı
+  // ise kill-chain bu adreste ŞU AN doğrulanamaz → banner ve işaretçi dürüstçe düşürülür.
+  const canliServis = canli === "live";
+  const canliBilgiVar = Boolean(canli);
+  const celiski = asama >= 4 && canliBilgiVar && !canliServis; // yüksek kanıt ama canlı içerik yok
+  const canliAd: Record<string, string> = { redirect: "başka adrese yönlendiriyor", parked: "park/satılık (pasif)", dead: "erişilemez/kaldırılmış", erisim_kisitli: "erişim kısıtlı (HTTP 403)", bilinmiyor: "durumu doğrulanamıyor" };
+  const durum = celiski
+    ? { t: "CANLI İÇERİK DOĞRULANMADI", d: `Geçmiş taramalarda "${asamalar[Math.min(asama, asamalar.length - 1)]}" aşamasına dek işaretler gözlendi; ancak adres ŞU AN ${canliAd[canli!] || canli} — bu adreste canlı kimlik/kart toplama şu an DOĞRULANAMIYOR.`, type: "warning" as const, ikon: <ClockCircleOutlined /> }
+    : asama >= 6
+      ? { t: "AKTİF SALDIRI", d: "Kimlik/kart toplama aşamasında — canlı tehdit.", type: "error" as const, ikon: <WarningOutlined /> }
+      : asama >= 4
+        ? { t: "SALDIRI GELİŞİYOR", d: "Sahte marka varlığı/form sitede doğrulandı — olaya dönüşmeden yakalandı.", type: "warning" as const, ikon: <ThunderboltOutlined /> }
+        : asama === 3
+          ? { t: "YAYINDA — İZLEMEDE", d: "Site yayında ama taklit içerik/marka varlığı henüz doğrulanmadı.", type: "info" as const, ikon: <ClockCircleOutlined /> }
+          : { t: "İZLEMEDE — HAZIRLIK", d: "Altyapı hazır (domain + sertifika); yayın içeriği doğrulanamadı (park/bot-duvarı olabilir).", type: "info" as const, ikon: <ClockCircleOutlined /> };
   const kayit = alan("Kayıt tarihi");
   const certGecmis = alan("Sertifika geçmişi");
   const certIlk = certGecmis?.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || alan("En yeni sertifika")?.match(/(\d{4}-\d{2}-\d{2})/)?.[1];
@@ -718,11 +732,11 @@ function SaldiriGelisimi({ rapor }: { rapor: Rapor | null }) {
       <Timeline
         style={{ marginTop: 12, marginBottom: 0 }}
         items={asamalar.map((s, i) => ({
-          color: i < asama ? "green" : i === asama ? (asama >= 6 ? "red" : "orange") : "gray",
+          color: i < asama ? "green" : i === asama ? (celiski ? "blue" : asama >= 6 ? "red" : "orange") : "gray",
           dot: i === asama ? <ThunderboltOutlined style={{ fontSize: 12 }} /> : undefined,
           children: (
             <Flex justify="space-between" gap={8}>
-              <Text style={{ fontSize: 12, color: i <= asama ? "var(--c-cfe0ef)" : "var(--c-5c748b)", fontWeight: i === asama ? 600 : 400 }}>{s}{i === asama ? " · şu an burada" : ""}</Text>
+              <Text style={{ fontSize: 12, color: i <= asama ? "var(--c-cfe0ef)" : "var(--c-5c748b)", fontWeight: i === asama ? 600 : 400 }}>{s}{i === asama ? (celiski ? " · gözlendi (şu an canlı değil)" : " · şu an burada") : ""}</Text>
               {zaman(i) && <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)", fontFamily: "'IBM Plex Mono',monospace", whiteSpace: "nowrap" }}>{zaman(i)}</Text>}
             </Flex>
           ),
