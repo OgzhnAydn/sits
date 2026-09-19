@@ -142,6 +142,8 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "emlakyonetim", ad: "Emlak Yönetim", resmi: ["emlakyonetim.com.tr"] },
   { anahtar: "emlakkatilim", ad: "Emlak Katılım (Katılım Bankası)", resmi: ["emlakkatilim.com.tr"] },
   { anahtar: "sehircilik", ad: "Çevre, Şehircilik ve İklim Değişikliği Bakanlığı", resmi: ["csb.gov.tr"] },
+  // ── Enerji ──
+  { anahtar: "enerjisa", ad: "Enerjisa", resmi: ["enerjisa.com.tr", "enerjisauretim.com.tr"] },
   // ── Perakende / sivil toplum / kamu ──
   { anahtar: "migros", ad: "Migros", resmi: ["migros.com.tr", "sanalmarket.com.tr"] },
   // "basil" yaygın kelime (fesleğen otu / Basil ismi — basilico, sweetbasil, basilica) → yaygin:
