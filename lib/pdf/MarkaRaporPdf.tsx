@@ -406,7 +406,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
 
   const durumOzet = v.ozet.aktif > 0
     ? `Bu dönemde ${v.markaAd} markası adına açılmış ${v.ozet.toplam} benzer adresin ${v.ozet.aktif} tanesi AKTİF tuzak olarak tespit edildi; ${v.ozet.canli} adres canlı, ${v.ozet.park} adres park/izlemede tutuldu.`
-    : `Bu dönemde ${v.markaAd} markası adına açılmış ${v.ozet.toplam} benzer adres tespit edilmiş ve her biri değerlendirilmiştir; markanız adına AKTİF bir kimlik avı (phishing) tuzağına rastlanmamıştır. ${v.ozet.canli} adres canlı, ${v.ozet.park} adres park/izlemede.`;
+    : `Bu dönemde ${v.markaAd} markası adına açılmış ${v.ozet.toplam} benzer adres tespit edilmiş ve her biri değerlendirilmiştir; bu dönemde AKTİF bir kimlik avı (phishing) tuzağı tespit edilmemiştir. ${v.ozet.canli} adres canlı, ${v.ozet.park} adres park/izlemede.`;
 
   const oneriliKay = [...v.oneCikan, ...v.digerleri.filter((t) => t.durum === "aktif-tuzak" || t.durum === "canli" || aksiyonGerekli(t))]
     .filter((t, i, a) => a.findIndex((x) => x.domain === t.domain) === i) // tekilleştir
@@ -489,14 +489,14 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
               <Text style={{ fontSize: 7.5, color: GRI, letterSpacing: 1 }}>DEĞERLENDİRME</Text>
               <Text style={{ fontSize: 21, fontWeight: "bold", color: LACIVERT, marginTop: 2, marginBottom: 7 }}>{etiket}</Text>
               <Text style={{ fontSize: 9, color: "#33405c", lineHeight: 1.5 }}>
-                {v.ozet.aktif > 0 ? `${v.ozet.aktif} aktif tuzak. ` : "Aktif kimlik avı yok. "}
+                {v.ozet.aktif > 0 ? `${v.ozet.aktif} aktif tuzak. ` : "Aktif tuzak tespit edilmedi. "}
                 Geniş benzer-isim ayak izi: {v.ozet.toplam} izlenecek adres, {v.erkenlik.usomdaYok} tanesi ulusal listede yok.
               </Text>
             </View>
           </View>
           <Text style={st.p}>{durumOzet} Genel tablo şu maddelerle özetlenebilir:</Text>
           <View style={st.madde}><Text style={st.maddeIsaret}>•</Text><Text style={st.maddeMetin}>
-            <Text style={st.guclu}>{v.ozet.aktif > 0 ? `${v.ozet.aktif} aktif kimlik avı (phishing) adresi mevcuttur.` : "Aktif kimlik avı (phishing) yoktur."}</Text> {v.ozet.aktif > 0 ? "Bu adresler için önerilen adımlar aşağıdadır." : "Müşteri verisinin çalındığına dair bulguya rastlanmamıştır."}
+            <Text style={st.guclu}>{v.ozet.aktif > 0 ? `${v.ozet.aktif} aktif kimlik avı (phishing) adresi tespit edildi.` : "Bu dönemde aktif kimlik avı (phishing) tuzağı tespit edilmedi."}</Text> {v.ozet.aktif > 0 ? "Bu adresler için önerilen adımlar aşağıdadır." : "İzleme kesintisiz sürüyor; yeni tespitler raporlanır."}
           </Text></View>
           {kumeVar && <View style={st.madde}><Text style={st.maddeIsaret}>•</Text><Text style={st.maddeMetin}>
             <Text style={st.guclu}>Ham sayı yanıltıcı olabilir:</Text> {v.ozet.toplam} adresin {kumeAdet}'i tek bir <Text style={st.guclu}>.{enKalabalik[0]}</Text> toplu-kayıt kümesidir (aynı operasyon). Pratikte <Text style={st.guclu}>{ayriAdet} ayrı adres + 1 küme</Text> söz konusudur.
