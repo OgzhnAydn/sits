@@ -8,7 +8,7 @@
 // yaygin: anahtar aynı zamanda yabancı yaygın kelime / coğrafi ad (pegasus=mitoloji, santander=şehir,
 // iberia=yarımada, albaraka=Arapça bereket, correos=İsp. posta) → o ülkedeki meşru işletmeleri yakalar.
 // İşaretli markalar, kısa anahtarlar gibi SIKI-BAĞLAM kapısına tabi (riskli TLD veya phishing bağlamı şart).
-export type KorunanMarka = { anahtar: string; ad: string; resmi: string[]; kaliplari?: string[]; yaygin?: boolean };
+export type KorunanMarka = { anahtar: string; ad: string; resmi: string[]; kaliplari?: string[]; yaygin?: boolean; logo?: string };
 
 // TEK KAYNAK: hem CertStream avcısı hem domainOsint (typosquatting + favicon
 // karşılaştırması) bu listeyi kullanır. Böylece her korunan marka için favicon
@@ -143,7 +143,8 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "emlakkatilim", ad: "Emlak Katılım (Katılım Bankası)", resmi: ["emlakkatilim.com.tr"] },
   { anahtar: "sehircilik", ad: "Çevre, Şehircilik ve İklim Değişikliği Bakanlığı", resmi: ["csb.gov.tr"] },
   // ── Enerji ──
-  { anahtar: "enerjisa", ad: "Enerjisa", resmi: ["enerjisa.com.tr", "enerjisauretim.com.tr"] },
+  // logo: favicon.ico BOŞ → Google favicon servisi küre döndürüyor; gerçek PNG favicon açıkça verilir.
+  { anahtar: "enerjisa", ad: "Enerjisa", resmi: ["enerjisa.com.tr", "enerjisauretim.com.tr"], logo: "https://www.enerjisa.com.tr/assets/favicon/favicon_512x512.png" },
   // ── Perakende / sivil toplum / kamu ──
   { anahtar: "migros", ad: "Migros", resmi: ["migros.com.tr", "sanalmarket.com.tr"] },
   // "basil" yaygın kelime (fesleğen otu / Basil ismi — basilico, sweetbasil, basilica) → yaygin:
@@ -168,6 +169,9 @@ export function markaLogo(resmi: string | string[] | undefined | null, boyut = 1
   if (!d) return null;
   const host = String(d).replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
   if (!host) return null;
+  // Açık logo override — favicon servisinin başaramadığı markalar (ör. favicon.ico boş) için.
+  const m = KORUNAN_MARKALAR.find((x) => x.logo && x.resmi.some((r) => r === host || host.endsWith("." + r) || r.endsWith("." + host)));
+  if (m?.logo) return m.logo;
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${boyut}`;
 }
 
