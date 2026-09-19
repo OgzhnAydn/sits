@@ -145,6 +145,11 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   // ── Enerji ──
   // logo: favicon.ico BOŞ → Google favicon servisi küre döndürüyor; gerçek PNG favicon açıkça verilir.
   { anahtar: "enerjisa", ad: "Enerjisa", resmi: ["enerjisa.com.tr", "enerjisauretim.com.tr"], logo: "https://www.enerjisa.com.tr/assets/favicon/favicon_512x512.png" },
+  // ── Bilkent Holding grubu (holding / üniversite / perakende / fitness) ──
+  { anahtar: "bilkentholding", ad: "Bilkent Holding", resmi: ["bilkentholding.com.tr"], logo: "https://www.bilkentholding.com.tr/favicon.ico" },
+  { anahtar: "bilkent", ad: "Bilkent Üniversitesi", resmi: ["bilkent.edu.tr"], logo: "https://w3.bilkent.edu.tr/www/wp-content/uploads/sites/5/2015/03/favicon.ico" },
+  { anahtar: "tepehome", ad: "Tepe Home", resmi: ["tepehome.com.tr", "tepehome.com"], logo: "https://www.tepehome.com.tr/favicon.ico" },
+  { anahtar: "sportsinternational", ad: "Sports International", resmi: ["sportsinternational.com.tr"], logo: "https://www.sportsinternational.com.tr/images/favicon-sportsint.png" },
   // ── Perakende / sivil toplum / kamu ──
   { anahtar: "migros", ad: "Migros", resmi: ["migros.com.tr", "sanalmarket.com.tr"] },
   // "basil" yaygın kelime (fesleğen otu / Basil ismi — basilico, sweetbasil, basilica) → yaygin:
