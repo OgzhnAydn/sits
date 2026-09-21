@@ -151,7 +151,8 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "tepehome", ad: "Tepe Home", resmi: ["tepehome.com.tr", "tepehome.com"], logo: "https://www.tepehome.com.tr/favicon.ico" },
   { anahtar: "sportsinternational", ad: "Sports International", resmi: ["sportsinternational.com.tr"], logo: "https://www.sportsinternational.com.tr/images/favicon-sportsint.png" },
   // ── Milli Piyango (sahte çekiliş/piyango dolandırıcılığında sık taklit edilir) ──
-  { anahtar: "millipiyango", ad: "Milli Piyango", resmi: ["mpi.gov.tr", "millipiyango.gov.tr", "millipiyangoonline.com"], logo: "https://www.mpi.gov.tr/assets/images/Mill%C3%AE_Piyango_%C4%B0daresi_logo.svg.jpg" },
+  // logo: KARE ikon (yatay logo dairesel node'da eziliyordu). millipiyangoonline.com resmî faviconu.
+  { anahtar: "millipiyango", ad: "Milli Piyango", resmi: ["mpi.gov.tr", "millipiyango.gov.tr", "millipiyangoonline.com"], logo: "https://icons.duckduckgo.com/ip3/millipiyangoonline.com.ico" },
   // ── Perakende / sivil toplum / kamu ──
   { anahtar: "migros", ad: "Migros", resmi: ["migros.com.tr", "sanalmarket.com.tr"] },
   // "basil" yaygın kelime (fesleğen otu / Basil ismi — basilico, sweetbasil, basilica) → yaygin:
