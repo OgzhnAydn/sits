@@ -97,9 +97,8 @@ export default function BahisMerkez() {
   const antTema = { algorithm: koyu ? theme.darkAlgorithm : theme.defaultAlgorithm, token: koyu ? antTokenKoyu : antTokenAcik };
   const durumTag = (y: Yakalanan) =>
     y.engelli === true ? <Tag color="default" icon={<span className="material-symbols-outlined" style={{ fontSize: 12 }}>block</span>} style={{ margin: 0 }}>engelli</Tag>
-    : y.usomda === false ? <Tag color="success" style={{ margin: 0 }}>biz-önce</Tag>
     : y.usomda === true ? <Tag style={{ margin: 0 }}>USOM&apos;da</Tag>
-    : <Tag color="default" style={{ margin: 0 }}>sorgulanıyor</Tag>;
+    : <Text type="secondary" style={{ fontSize: 11 }}>—</Text>;
 
   return (
     <ConfigProvider theme={antTema}>
