@@ -8,8 +8,21 @@ import { ConfigProvider, theme, Row, Col, Card, Statistic, Table, Tag, Flex, But
 import {
   EyeOutlined, ThunderboltOutlined, GlobalOutlined, LogoutOutlined, FlagOutlined,
   RadarChartOutlined, BarChartOutlined, SafetyCertificateOutlined, AimOutlined,
+  DownloadOutlined, FilePdfOutlined,
 } from "@ant-design/icons";
 import { markaDinle, cikis } from "@/lib/markaAuth";
+
+// Büyük dosyayı blob ile güvenli indir (uzun süren endpoint'lerde tarayıcı sekmesi boş kalmasın).
+async function dosyaIndir(url: string, ad: string): Promise<void> {
+  const r = await fetch(url, { cache: "no-store" });
+  if (!r.ok) throw new Error("indirilemedi");
+  const blob = await r.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = ad;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+}
 import { usePanoTema, antTokenKoyu, antTokenAcik } from "@/lib/panoTema";
 
 const { Text, Title } = Typography;
@@ -37,6 +50,8 @@ export default function BahisMerkez() {
   const [markalar, setMarkalar] = useState<MarkaSat[]>([]);
   const [ist, setIst] = useState({ toplam: 0, bizOnce: 0, engelliSayi: 0, trSayi: 0, markaVar: 0, tarandi: 0 });
   const [toplamCT, setToplamCT] = useState<number | null>(null); // KARARLI CT evreni (/api/ct-akis, monoton)
+  const [csvYuk, setCsvYuk] = useState(false);
+  const [pdfYuk, setPdfYuk] = useState(false);
   const durdu = useRef(false);
 
   useEffect(() => markaDinle((user, hesap) => {
@@ -108,6 +123,8 @@ export default function BahisMerkez() {
             <Flex gap={8} wrap style={{ rowGap: 8 }}>
               <Button onClick={degistir} title={koyu ? "Açık tema" : "Koyu tema"} style={{ color: "var(--c-8fa6bd)" }}
                 icon={<span className="material-symbols-outlined" style={{ fontSize: 17, lineHeight: 1 }}>{koyu ? "light_mode" : "dark_mode"}</span>} />
+              <Button icon={<DownloadOutlined />} loading={csvYuk} onClick={async () => { setCsvYuk(true); try { await dosyaIndir("/api/bahis-liste-csv", "MirLeon-YasaDisiBahis-TumListe.csv"); } catch { /* */ } finally { setCsvYuk(false); } }} style={{ color: "var(--c-3ee08a)" }}>CSV (tümü)</Button>
+              <Button icon={<FilePdfOutlined />} loading={pdfYuk} onClick={async () => { setPdfYuk(true); try { await dosyaIndir("/api/bahis-liste-pdf", "MirLeon-YasaDisiBahis-Rapor.pdf"); } catch { /* */ } finally { setPdfYuk(false); } }} style={{ color: "var(--c-f6c877)" }}>PDF rapor</Button>
               <Button icon={<RadarChartOutlined />} onClick={() => router.push("/kontrol")} style={{ color: "var(--c-8fa6bd)" }}>Kontrol Odası</Button>
               <Button icon={<BarChartOutlined />} onClick={() => router.push("/mercek")} style={{ color: "var(--c-8fa6bd)" }}>Kokpit</Button>
               <Button icon={<LogoutOutlined />} onClick={() => { cikis(); router.replace("/marka-giris"); }} style={{ color: "var(--c-8fa6bd)" }}>Çıkış ({hesapAdi})</Button>
