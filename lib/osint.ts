@@ -176,7 +176,7 @@ async function hostGuvenli(host: string): Promise<boolean> {
 
 // Güvenli sunucu-tarafı getirme: her adımda host→IP doğrular, redirect'i MANUEL
 // takip edip yeni host'u yeniden doğrular (iç ağa yönlendirme SSRF'ini engeller).
-async function guvenliGetir(url: string, ms: number, headers: Record<string, string>): Promise<Response | null> {
+export async function guvenliGetir(url: string, ms: number, headers: Record<string, string>): Promise<Response | null> {
   let current = url;
   for (let hop = 0; hop < 4; hop++) {
     let u: URL;
@@ -704,6 +704,24 @@ export function kSeviye(s: number): KategoriDurum["seviye"] {
 // JENERİK altyapı — milyonlarca site paylaşır → "aynı operatör" KANITI DEĞİL (#1 yanlış-pozitif).
 // Cloudflare NS + Google Trust CA + Cloudflare ASN eşleşmesi kampanya değildir.
 const DNA_JENERIK = /cloudflare|google|amazon|\baws\b|azure|microsoft|akamai|fastly|let'?s?\s*encrypt|sectigo|digicert|comodo|globalsign|zerossl|godaddy|namecheap|cloudns|hetzner|\bovh\b|digitalocean|linode|vercel|netlify|hostinger|namesilo|dnspod|alibaba/i;
+
+// HTTP YANIT BAŞLIKLARINDAN CDN SAĞLAYICISI — en kesin CDN sinyali. Her CDN kendine özgü
+// başlık bırakır (cf-ray=Cloudflare, x-amz-cf-id=CloudFront…). ASN/CNAME'e göre daha güvenilir.
+function cdnBasliktan(h: Headers): string | null {
+  const g = (k: string) => (h.get(k) || "").toLowerCase();
+  const server = g("server"), via = g("via");
+  if (h.has("cf-ray") || server.includes("cloudflare")) return "Cloudflare";
+  if (h.has("x-amz-cf-id") || h.has("x-amz-cf-pop") || via.includes("cloudfront")) return "AWS CloudFront";
+  if (h.has("x-akamai-transformed") || h.has("x-akamai-request-id") || server.includes("akamai")) return "Akamai";
+  if ((h.has("x-served-by") && (h.has("x-cache") || h.has("x-timer"))) || via.includes("fastly") || h.has("fastly-restarts")) return "Fastly";
+  if (h.has("x-sucuri-id") || h.has("x-sucuri-cache")) return "Sucuri";
+  if (server.includes("incapsula") || h.has("x-iinfo")) return "Imperva Incapsula";
+  if (h.has("x-bunnycdn-request-id") || server.includes("bunnycdn")) return "BunnyCDN";
+  if (server.includes("ddos-guard")) return "DDoS-Guard";
+  if (h.has("x-qrator-id")) return "Qrator";
+  if (h.has("x-cdn")) return g("x-cdn"); // genel x-cdn başlığı (sağlayıcı adını yazar)
+  return null;
+}
 const MX_JENERIK = /google|outlook|office365|yandex|zoho|mail\.ru|protonmail|gmail|hostinger|yandexmail/i;
 export function altyapiDna(r: OsintRapor): { imza: string; parcalar: { k: string; v: string }[] } | null {
   const ad = (x: string) => r.alanlar.find((a) => a.ad.startsWith(x))?.deger || "";
@@ -1508,6 +1526,11 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
     // sayfaları böyle yapar) FINAL URL'i elde et → park host'unu yine yakala.
     let resp = await guvenliGetir(hedef, 6000, TARAYICI_BASLIK);
     let sonUrl = resp?.url || hedef;
+    // CDN / koruma katmanı — HTTP başlıklarından KESİN tespit (cf-ray, x-amz-cf-id…).
+    if (resp) {
+      const cdnH = cdnBasliktan(resp.headers);
+      if (cdnH) r.alanlar.push({ ad: "CDN / koruma katmanı", deger: `${cdnH} — gerçek sunucu bu katmanın ardında gizli (görünen IP CDN'e ait)` });
+    }
     let sayfa: string | null = null;
     if (resp && resp.ok) {
       try { sayfa = new TextDecoder().decode((await resp.arrayBuffer()).slice(0, 250000)); } catch { sayfa = null; }
