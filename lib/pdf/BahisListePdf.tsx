@@ -9,8 +9,8 @@ import fs from "fs";
 // düşük seviyeli @react-pdf/pdfkit writer'ı ile İMPERATİF çiziyoruz (22.000 satır ≈ 18sn, ~0.7GB).
 // Böylece TESPİT EDİLEN TÜM adresler tek dosyaya yazılabiliyor — hiçbirini eksik bırakmadan.
 
-export type BahisSatir = { domain: string; marka?: string | null; guven: number; usomda?: boolean | null; engelli?: boolean | null; zaman: number };
-export type BahisListeVeri = { tarih: string; refNo: string; guvenEsik: number; toplam: number; bizOnce: number; liste: BahisSatir[] };
+export type BahisSatir = { domain: string; marka?: string | null; guven: number; usomda?: boolean | null; engelli?: boolean | null; zaman: number; canli?: boolean };
+export type BahisListeVeri = { tarih: string; refNo: string; guvenEsik: number; toplam: number; canliSayi: number; probeAdet: number; liste: BahisSatir[] };
 
 const KOYU = "#0e2038", LACIVERT = "#1d2f49", TEAL = "#159aa1", ALTIN = "#c6a24a", TBAS = "#2b3f59", GRI = "#6a7583", CIZGI = "#e3e8ef", ACIK = "#f5f8fa", KIRMIZI = "#c62a1f", YESIL = "#2e7d55";
 
@@ -21,13 +21,27 @@ const fontYol = (p: string) => path.join(process.cwd(), "assets/fonts", p);
 
 // Sütun düzeni (tablo) — govde içi, tıklanabilir alan adı en geniş sütun.
 const COL = {
-  no: { x: 40, w: 26, hiza: "left" as const },
-  dom: { x: 68, w: 232, hiza: "left" as const },
-  mar: { x: 302, w: 86, hiza: "left" as const },
-  guv: { x: 390, w: 40, hiza: "center" as const },
-  usom: { x: 432, w: 78, hiza: "left" as const },
+  no: { x: 40, w: 22, hiza: "left" as const },
+  star: { x: 60, w: 14, hiza: "left" as const },  // BAŞLIKSIZ ★ kolonu — canlı olanlara yıldız
+  dom: { x: 76, w: 250, hiza: "left" as const },
+  mar: { x: 330, w: 108, hiza: "left" as const },
+  guv: { x: 444, w: 40, hiza: "center" as const },
   zam: { x: 512, w: 45, hiza: "right" as const },
 };
+
+// Küçük 5-köşeli yıldız çiz (font glyph'ine güvenme; pdfkit path ile kesin) — canlı işareti.
+// (.fill() yolu otomatik kapatır → closePath gerekmez.)
+function yildizCiz(doc: Doc, cx: number, cy: number, R: number, renk: string) {
+  doc.save();
+  for (let i = 0; i < 10; i++) {
+    const rad = i % 2 === 0 ? R : R * 0.42;
+    const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+    const x = cx + rad * Math.cos(ang), yy = cy + rad * Math.sin(ang);
+    if (i === 0) doc.moveTo(x, yy); else doc.lineTo(x, yy);
+  }
+  doc.fillColor(renk).fill();
+  doc.restore();
+}
 
 type Doc = {
   addPage: (o?: Record<string, unknown>) => Doc; registerFont: (n: string, b: Buffer) => Doc;
@@ -121,7 +135,7 @@ export async function bahisListePdf(v: BahisListeVeri): Promise<Buffer> {
     yaz(kucuk, x + 10, y + 36, { font: "T", boy: 8, renk: GRI, w: kpiW - 20 });
   };
   kpi(0, trSayi(v.toplam), "Türkiye hedefli adres", KIRMIZI);
-  kpi(1, trSayi(v.bizOnce), "USOM'da yok · biz-önce", YESIL);
+  kpi(1, trSayi(v.canliSayi), "canlı · içerik sunan (★)", ALTIN);
   kpi(2, `≥%${v.guvenEsik}`, "güven eşiği", TEAL);
   y += 62;
   // Dürüst çerçeve kutusu
@@ -129,8 +143,8 @@ export async function bahisListePdf(v: BahisListeVeri): Promise<Buffer> {
   doc.rect(L, y, 3, 96).fill(ALTIN);
   durumSifirla();
   let yy = y + 10;
-  yaz("Durum sütunları hakkında — dürüst çerçeve", L + 12, yy, { font: "TB", boy: 9.5, renk: LACIVERT }); yy += 15;
-  yy = paragraf(doc, "USOM: \"biz-önce\" = adres USOM resmî listesinde yok, bu sistem önce yakaladı — USOM'a bildirilebilecek yeni tespit. \"USOM'da\" = zaten kayıtlı.", L + 12, yy, R - L - 24, 8.6, 1.45, "#33405c") + 3;
+  yaz("Yıldız (★) ve liste hakkında — dürüst çerçeve", L + 12, yy, { font: "TB", boy: 9.5, renk: LACIVERT }); yy += 15;
+  yy = paragraf(doc, `★ = adres ŞU AN içerik sunuyor (canlılık doğrulandı). Canlılık, en yüksek güvenli ilk ${v.probeAdet} adres için kontrol edildi; yıldızsız satırlar da tespit listesindedir ancak canlılıkları bu raporda ayrıca denenmemiştir (park/erişilemez olabilir).`, L + 12, yy, R - L - 24, 8.6, 1.45, "#33405c") + 3;
   yy = paragraf(doc, "BTK engeli bu listede gösterilmez: sistem yurtdışı sunucularda çalışır; Türkiye'nin BTK/ISP-DNS engelleri yurtdışından güvenilir görülemez. Bir adresin Türkiye'de engelli olup olmadığı ancak Türkiye içinden sorgu ile kesinleşir.", L + 12, yy, R - L - 24, 8.6, 1.45, "#33405c");
   durumSifirla(); y += 106;
   paragraf(doc, `Güven skoru otomatik ön-değerlendirmedir; %${v.guvenEsik}+ eşiği yanlış pozitifi asgariye indirir ama her satır resmî işlem öncesi teyit edilmelidir. Her alan adı tıklanabilir bağlantıdır (yalnız güvenli ortamda açın).`, L, y, R - L, 8.4, 1.45, GRI);
@@ -154,7 +168,6 @@ export async function bahisListePdf(v: BahisListeVeri): Promise<Buffer> {
     yaz("Alan adı (bağlantı)", COL.dom.x, ty + 4, { font: "TB", boy: 7.4, renk: "#dbe6f0" });
     yaz("Marka", COL.mar.x, ty + 4, { font: "TB", boy: 7.4, renk: "#dbe6f0" });
     yaz("Güven", COL.guv.x, ty + 4, { font: "TB", boy: 7.4, renk: "#dbe6f0", w: COL.guv.w, hiza: "center" });
-    yaz("USOM", COL.usom.x, ty + 4, { font: "TB", boy: 7.4, renk: "#dbe6f0" });
     yaz("İlk görülme", COL.zam.x, ty + 4, { font: "TB", boy: 7.4, renk: "#dbe6f0", w: COL.zam.w, hiza: "right" });
     return ty + 18;
   };
@@ -167,9 +180,7 @@ export async function bahisListePdf(v: BahisListeVeri): Promise<Buffer> {
     yaz(s.domain, COL.dom.x, ry, { font: "T", boy: 7.6, renk: "#1a5fb4", w: COL.dom.w, link: `https://${s.domain}` });
     yaz(s.marka || "—", COL.mar.x, ry, { font: "T", boy: 7.6, renk: "#26324a", w: COL.mar.w });
     yaz(`%${s.guven}`, COL.guv.x, ry, { font: "TB", boy: 7.6, renk: KIRMIZI, w: COL.guv.w, hiza: "center" });
-    const uMetin = s.usomda === false ? "yok · biz-önce" : s.usomda === true ? "kayıtlı" : "bilinmiyor";
-    const uRenk = s.usomda === false ? YESIL : s.usomda === true ? GRI : "#8a97a5";
-    yaz(uMetin, COL.usom.x, ry, { font: "T", boy: 7.2, renk: uRenk, w: COL.usom.w });
+    if (s.canli) { yildizCiz(doc, COL.star.x + 5, ry + 4, 4.3, ALTIN); durumSifirla(); }
     yaz(zmn(s.zaman), COL.zam.x, ry, { font: "T", boy: 7.6, renk: GRI, w: COL.zam.w, hiza: "right" });
     ry += satirH;
   }
