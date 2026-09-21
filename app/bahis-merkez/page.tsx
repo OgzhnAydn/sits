@@ -36,6 +36,7 @@ export default function BahisMerkez() {
   const [canliYuk, setCanliYuk] = useState(false);
   const [markalar, setMarkalar] = useState<MarkaSat[]>([]);
   const [ist, setIst] = useState({ toplam: 0, bizOnce: 0, engelliSayi: 0, trSayi: 0, markaVar: 0, tarandi: 0 });
+  const [toplamCT, setToplamCT] = useState<number | null>(null); // KARARLI CT evreni (/api/ct-akis, monoton)
   const durdu = useRef(false);
 
   useEffect(() => markaDinle((user, hesap) => {
@@ -57,7 +58,7 @@ export default function BahisMerkez() {
         setListe(Array.isArray(d.liste) ? d.liste : []);
         if (!yalnizCanli) {
           setMarkalar(Array.isArray(d.markaDagilim) ? d.markaDagilim : []);
-          setIst((p) => ({ toplam: d.toplam || 0, bizOnce: d.bizOnce || 0, engelliSayi: d.engelliSayi || 0, trSayi: d.trSayi || 0, markaVar: d.markaVar || 0, tarandi: p.tarandi + (d.tarandi || 0) }));
+          setIst({ toplam: d.toplam || 0, bizOnce: d.bizOnce || 0, engelliSayi: d.engelliSayi || 0, trSayi: d.trSayi || 0, markaVar: d.markaVar || 0, tarandi: d.tarandi || 0 });
         }
       } catch { if (!durdu.current) setListe((l) => l ?? []); }
       finally { if (!durdu.current) setCanliYuk(false); }
@@ -65,6 +66,18 @@ export default function BahisMerkez() {
     cek(); const t = setInterval(cek, aralik);
     return () => { durdu.current = true; clearInterval(t); };
   }, [oturum, yalnizCanli]);
+
+  // KARARLI CT evreni — Kontrol Odası ile AYNI sayaç (/api/ct-akis: monoton, Firestore-destekli).
+  // Böylece "İzlenen Sertifika" üst üste toplanmaz, gerçek değeri (~milyar) gösterir.
+  useEffect(() => {
+    if (!oturum) return;
+    let durduCT = false;
+    async function cekCT() {
+      try { const j = await (await fetch("/api/ct-akis", { cache: "no-store" })).json(); if (!durduCT && j.toplam) setToplamCT(j.toplam); } catch { /* */ }
+    }
+    cekCT(); const t = setInterval(cekCT, 30000);
+    return () => { durduCT = true; clearInterval(t); };
+  }, [oturum]);
 
   const antTema = { algorithm: koyu ? theme.darkAlgorithm : theme.defaultAlgorithm, token: koyu ? antTokenKoyu : antTokenAcik };
   const durumTag = (y: Yakalanan) =>
@@ -104,7 +117,7 @@ export default function BahisMerkez() {
           {/* KPI */}
           <Row gutter={[14, 14]}>
             {[
-              { t: "İzlenen Sertifika", v: fmt(ist.tarandi), i: <EyeOutlined />, c: "var(--c-4d9fe0)" },
+              { t: "İzlenen Sertifika", v: toplamCT ? (toplamCT / 1e9).toFixed(2) + " Mr" : "…", i: <EyeOutlined />, c: "var(--c-4d9fe0)" },
               { t: "Yakalanan Bahis", v: fmt(ist.toplam), i: <AimOutlined />, c: "var(--c-4d9fe0)" },
               { t: "USOM'da yok · biz-önce", v: fmt(ist.bizOnce), i: <ThunderboltOutlined />, c: "var(--c-3ee08a)" },
               { t: "Zaten engelli (BTK)", v: fmt(ist.engelliSayi), i: <SafetyCertificateOutlined />, c: "var(--c-8fb0d4)" },
