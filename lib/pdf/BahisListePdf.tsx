@@ -136,7 +136,7 @@ export async function bahisListePdf(v: BahisListeVeri): Promise<Buffer> {
   };
   kpi(0, trSayi(v.toplam), "Türkiye hedefli adres", KIRMIZI);
   kpi(1, trSayi(v.canliSayi), "canlı · içerik sunan (★)", ALTIN);
-  kpi(2, `≥%${v.guvenEsik}`, "güven eşiği", TEAL);
+  kpi(2, v.guvenEsik > 0 ? `≥%${v.guvenEsik}` : "Tümü", "güven eşiği", TEAL);
   y += 62;
   // Dürüst çerçeve kutusu
   doc.fillColor("#fff8f0").rect(L, y, R - L, 96).fill();

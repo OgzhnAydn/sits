@@ -10,14 +10,16 @@ export const maxDuration = 300; // 70k+ satır tüm-liste → uzun; Vercel Pro'd
 // Dürüst çerçeve: USOM durumu kayıtlı; BTK engeli yurtdışı sunucudan güvenilir görülemez (PDF'te belirtilir).
 export async function GET(req: NextRequest) {
   const u = new URL(req.url);
-  const esik = Math.max(50, Math.min(99, Number(u.searchParams.get("esik")) || 90));
+  // PDF (formatlı + ★) yüksek-güvenli alt küme (vars %90). TAM 70k liste PDF'e sığmıyor →
+  // tamamı için /api/bahis-liste-csv (hafif, tüm TR-hedefli).
+  const esik = Math.max(0, Math.min(99, Number(u.searchParams.get("esik")) || 90));
   // PDF'e yazılacak azami satır. Vars: TAMAMI (0/"hepsi" = sınırsız). Kullanıcı isterse ?adet=N ile kısar.
   const adetParam = (u.searchParams.get("adet") || "").toLowerCase();
   const kapak = adetParam === "" || adetParam === "hepsi" || adetParam === "0"
     ? Infinity : Math.max(100, Number(adetParam) || Infinity);
 
-  // TR-hedefli kayıtların TAMAMINI çek (cursor-sayfalama, ~30k / ~13sn), yüksek-güven + engelsiz süz.
-  const ham = await bahisTRHedefli(60000);
+  // TR-hedefli kayıtların TAMAMINI çek (cursor-sayfalama). Sınır 90k → 70k+ evren tamamen okunur.
+  const ham = await bahisTRHedefli(90000);
   const tr = ham.filter((a) => a.trHedefli && (a.guven || 0) >= esik && a.engelli !== true);
   tr.sort((a, b) => (b.guven || 0) - (a.guven || 0) || (b.zaman || 0) - (a.zaman || 0));
 
