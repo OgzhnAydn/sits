@@ -4,7 +4,7 @@
 // CT akışından canlı yakalanan bahis siteleri + biz-önce (USOM'da yok) + marka dağılımı.
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ConfigProvider, theme, Row, Col, Card, Statistic, Table, Tag, Flex, Button, Spin, Typography, Badge, Progress, Grid } from "antd";
+import { ConfigProvider, theme, Row, Col, Card, Statistic, Table, Tag, Flex, Button, Spin, Typography, Badge, Progress, Grid, Segmented } from "antd";
 import {
   EyeOutlined, ThunderboltOutlined, GlobalOutlined, LogoutOutlined, FlagOutlined,
   RadarChartOutlined, BarChartOutlined, SafetyCertificateOutlined, AimOutlined,
@@ -16,7 +16,7 @@ const { Text, Title } = Typography;
 const fmt = (n: number) => (n || 0).toLocaleString("tr-TR");
 const gecen = (t: number) => { if (!t) return "—"; const dk = (Date.now() - t) / 60000; if (dk < 1) return "az önce"; if (dk < 60) return Math.round(dk) + " dk önce"; if (dk < 1440) return Math.round(dk / 60) + " saat önce"; return Math.round(dk / 1440) + " gün önce"; };
 
-type Yakalanan = { domain: string; ca: string; zaman: number; guven: number; isaretler: string[]; tld: string; trHedefli: boolean; usomda: boolean | null; engelli: boolean | null; marka: string | null };
+type Yakalanan = { domain: string; ca: string; zaman: number; guven: number; isaretler: string[]; tld: string; trHedefli: boolean; usomda: boolean | null; engelli: boolean | null; marka: string | null; canliDurum?: string };
 type MarkaSat = { marka: string; sayi: number; son: number; bizOnce: number };
 const KART = { background: "var(--c-0b1726)", borderColor: "var(--c-17293c)" } as const;
 
@@ -32,6 +32,8 @@ export default function BahisMerkez() {
   const [oturum, setOturum] = useState<boolean | null>(null);
   const [hesapAdi, setHesapAdi] = useState("");
   const [liste, setListe] = useState<Yakalanan[] | null>(null);
+  const [yalnizCanli, setYalnizCanli] = useState(false); // demo/şov: yalnız içerik-sunan (canlı) bahis siteleri
+  const [canliYuk, setCanliYuk] = useState(false);
   const [markalar, setMarkalar] = useState<MarkaSat[]>([]);
   const [ist, setIst] = useState({ toplam: 0, bizOnce: 0, engelliSayi: 0, trSayi: 0, markaVar: 0, tarandi: 0 });
   const durdu = useRef(false);
@@ -44,18 +46,25 @@ export default function BahisMerkez() {
   useEffect(() => {
     if (!oturum) return;
     durdu.current = false;
+    // Yalnız-canlı modu: canlılık sondası pahalı → daha seyrek (25sn) tazelenir; KPI'lar normal feed'den kalır.
+    const url = yalnizCanli ? "/api/bahis-canli" : "/api/bahis";
+    const aralik = yalnizCanli ? 25000 : 7000;
     async function cek() {
       try {
-        const d = await (await fetch("/api/bahis", { cache: "no-store" })).json();
+        if (yalnizCanli) setCanliYuk(true);
+        const d = await (await fetch(url, { cache: "no-store" })).json();
         if (durdu.current) return;
         setListe(Array.isArray(d.liste) ? d.liste : []);
-        setMarkalar(Array.isArray(d.markaDagilim) ? d.markaDagilim : []);
-        setIst((p) => ({ toplam: d.toplam || 0, bizOnce: d.bizOnce || 0, engelliSayi: d.engelliSayi || 0, trSayi: d.trSayi || 0, markaVar: d.markaVar || 0, tarandi: p.tarandi + (d.tarandi || 0) }));
+        if (!yalnizCanli) {
+          setMarkalar(Array.isArray(d.markaDagilim) ? d.markaDagilim : []);
+          setIst((p) => ({ toplam: d.toplam || 0, bizOnce: d.bizOnce || 0, engelliSayi: d.engelliSayi || 0, trSayi: d.trSayi || 0, markaVar: d.markaVar || 0, tarandi: p.tarandi + (d.tarandi || 0) }));
+        }
       } catch { if (!durdu.current) setListe((l) => l ?? []); }
+      finally { if (!durdu.current) setCanliYuk(false); }
     }
-    cek(); const t = setInterval(cek, 7000);
+    cek(); const t = setInterval(cek, aralik);
     return () => { durdu.current = true; clearInterval(t); };
-  }, [oturum]);
+  }, [oturum, yalnizCanli]);
 
   const antTema = { algorithm: koyu ? theme.darkAlgorithm : theme.defaultAlgorithm, token: koyu ? antTokenKoyu : antTokenAcik };
   const durumTag = (y: Yakalanan) =>
@@ -129,20 +138,32 @@ export default function BahisMerkez() {
             </Col>
             {/* Canlı tespit akışı */}
             <Col xs={24} lg={16}>
-              <Card style={KART} styles={{ body: { padding: 14 } }} title={<Flex justify="space-between" align="center"><Text style={{ color: "var(--c-c7d6e6)" }}>Canlı tespit akışı</Text><Text style={{ fontSize: 11, color: "var(--c-5b6b7d)" }}>7 sn&apos;de tazelenir</Text></Flex>}>
+              <Card style={KART} styles={{ body: { padding: 14 } }} title={<Flex justify="space-between" align="center" gap={8} wrap style={{ rowGap: 6 }}>
+                <Text style={{ color: "var(--c-c7d6e6)" }}>Canlı tespit akışı</Text>
+                <Flex align="center" gap={10} wrap style={{ rowGap: 6 }}>
+                  <Segmented size="small" value={yalnizCanli ? "canli" : "tum"} onChange={(v) => setYalnizCanli(v === "canli")}
+                    options={[{ label: "Tümü", value: "tum" }, { label: "Yalnız canlı", value: "canli" }]} />
+                  <Text style={{ fontSize: 11, color: "var(--c-5b6b7d)" }}>{yalnizCanli ? (canliYuk ? "doğrulanıyor…" : "içerik sunanlar") : "7 sn'de tazelenir"}</Text>
+                </Flex>
+              </Flex>}>
                 <Table
                   size="small" pagination={false} rowKey="domain" dataSource={liste || []}
                   scroll={{ x: "max-content", y: 440 }}
                   rowClassName={(r: Yakalanan) => (Date.now() - r.zaman < 45000 ? "bahis-yeni" : "")}
-                  locale={{ emptyText: <Text type="secondary">Akış taranıyor…</Text> }}
+                  locale={{ emptyText: <Text type="secondary">{yalnizCanli ? (canliYuk ? "Canlılık doğrulanıyor…" : "Şu an içerik sunan (canlı) bahis sitesi bulunamadı — tekrar taranıyor.") : "Akış taranıyor…"}</Text> }}
                   columns={[
                     { title: "Domain", dataIndex: "domain", ellipsis: true, render: (v: string) => <a href={`/sorgula?q=${encodeURIComponent(v)}`} target="_blank" rel="noreferrer" style={{ color: "var(--c-ff9aa4)", fontFamily: "monospace", fontSize: 12 }}>{v}</a> },
                     { title: "Marka", dataIndex: "marka", width: 100, ellipsis: true, render: (v: string | null) => v ? <Text style={{ fontSize: 11, color: "var(--c-f6c877)" }}>{v}</Text> : <Text type="secondary" style={{ fontSize: 11 }}>—</Text> },
                     { title: "Güven", dataIndex: "guven", width: 64, align: "center", render: (v: number) => <Tag color={v >= 85 ? "error" : v >= 70 ? "warning" : "default"} style={{ margin: 0 }}>%{v}</Tag> },
-                    { title: "Durum", key: "durum", width: 96, render: (_: unknown, r: Yakalanan) => durumTag(r) },
+                    { title: "Durum", key: "durum", width: 110, render: (_: unknown, r: Yakalanan) => r.canliDurum === "live" ? <Tag color="success" style={{ margin: 0 }}>CANLI · içerik var</Tag> : durumTag(r) },
                     { title: "TR", dataIndex: "trHedefli", width: 44, align: "center", render: (v: boolean) => v ? <span title="Türkiye hedefli">🇹🇷</span> : null },
                     { title: "Zaman", dataIndex: "zaman", width: 90, render: (v: number) => <Text style={{ fontSize: 11, color: "var(--c-5b6b7d)" }}>{gecen(v)}</Text> },
-                    { title: "", key: "aksiyon", width: 44, align: "center", render: (_: unknown, r: Yakalanan) => (r.usomda === false && r.engelli !== true) ? <Button size="small" type="text" title="USOM'a bildir (alan adı kopyalanır)" onClick={() => usomBildir(r.domain)} icon={<FlagOutlined style={{ color: "var(--c-3ee08a)" }} />} /> : null },
+                    { title: "", key: "aksiyon", width: yalnizCanli ? 76 : 44, align: "center", render: (_: unknown, r: Yakalanan) => (
+                      <Flex gap={2} justify="center">
+                        {yalnizCanli && <Button size="small" type="text" title="Siteyi aç (canlı — dikkat: yasa dışı bahis sitesi)" onClick={() => window.open(`https://${r.domain}`, "_blank", "noopener,noreferrer")} icon={<EyeOutlined style={{ color: "var(--c-4d9fe0)" }} />} />}
+                        {(r.usomda === false && r.engelli !== true) ? <Button size="small" type="text" title="USOM'a bildir (alan adı kopyalanır)" onClick={() => usomBildir(r.domain)} icon={<FlagOutlined style={{ color: "var(--c-3ee08a)" }} />} /> : null}
+                      </Flex>
+                    ) },
                   ]}
                 />
               </Card>
