@@ -22,7 +22,7 @@ import AnalitikPanel from "./AnalitikPanel";
 const { Text, Title } = Typography;
 
 type AkisSatir = { i: number; kisa: string; domain: string; ca: string; marka: string | null };
-type Aday = { domain: string; marka: string; skor: number; durum?: string; zaman?: number };
+type Aday = { domain: string; marka: string; skor: number; durum?: string; zaman?: number; aiTur?: string; aiKimlikAvi?: boolean; aiNot?: string; analizZaman?: number };
 type Alan = { ad: string; deger: string };
 type Kategori = { ad: string; seviye: string };
 type Dedektif = { tur: string; guven: string; hedef?: string };
@@ -130,6 +130,17 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
       setTaraSonuc(j.ok ? `${j.yeni || 0} yeni · ${j.taranan || 0} tarandı` : (j.hata || "tarama başarısız"));
     } catch { setTaraSonuc("tarama başarısız"); }
     finally { setTaraniyor(false); }
+  }
+  const [aiTaraniyor, setAiTaraniyor] = useState(false);
+  const [aiSonuc, setAiSonuc] = useState<string | null>(null);
+  async function topluAiAnaliz() {
+    if (!markaFiltre || aiTaraniyor) return;
+    setAiTaraniyor(true); setAiSonuc(null);
+    try {
+      const j = await (await fetch(`/api/marka-analiz?marka=${encodeURIComponent(markaFiltre)}&adet=8`)).json();
+      setAiSonuc(j.ok ? `${j.analizEdilen || 0} adres AI ile analiz edildi · ${j.kimlikAviSayisi || 0} kimlik-avı` : (j.hata || "analiz başarısız"));
+    } catch { setAiSonuc("analiz başarısız"); }
+    finally { setAiTaraniyor(false); }
   }
   const [oturum, setOturum] = useState<boolean | null>(null);
   const [operator, setOperator] = useState(false); // marka="*" → tüm markalara dalabilir
@@ -339,6 +350,12 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                       Şimdi Tara
                     </Button>
                   )}
+                  {markaFiltre && (
+                    <Button size="small" loading={aiTaraniyor} onClick={topluAiAnaliz} icon={<span className="material-symbols-outlined" style={{ fontSize: 15, lineHeight: 1 }}>smart_toy</span>} style={{ marginTop: 8, marginLeft: 6 }} title="Tespitleri içerik + Gemini görsel analizi ile toplu incele">
+                      Tümünü AI Analiz Et
+                    </Button>
+                  )}
+                  {aiSonuc && <div style={{ fontSize: 11, color: "var(--c-8fa6bd)", marginTop: 6 }}>{aiSonuc}</div>}
                   {taraSonuc && <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)", display: "block", marginTop: 4 }}>{taraSonuc}</Text>}
                 </Flex>
                 <div style={{ paddingTop: 8 }}>
@@ -614,6 +631,17 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
         <Progress percent={Math.min(100, risk)} showInfo={false} strokeColor={renk} trailColor="var(--c-17293c)" size={{ height: 6 }} style={{ marginTop: 6, marginBottom: 0 }} />
       </div>
 
+      {(aday.aiTur || aday.aiKimlikAvi) && (
+        <Flex vertical gap={4} style={{ background: aday.aiKimlikAvi ? "var(--c-2a0f12)" : "var(--c-0e1a2e)", border: `1px solid ${aday.aiKimlikAvi ? "var(--c-7a1f28)" : "var(--c-1d3350)"}`, borderRadius: 8, padding: "9px 11px" }}>
+          <Flex align="center" gap={7}>
+            <span className="material-symbols-outlined" style={{ fontSize: 16, color: aday.aiKimlikAvi ? "var(--c-ff5468)" : "var(--c-31c8a0)" }}>smart_toy</span>
+            <Text strong style={{ fontSize: 12, color: "var(--c-cfe0ef)" }}>AI içerik analizi</Text>
+            {aday.aiKimlikAvi && <Tag color="error" style={{ margin: 0, marginLeft: "auto" }}>KİMLİK AVI</Tag>}
+          </Flex>
+          {aday.aiTur && <Text style={{ fontSize: 11.5, color: "var(--c-a9c0da)" }}>Görsel: {aday.aiTur}</Text>}
+          {aday.aiNot && <Text style={{ fontSize: 10.5, color: "var(--c-8fa6bd)", lineHeight: 1.4 }}>{aday.aiNot}</Text>}
+        </Flex>
+      )}
       <EtbisRozet rapor={rapor} />
       <SaldiriGelisimi rapor={rapor} canli={canliV?.durum} />
 

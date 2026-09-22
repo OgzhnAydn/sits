@@ -270,6 +270,11 @@ export type MarkaAday = {
   durum?: "aktif-tuzak" | "park" | "yayinda-degil" | "canli"; // canlı durum (park'lar ayrı takip)
   kampanya?: { domainSayisi: number; ipler: string[]; asnler: string[]; iletisimKanallari: string[]; exfilVar: boolean; ozet: string }; // operasyon haritası özeti
   cikisAni?: number; // sahte adresin DOĞUŞ anı (ms, en eski sertifika). zaman = TESPİT anı. Gecikme = zaman − cikisAni.
+  // AI/içerik analizi (otomatik derin analizden — /api/marka-analiz). Panelde tıklamadan görünür.
+  aiTur?: string;          // Gemini görsel analiz türü (banka giriş / ödeme-kart / park / hata…)
+  aiKimlikAvi?: boolean;   // görselde/içerikte GERÇEK kimlik-avı formu doğrulandı mı
+  aiNot?: string;          // 1 cümle özet
+  analizZaman?: number;    // en son derin analiz zamanı (ms)
 };
 
 export async function markaAdayKaydet(a: MarkaAday): Promise<void> {
