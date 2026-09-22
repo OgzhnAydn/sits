@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { markaAdaylariMarka, markaAdayKaydet, type MarkaAday } from "@/lib/store";
-import { domainOsint, saldiriAsamasi } from "@/lib/osint";
+import { markaAdaylariMarka, markaAdayKaydet, yasamGecisUygula, type MarkaAday } from "@/lib/store";
+import { domainOsint, saldiriAsamasi, domainDurumu } from "@/lib/osint";
 import { gercekTaklit } from "@/lib/korunanMarkalar";
 
 export const runtime = "nodejs";
@@ -44,6 +44,8 @@ export async function GET(req: NextRequest) {
       const aiNot = (r.alanlar.find((x) => x.ad === "Görsel notu")?.deger) || (r.bulgular[0] || "").slice(0, 130);
       const guncel: MarkaAday = { ...a, aiTur: aiTur || undefined, aiKimlikAvi: kimlikAvi, aiNot: aiNot || undefined, analizZaman: Date.now() };
       await markaAdayKaydet(guncel).catch(() => {});
+      // YAŞAM DÖNGÜSÜ: derin analiz verdicti geçişi sürer (kimlik-avı/canlı → DOGRULANDI, park → IZLEMEDE).
+      await yasamGecisUygula(a.domain, a.yasamDurumu, { tur: "derin-analiz", canliDurum: domainDurumu(r).durum, aktifTehdit: kimlikAvi, skor: r.risk }).catch(() => {});
       return { domain: a.domain, aiTur, aiKimlikAvi: kimlikAvi, aiNot, risk: r.risk };
     } catch {
       return { domain: a.domain, aiTur: "", aiKimlikAvi: false, aiNot: "", risk: 0 };

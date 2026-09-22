@@ -24,6 +24,7 @@ import { db, firebaseHazir } from "./firebase";
 import { gercekTaklit } from "./korunanMarkalar";
 import { usomBilgi } from "./tehditListeleri";
 import type { Analiz } from "./analyze";
+import { gecisHesapla, type YasamDurumu, type YasamOlay, type YasamSinyali } from "./yasamDongusu";
 
 function belgeId(tip: string, deger: string) {
   return `${tip}_${deger.toLowerCase().replace(/[^a-z0-9]/g, "")}`.slice(0, 200);
@@ -275,6 +276,11 @@ export type MarkaAday = {
   aiKimlikAvi?: boolean;   // görselde/içerikte GERÇEK kimlik-avı formu doğrulandı mı
   aiNot?: string;          // 1 cümle özet
   analizZaman?: number;    // en son derin analiz zamanı (ms)
+  // ── YAŞAM DÖNGÜSÜ (canlılık `durum`'dan AYRI; lib/yasamDongusu.ts durum makinesi) ──
+  yasamDurumu?: YasamDurumu;    // ADAY | DOGRULANDI | IZLEMEDE | PASIF | ELENDI
+  yasamGecmisi?: YasamOlay[];   // her geçiş loglanır (denetim izi)
+  dogrulanmaZamani?: number;    // İLK DOGRULANDI anı (ms) — geçmiş ciddiyet damgası (retirement-ts analogu)
+  pasifZamani?: number;         // PASIF (kaldırıldı) anı (ms)
 };
 
 export async function markaAdayKaydet(a: MarkaAday): Promise<void> {
@@ -290,13 +296,33 @@ export async function markaAdayKaydet(a: MarkaAday): Promise<void> {
       const d = mevcut.data() as { zaman?: number; olusturma?: unknown };
       if (typeof d.zaman === "number" && d.zaman > 0) veri.zaman = d.zaman; // ilk bulunma korunur
       if (d.olusturma) delete (veri as { olusturma?: unknown }).olusturma; // olusturma'yı ezme
+      // yasamGecmisi'ni bu genel yazıcı EZMESİN — geçiş izi yalnız yasamGecisUygula ile büyür.
+      delete (veri as { yasamGecmisi?: unknown }).yasamGecmisi;
     } else {
-      veri.olusturma = serverTimestamp(); // yalnız İLK oluşturmada
+      veri.olusturma = serverTimestamp();          // yalnız İLK oluşturmada
+      veri.yasamDurumu = a.yasamDurumu || "ADAY";   // yaşam döngüsü başlangıcı: ADAY
     }
     await setDoc(ref, veri, { merge: true });
   } catch {
     /* kurallar yayınlanmadıysa sessiz geç */
   }
+}
+
+// ── YAŞAM DÖNGÜSÜ GEÇİŞİ ── bir tespitin yasamDurumu'nu katı durum makinesiyle ilerletir.
+// `onceki` = çağıranın zaten okuduğu mevcut yasamDurumu (ekstra okuma YOK). Yalnız GERÇEK
+// geçişte yazar (kota-güvenli); izinsiz/geri geçişte yazmaz. Geçiş izi arrayUnion ile büyür.
+// dogrulanmaZamani YALNIZ ilk doğrulamada (ADAY→DOGRULANDI) damgalanır → geçmiş ciddiyet korunur.
+export async function yasamGecisUygula(domain: string, onceki: YasamDurumu | undefined, sinyal: YasamSinyali): Promise<YasamDurumu> {
+  const g = gecisHesapla(onceki, sinyal);
+  if (!g.degisti || !firebaseHazir || !db) return g.durum;
+  try {
+    const olay: YasamOlay = { durum: g.durum, onceki, t: Date.now(), neden: g.neden };
+    const veri: Record<string, unknown> = { yasamDurumu: g.durum, yasamGecmisi: arrayUnion(olay), sonTarama: Date.now() };
+    if (g.durum === "DOGRULANDI" && (onceki === "ADAY" || onceki === undefined)) veri.dogrulanmaZamani = Date.now();
+    if (g.durum === "PASIF") veri.pasifZamani = Date.now();
+    await setDoc(doc(db, "marka_adaylari", belgeId("dom", domain)), veri, { merge: true });
+  } catch { /* kurallar yoksa sessiz */ }
+  return g.durum;
 }
 
 // MÜŞTERİ-BAZLI TESPİT ÖZETİ — "markanız için şu kadar tehdit tespit ettik".

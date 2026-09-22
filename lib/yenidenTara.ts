@@ -1,9 +1,10 @@
 // YENİDEN TARAMA — aktif adayları periyodik yeniden analiz eder ve risk YÖRÜNGESİNE
 // yeni nokta ekler. Böylece bir domainin park→web→logo→login→kimlik-toplama
 // olgunlaşmasını ZAMAN İÇİNDE yakalarız (kokpitteki "risk gelişimi" gerçek olur).
-import { markaAdaylariGetir, riskGecmisiEkle, adayDurumGuncelle, type Yukselme } from "./store";
+import { markaAdaylariGetir, riskGecmisiEkle, adayDurumGuncelle, yasamGecisUygula, type Yukselme } from "./store";
 import { domainOsint, saldiriAsamasi, altyapiDna, domainDurumu, takipIdBirincil } from "./osint";
 import { gercekTaklit } from "./korunanMarkalar";
+import { canliliktanSinyal } from "./yasamDongusu";
 
 // Bir sonraki tarama, aday önceki duruma göre EYLEME mi geçti? Cevabı bu üretir.
 // "Zayıf" = henüz tehlikeye dönüşmemiş (park / yayında değil). Bir zayıf durumdan
@@ -39,6 +40,8 @@ export async function yenidenTaraBatch(n = 8, offset?: number): Promise<{ tarana
       const yeniDurum = domainDurumu(r).durum;
       const yukselme = yukselmeCikar(a, r.risk, yeniDurum);
       await adayDurumGuncelle(a.domain, yeniDurum, r.risk, yukselme, r.cikisAni);
+      // YAŞAM DÖNGÜSÜ: canlılık gözleminden geçiş uygula (yalnız gerçek geçişte yazar).
+      await yasamGecisUygula(a.domain, a.yasamDurumu, canliliktanSinyal(yeniDurum, saldiriAsamasi(r) >= 6, undefined, r.risk));
       if (yukselme) yukselen++;
       kaydedilen++;
     } catch { /* tek domain başarısız → diğerlerini etkileme */ }
