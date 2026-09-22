@@ -398,7 +398,9 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
               ))}
             >
               {/* Grafik her iki temada da koyu "radar ekranı" kalır (canvas renkleri koyu; JS ile CSS-var okunamadığından). */}
-              <div style={{ position: "relative", height: grafGorunum === "radyal" ? 600 : 460, background: grafGorunum === "evren" ? (koyu ? "#0a1420" : "#f4f7fb") : (koyu ? "#0b1524" : "#f4f7fb"), borderRadius: 10, overflow: "hidden" }}>
+              <div style={{ position: "relative", height: grafGorunum === "radyal" ? 600 : 460, borderRadius: 10, overflow: "hidden",
+                backgroundColor: grafGorunum === "evren" ? (koyu ? "#0a1420" : "#f4f7fb") : (koyu ? "#0b1524" : "#f5f7fa"),
+                ...(grafGorunum === "radyal" ? { backgroundImage: `radial-gradient(circle, ${koyu ? "#1b2c42" : "#ccd5e2"} 1px, transparent 1.5px)`, backgroundSize: "22px 22px", backgroundPosition: "center" } : {}) }}>
                 <div style={{ position: "absolute", top: 8, left: 8, zIndex: 3 }}>
                   <Segmented size="small" value={zaman} onChange={(v) => setZaman(v as "anlik" | "24s" | "7g" | "hepsi")}
                     options={[{ label: "Anlık", value: "anlik" }, { label: "24s", value: "24s" }, { label: "7 gün", value: "7g" }, { label: "Tümü", value: "hepsi" }]} />
