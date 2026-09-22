@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { markaAdaylariMarka, markaErkenlik, kullaniciMarkalariGetir, type MarkaAday } from "@/lib/store";
+import { markaAdaylariMarka, markaErkenlik, kullaniciMarkalariGetir, markaAdayKaydet, type MarkaAday } from "@/lib/store";
 import { gercekTaklit, markaLogoAnahtar, KORUNAN_MARKALAR } from "@/lib/korunanMarkalar";
+import { domainOsint, saldiriAsamasi } from "@/lib/osint";
 import { markaRaporPdf, type RaporTespit } from "@/lib/pdf/MarkaRaporPdf";
 import { usomBiliniyor } from "@/lib/usom";
 import { btkEngelli } from "@/lib/btk";
@@ -34,7 +35,7 @@ async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string;
 }
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300; // öne çıkanlarda eksik AI verdict'i rapor sırasında üretilir → uzun
 
 const ARALIK: Record<string, { ms: number; etiket: string }> = {
   gunluk: { ms: 24 * 3600e3, etiket: "Son 24 saat" },
@@ -108,6 +109,16 @@ export async function GET(req: NextRequest) {
   const tesp = (a: MarkaAday): RaporTespit => ({ domain: a.domain, skor: a.skor || 0, durum: a.durum, seviye: a.seviye, zaman: a.zaman || 0, sinyaller: a.sinyaller, kaynak: a.kaynak, aiTur: a.aiTur, aiKimlikAvi: a.aiKimlikAvi, aiNot: a.aiNot });
   const oncelikli = gecerli.filter((a) => a.durum === "aktif-tuzak" || a.durum === "canli").sort((a, b) => (b.skor || 0) - (a.skor || 0));
   const oneCikanKay = (tekDomain ? gecerli : oncelikli).slice(0, tekDomain ? 1 : 4);
+  // ÖNE ÇIKANLARDA AI VERDICT EKSİKSE ŞİMDİ ÜRET → rapor tek adımda AI'lı çıksın (görsel + metin analizi).
+  await Promise.all(oneCikanKay.filter((a) => !a.aiTur).slice(0, 4).map(async (a) => {
+    try {
+      const rr = await domainOsint(a.domain, undefined, true);
+      const aiTur = rr.alanlar.find((x) => x.ad === "Görsel analiz (AI)" || x.ad === "İçerik analizi (AI)")?.deger || "";
+      const kimlikAvi = saldiriAsamasi(rr) >= 6 || rr.bulgular.some((b) => /kimlik.?av|kart bilgisi isteniyor|üçüncü bir tarafa aktar|şifre.*girme|şifre\/kart\/kimlik/i.test(b));
+      a.aiTur = aiTur || undefined; a.aiKimlikAvi = kimlikAvi; a.analizZaman = Date.now();
+      markaAdayKaydet(a).catch(() => {});
+    } catch { /* AI üretilemedi — rapor yine çıkar */ }
+  }));
   const oneCikanDom = new Set(oneCikanKay.map((a) => a.domain));
   const digerleri = gecerli.filter((a) => !oneCikanDom.has(a.domain)).map(tesp);
 

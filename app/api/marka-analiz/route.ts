@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const sonuc = await parcali(secili, 2, async (a) => {
     try {
       const r = await domainOsint(a.domain, undefined, true); // içerik + ekran + Gemini görsel analiz
-      const aiTur = r.alanlar.find((x) => x.ad === "Görsel analiz (AI)")?.deger || "";
+      const aiTur = r.alanlar.find((x) => x.ad === "Görsel analiz (AI)" || x.ad === "İçerik analizi (AI)")?.deger || "";
       const asama = saldiriAsamasi(r);
       const kimlikAvi = asama >= 6 || r.bulgular.some((b) => /kimlik.?av|kart bilgisi isteniyor|üçüncü bir tarafa aktar|şifre.*girme/i.test(b));
       const aiNot = (r.alanlar.find((x) => x.ad === "Görsel notu")?.deger) || (r.bulgular[0] || "").slice(0, 130);

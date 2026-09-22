@@ -24,7 +24,7 @@ import { tehditKontrol, type TehditSonuc } from "./tehditListeleri";
 import { itibarliMi } from "./itibarli";
 import { seonTelefon } from "./seon";
 import { AVCI_MARKALAR, resmiMarkaDomaini, KAMU_KURUMLARI, tescilliBilgi } from "./korunanMarkalar";
-import { geminiVarMi, geminiGorselJson } from "./gemini";
+import { geminiVarMi, geminiGorselJson, geminiJson } from "./gemini";
 import { faviconMarkaEslesme } from "./faviconMarka";
 import { etbisSorgu } from "./etbis";
 import { etbisYerel } from "./etbisYerel";
@@ -1613,6 +1613,28 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
         r.alanlar.push({ ad: "Sayfa başlığı", deger: bilgi.baslik });
       }
       if (bilgi.siteAdi) r.alanlar.push({ ad: "Site", deger: bilgi.siteAdi });
+
+      // GÖRÜNTÜSÜZ İÇERİK ANALİZİ (AI metin): ekran görüntüsü YOK ama HTML içerik VAR ise
+      // (taze/cloaklı siteler urlscan'de görüntüsüz olabilir) → sayfa METNİNİ Gemini'ye
+      // yollayıp kimlik-avı/tür verdict'i al. Görsel analizle aynı JSON şeması.
+      if (markaEslesme && geminiVarMi && !r.ekranGoruntusu && !r.alanlar.some((x) => x.ad === "Görsel analiz (AI)")) {
+        try {
+          const metin = sayfa.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 5000);
+          if (metin.length > 120) {
+            const gj = (await Promise.race([
+              geminiJson<{ tur?: string; kimlikAvi?: boolean; aciklama?: string }>(
+                `Bu bir web sayfasının METİN içeriği. SADECE şu JSON'u döndür: {"tur":"kısa tür (banka giriş sayfası|giriş/oturum formu|ödeme/kart sayfası|çekiliş/ödül dolandırıcılığı|e-ticaret|haber/blog|park/satılık|boş/hata)","kimlikAvi":true/false (sayfa kullanıcıdan ŞİFRE/KART/KİMLİK/TC/KOD isteyen bir form ya da böyle bir talep AÇIKÇA içeriyor mu),"aciklama":"1 cümle"}. Emin değilsen kimlikAvi:false. Türkçe.`,
+                metin
+              ),
+              new Promise<null>((res) => setTimeout(() => res(null), 15000)),
+            ])) as { tur?: string; kimlikAvi?: boolean; aciklama?: string } | null;
+            if (gj?.tur) {
+              r.alanlar.push({ ad: "İçerik analizi (AI)", deger: gj.tur });
+              if (gj.kimlikAvi) { r.risk += 25; r.bulgular.unshift(`Yapay zekâ metin analizinde: sayfa kullanıcıdan şifre/kart/kimlik bilgisi İSTİYOR — kimlik avı işareti (${gj.aciklama || gj.tur}).`); }
+            }
+          }
+        } catch { /* AI metin analizi alınamadı */ }
+      }
     }
   }
 
