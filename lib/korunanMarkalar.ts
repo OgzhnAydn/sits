@@ -395,3 +395,10 @@ export function resmiMarkaDomaini(domain: string): boolean {
   const d = domain.toLowerCase().replace(/^www\./, "");
   return KORUNAN_MARKALAR.some((m) => m.resmi.some((r) => d === r || d.endsWith("." + r)));
 }
+
+// Domain hangi korunan markanın RESMÎ adresi? (resmi kısa-devre damgası için ad döner, yoksa "")
+export function resmiMarkaAdi(domain: string): string {
+  const d = domainSade(domain);
+  const m = KORUNAN_MARKALAR.find((x) => x.resmi.some((r) => { const rr = domainSade(r); return d === rr || d.endsWith("." + rr); }));
+  return m?.ad || "";
+}

@@ -23,7 +23,7 @@ import { lookup } from "node:dns/promises";
 import { tehditKontrol, type TehditSonuc } from "./tehditListeleri";
 import { itibarliMi } from "./itibarli";
 import { seonTelefon } from "./seon";
-import { AVCI_MARKALAR, resmiMarkaDomaini, KAMU_KURUMLARI, tescilliBilgi } from "./korunanMarkalar";
+import { AVCI_MARKALAR, resmiMarkaDomaini, resmiMarkaAdi, KAMU_KURUMLARI, tescilliBilgi } from "./korunanMarkalar";
 import { geminiVarMi, geminiGorselJson, geminiJson } from "./gemini";
 import { faviconMarkaEslesme } from "./faviconMarka";
 import { etbisSorgu } from "./etbis";
@@ -933,6 +933,28 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
   const r: OsintRapor = { tip: "url", deger: domain, alanlar: [], bulgular: [], risk: 0 };
   let domainYasGun: number | null = null; // RDAP'ten; CT sinyallerini bağlamlandırmak için
   let barindirmaMetni = ""; // isp+org+asn (marka kendi altyapısında mı barınıyor kontrolü)
+
+  // ── RESMÎ ADRES KISA-DEVRESİ (müşteri güveni: resmî sayfayı ASLA "sahte" gösterme) ──
+  // Korunan markanın DOĞRULANMIŞ resmî domaini (toki.gov.tr + alt alanları) VEYA Türk resmî
+  // uzantısı (.gov.tr/.edu.tr/.bel.tr/.pol.tr/.tsk.tr/.k12.tr) → taklit EDİLEMEZ (sahtekâr
+  // -gov.com/govtr kullanır, gerçek .gov.tr kaydını alamaz). Bunları risk 0 + net "RESMÎ" damgası
+  // ile döndür; tehdit skorlamasına HİÇ girme. Tek istisna: USOM o resmî adresi listelemişse
+  // (ele geçirilmiş — çok nadir) dürüstçe uyar ve normal analize devam et.
+  const resmiSonek = /\.(gov|edu|bel|pol|tsk|k12)\.tr$/.test(domain);
+  if (resmiMarkaDomaini(domain) || resmiSonek) {
+    let usomKotu = false;
+    try { const t = await tehditKontrol(domain); usomKotu = t.usom && t.kaynaklar.length > 0; } catch { /* liste alınamazsa resmî kabul */ }
+    if (!usomKotu) {
+      const markaAd = resmiMarkaAdi(domain);
+      r.risk = 0;
+      r.alanlar.push({ ad: "Resmî adres", deger: markaAd ? `✓ ${markaAd} — DOĞRULANMIŞ resmî site` : "✓ Doğrulanmış resmî kamu (.gov.tr) adresi" });
+      if (resmiSonek) r.alanlar.push({ ad: "Alan adı türü", deger: "Türkiye resmî kamu uzantısı — kaydı yalnız devlet kurumlarına açık, taklit edilemez" });
+      r.bulgular.push(markaAd
+        ? `Bu adres ${markaAd} kurumunun DOĞRULANMIŞ resmî adresidir — sahte/taklit DEĞİLDİR, güvenle kullanılabilir.`
+        : "Bu adres doğrulanmış resmî bir kamu (.gov.tr) adresidir — sahte değildir, güvenle kullanılabilir.");
+      return r;
+    }
+  }
 
   // BİLİNEN-KÖTÜ LİSTELERİ — sıfırdan analizden önce, resmi/global kara listeler.
   // USOM = Türkiye'nin resmi zararlı bağlantı listesi; en güçlü tek sinyalimiz.
