@@ -861,6 +861,13 @@ export function domainDurumu(rapor: OsintRapor): { durum: DomainDurum; etiket: s
   if (cozulmuyor) return { durum: "yayinda-degil", etiket: "Yayında değil / çözülmüyor", ikon: "cloud_off" };
   // Kayıtlı ama şu an A kaydı yok → "canlı" DEĞİL ama "kaldırılmış" da değil (dürüst ara durum).
   if (alan("dns durumu").includes("a kaydı yok")) return { durum: "yayinda-degil", etiket: "Şu an erişilemiyor — kayıtlı, A kaydı yok", ikon: "cloud_off" };
+  // ORIGIN KAPALI / CDN HATA SAYFASI: DNS çözülüp CDN edge cevap verse de gerçek sunucu (origin)
+  // kapalıysa "canlı içerik" DEĞİLDİR. Cloudflare 521-526 "web server is down", 502/503/504,
+  // "origin unreachable", "error 10xx" → urlscan başlığı / site durumu / bulgulardan yakala.
+  // (toki-ilkevim.cfd: urlscan başlığı "521: Web server is down" iken "Canlı" demek YANLIŞTI.)
+  const baslik = alan("sayfa başlığı (urlscan)") + " " + alan("site durumu") + " " + b + " " + not;
+  const originKapali = /web server is down|origin is unreachable|origin down|\b52[0-6]\s*[:·-]|error\s?52\d\b|error\s?10\d\d\b|this site can.?t be reached|502 bad gateway|503 service unavailable|504 gateway time-?out/.test(baslik);
+  if (originKapali) return { durum: "yayinda-degil", etiket: "Sunucu yanıt vermiyor — origin kapalı (CDN hata sayfası), içerik doğrulanamadı", ikon: "cloud_off" };
   return { durum: "canli", etiket: "Canlı — içerik yayında", ikon: "public" };
 }
 
