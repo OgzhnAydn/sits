@@ -980,12 +980,12 @@ function MarkaRadyal({ marka, adaylar, secili, onSelect, logo, koyu = true }: { 
   const cx = w / 2;
   const araH = h - 46;              // alt özet şeridi için pay
   const cy = araH / 2 + 4;
-  const Rx = cx - 42, Ry = cy - 30;  // etiket hover'da açıldığından kenar payı küçük; ELİPS
-  const spacing = 46;                // yalnız skor-daireler → dar aralık, hepsi ferah sığar
+  const Rx = cx - 118, Ry = cy - 26; // SABİT etiket için yatay pay; ELİPS → tüm yüksekliği kullan
+  const spacing = 94;                // sabit etiketler çakışmasın diye açısal pay geniş
   const M = ogeler.length;
-  const ringN = M <= 8 ? 1 : M <= 20 ? 2 : 3;
+  const ringN = M <= 8 ? 1 : M <= 18 ? 2 : 3;
   // İç halka merkez logosuyla ÇAKIŞMASIN diye innermost fraksiyon büyük tutulur.
-  const fr = ringN === 1 ? [0.78] : ringN === 2 ? [0.62, 1] : [0.5, 0.75, 1];
+  const fr = ringN === 1 ? [0.78] : ringN === 2 ? [0.6, 1] : [0.48, 0.74, 1];
   const ringRx = fr.map((f) => Rx * f), ringRy = fr.map((f) => Ry * f);
   const caps = fr.map((_, i) => { const per = 2 * Math.PI * Math.sqrt((ringRx[i] ** 2 + ringRy[i] ** 2) / 2); return Math.max(4, Math.floor(per / spacing)); });
   const kapasite = caps.reduce((a, b) => a + b, 0);
@@ -1025,35 +1025,34 @@ function MarkaRadyal({ marka, adaylar, secili, onSelect, logo, koyu = true }: { 
         {logo ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={logo} alt={marka} style={{ width: 38, height: 38, objectFit: "contain" }} /> : <span className="material-symbols-outlined" style={{ fontSize: 34, color: "#3a90d8" }}>account_balance</span>}
         <Text strong style={{ fontSize: 9, color: txt, marginTop: 1, textAlign: "center", lineHeight: 1, maxWidth: 72, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{marka}</Text>
       </div>
-      {/* Düğümler: daire İÇİNDE skor hep görünür; DOMAIN etiketi yalnız hover/seçili → HİÇ çakışmaz.
-          (Dar panelde her-zaman-açık etiket kaçınılmaz çakışır; profesyonel graf gibi hover ile aç.) */}
+      {/* Düğümler: daire İÇİNDE skor + SABİT domain etiketi (dışa yaslı, radyal → komşularla ayrışır).
+          Hover/seçili olunca vurgulanır (kalın kenar + öne gelir). */}
       {konum.map((p, ki) => {
         const o = p.oge; const kume = o.kume; const aday = o.aday;
         const skor = kume ? kume.skor : (aday!.skor || 0);
         const sv = radyalSeviye(skor, koyu);
         const tam = kume ? `.${kume.tld} kümesi (${kume.sayi})` : aday!.domain;
+        const ad = tam.length > 20 ? tam.slice(0, 19) + "…" : tam;
         const isSel = !kume && !!secili && aday!.domain === secili.domain;
-        const acik = isSel || hoverIdx === ki; // etiketi göster
+        const vurgu = isSel || hoverIdx === ki;
         const sag = Math.cos(p.ang) >= -0.02;
-        const cap = 30; // düğüm çapı
+        const cap = 30;
         return (
           <div key={ki} onClick={() => { if (kume) onSelect(kume.uyeler[0]); else onSelect(aday!); }}
             onMouseEnter={() => setHoverIdx(ki)} onMouseLeave={() => setHoverIdx((v) => v === ki ? null : v)} title={tam}
-            style={{ position: "absolute", left: p.x, top: p.y, transform: "translate(-50%,-50%)", zIndex: acik ? 6 : 1, cursor: "pointer" }}>
+            style={{ position: "absolute", left: p.x, top: p.y, transform: "translate(-50%,-50%)", zIndex: vurgu ? 6 : 1, cursor: "pointer" }}>
             <div style={{ width: cap, height: cap, borderRadius: "50%", background: sv.renk, border: `2px solid ${koyu ? "#0b1524" : "#fff"}`,
-              boxShadow: acik ? `0 0 0 4px ${sv.renk}55` : (koyu ? "0 1px 3px rgba(0,0,0,.5)" : "0 1px 4px rgba(30,50,80,.25)"),
+              boxShadow: vurgu ? `0 0 0 4px ${sv.renk}55` : (koyu ? "0 1px 3px rgba(0,0,0,.5)" : "0 1px 4px rgba(30,50,80,.25)"),
               display: "flex", alignItems: "center", justifyContent: "center", transition: "box-shadow .12s" }}>
               <Text style={{ fontSize: 10, fontWeight: 700, color: "#fff", fontFamily: "'IBM Plex Mono',monospace" }}>{skor}</Text>
             </div>
-            {acik && (
-              <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", ...(sag ? { left: cap + 5 } : { right: cap + 5 }),
-                display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", pointerEvents: "none",
-                background: koyu ? "#0f1d31" : "#ffffff", border: `1px solid ${sv.renk}`, borderRadius: 7, padding: "3px 8px",
-                boxShadow: koyu ? "0 2px 8px rgba(0,0,0,.5)" : "0 2px 10px rgba(30,50,80,.2)" }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 14, color: sv.renk }}>{sv.ikon}</span>
-                <Text style={{ fontSize: 11, color: txt, fontWeight: 600, fontFamily: "'IBM Plex Mono',monospace" }}>{tam}</Text>
-              </div>
-            )}
+            {/* SABİT etiket — radyal dışa yaslı; hover/seçilide kutu + öne çıkar, aksi halde düz yazı */}
+            <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", ...(sag ? { left: cap + 4 } : { right: cap + 4 }),
+              maxWidth: 116, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none", textAlign: sag ? "left" : "right",
+              background: vurgu ? (koyu ? "#0f1d31" : "#ffffff") : "transparent", border: `1px solid ${vurgu ? sv.renk : "transparent"}`, borderRadius: 6, padding: vurgu ? "2px 7px" : "0 2px",
+              boxShadow: vurgu ? (koyu ? "0 2px 8px rgba(0,0,0,.5)" : "0 2px 10px rgba(30,50,80,.2)") : "none" }}>
+              <Text style={{ fontSize: 10, color: vurgu ? txt : (koyu ? "#9db4cc" : "#425268"), fontWeight: vurgu ? 700 : 500, fontFamily: "'IBM Plex Mono',monospace" }}>{ad}</Text>
+            </div>
           </div>
         );
       })}
