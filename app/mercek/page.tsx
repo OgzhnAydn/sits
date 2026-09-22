@@ -282,6 +282,17 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
           <span style={{ width: 1, height: 18, background: "var(--c-1f3652)" }} />
           <Text style={{ fontSize: 12, letterSpacing: ".08em", color: "var(--c-5f7c9c)", textTransform: "uppercase" }}>Siber Mercek</Text>
         </Flex>
+        {/* SEÇİLİ MARKA KİMLİĞİ — markanın resmi logosu + tam adı (kendi kimliğiyle) */}
+        {markaFiltre && (() => {
+          const bl = markaLogo(resmiMap[markaFiltre]);
+          return (
+            <Flex align="center" gap={9} style={{ padding: "3px 12px 3px 5px", borderRadius: 9, background: koyu ? "var(--c-0f1d31)" : "#eef3fb", border: `1px solid ${koyu ? "var(--c-1f3652)" : "#d3e0f0"}` }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {bl && <img src={bl} alt={markaAdi} style={{ height: 24, width: 24, objectFit: "contain", borderRadius: 5, background: "#fff", padding: 1, flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />}
+              <Text strong style={{ fontSize: 14, color: koyu ? "#e6eef7" : "#0c3557", letterSpacing: ".01em", whiteSpace: "nowrap" }}>{markaAdi}</Text>
+            </Flex>
+          );
+        })()}
         <Badge status="processing" color="var(--c-31c8b0)" text={<Text style={{ color: "var(--c-31c8b0)", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11 }}>LIVE</Text>} />
         <Text style={{ color: "var(--c-8fa6bd)", fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 }}>{toplamCT ? `${(toplamCT / 1e9).toFixed(2)}B sertifika` : "—"}</Text>
         {operator && (<>
@@ -455,6 +466,22 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
           </>)}
         </Row>
       </div>
+      {/* FOOTER — seçili markanın resmi logosu + adı (kendi kimliğiyle) + sistem imzası */}
+      <Flex align="center" justify="center" gap={10} wrap style={{ padding: "8px 18px", borderTop: "1px solid var(--c-17293c)", background: "var(--c-0a1420)", flexShrink: 0, rowGap: 4 }}>
+        {markaFiltre && (() => {
+          const bl = markaLogo(resmiMap[markaFiltre]);
+          return (
+            <Flex align="center" gap={8}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {bl && <img src={bl} alt={markaAdi} style={{ height: 18, width: 18, objectFit: "contain", borderRadius: 4, background: "#fff", padding: 1 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />}
+              <Text strong style={{ fontSize: 12.5, color: koyu ? "#cfe0ef" : "#0c3557" }}>{markaAdi}</Text>
+              <Text style={{ fontSize: 11, color: "var(--c-5f7c9c)" }}>marka tehdit koruması</Text>
+              <span style={{ width: 1, height: 12, background: "var(--c-1f3652)" }} />
+            </Flex>
+          );
+        })()}
+        <Text style={{ fontSize: 11, color: "var(--c-5f7c9c)", fontFamily: "'IBM Plex Mono',monospace" }}>Siber Mercek · MirLeon © {new Date().getFullYear()}</Text>
+      </Flex>
     </div>
   );
 }
