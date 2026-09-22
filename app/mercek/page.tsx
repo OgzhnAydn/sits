@@ -4,7 +4,7 @@
 // Giriş kapılı + marka kilidi. Sensör/akış ← /api/ct-akis, adaylar ← /api/marka-adaylari,
 // seçilen varlık ← /api/osint. antd: Card/Statistic/Progress/Table/Tag/Descriptions/Segmented.
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   ConfigProvider, theme, Row, Col, Card, Statistic, Progress, Table, Tag, Segmented,
   Button, Descriptions, Avatar, Flex, Badge, Empty, Spin, Typography, Space, Timeline, Alert, Select, Dropdown,
@@ -118,6 +118,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
   const [yukleniyor, setYukleniyor] = useState(false);
   const [filtre, setFiltre] = useState<Filtre>("hepsi");
   const [zaman, setZaman] = useState<"anlik" | "24s" | "7g" | "hepsi">("hepsi"); // grafik zaman penceresi (kalabalık azalt)
+  const [grafGorunum, setGrafGorunum] = useState<"radyal" | "evren">("radyal"); // radyal kart görünümü (varsayılan) ↔ canvas evren
   const [markaFiltre, setMarkaFiltre] = useState("");
   const [hesapAdi, setHesapAdi] = useState("");
   const [gorunum, setGorunum] = useState<"evren" | "ortak" | "mobilreklam" | "oncelik">("evren"); // kokpit içi menü: grafik ya da analitik bölüm
@@ -397,12 +398,18 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
               ))}
             >
               {/* Grafik her iki temada da koyu "radar ekranı" kalır (canvas renkleri koyu; JS ile CSS-var okunamadığından). */}
-              <div style={{ position: "relative", height: 460, background: koyu ? "#0a1420" : "#f4f7fb", borderRadius: 10, overflow: "hidden" }}>
+              <div style={{ position: "relative", height: grafGorunum === "radyal" ? 600 : 460, background: grafGorunum === "evren" ? (koyu ? "#0a1420" : "#f4f7fb") : (koyu ? "#0b1524" : "#f4f7fb"), borderRadius: 10, overflow: "hidden" }}>
                 <div style={{ position: "absolute", top: 8, left: 8, zIndex: 3 }}>
                   <Segmented size="small" value={zaman} onChange={(v) => setZaman(v as "anlik" | "24s" | "7g" | "hepsi")}
                     options={[{ label: "Anlık", value: "anlik" }, { label: "24s", value: "24s" }, { label: "7 gün", value: "7g" }, { label: "Tümü", value: "hepsi" }]} />
                 </div>
-                <ThreatUniverse marka={markaAdi} adaylar={grafikAdaylar} secili={secili} rapor={rapor} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} />
+                <div style={{ position: "absolute", top: 8, right: 8, zIndex: 3 }}>
+                  <Segmented size="small" value={grafGorunum} onChange={(v) => setGrafGorunum(v as "radyal" | "evren")}
+                    options={[{ label: "Radyal", value: "radyal" }, { label: "Evren", value: "evren" }]} />
+                </div>
+                {grafGorunum === "radyal"
+                  ? <MarkaRadyal marka={markaAdi} adaylar={grafikAdaylar} secili={secili} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} />
+                  : <ThreatUniverse marka={markaAdi} adaylar={grafikAdaylar} secili={secili} rapor={rapor} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} />}
               </div>
             </Card>
           </Col>
@@ -933,6 +940,132 @@ function KarsilastirGorsel({ resmiDom, fakeDom, fakeShot, benzerlik, markaAdi }:
 }
 
 /* THREAT UNIVERSE — marka merkezli force-graph + seçilenin altyapı alt-grafiği */
+// MARKA RADYAL GRAFİĞİ — merkezde marka logosu, çevresinde her tespit bir KART düğüm
+// (durum ikonu + domain + skor rozeti), aradaki ince çizgilerle bağlı; altta özet şeridi
+// (Tehlikeli / Şüpheli / Bilgi-Nötr / Toplam). Park kümeleri tek karta toplanır (kalabalık
+// yanılsaması yok). Skora göre 3 seviye — kusursuz, canvas'tan crisp ve tıklanabilir.
+type RadyalOge = { aday?: Aday; kume?: { tld: string; sayi: number; skor: number; uyeler: Aday[] } };
+function radyalSeviye(skor: number, koyu: boolean): { renk: string; ikon: string; grup: "tehlikeli" | "supheli" | "bilgi" } {
+  if (skor >= 60) return { renk: "#ff4d5e", ikon: "block", grup: "tehlikeli" };
+  if (skor >= 30) return { renk: "#f5921b", ikon: "warning", grup: "supheli" };
+  return { renk: koyu ? "#4a90d9" : "#3f7fc4", ikon: "open_in_new", grup: "bilgi" };
+}
+function MarkaRadyal({ marka, adaylar, secili, onSelect, logo, koyu = true }: { marka: string; adaylar: Aday[]; secili: Aday | null; onSelect: (a: Aday) => void; logo?: string | null; koyu?: boolean }) {
+  const kap = useRef<HTMLDivElement>(null);
+  const [boyut, setBoyut] = useState({ w: 900, h: 460 });
+  useEffect(() => {
+    const el = kap.current; if (!el) return;
+    const ro = new ResizeObserver(() => { const b = el.getBoundingClientRect(); setBoyut({ w: b.width, h: b.height }); });
+    ro.observe(el); const b = el.getBoundingClientRect(); setBoyut({ w: b.width, h: b.height });
+    return () => ro.disconnect();
+  }, []);
+
+  // ÖĞELER: tekiller + park kümeleri (aynı TLD ≥6 → tek kart). Önem sırasına diz, sınırla.
+  const ogeler = useMemo(() => {
+    const tld = (d: string) => { const p = String(d).toLowerCase().replace(/\.$/, "").split("."); return p[p.length - 1] || ""; };
+    const park = (a: Aday) => a.durum === "park" || a.durum === "yayinda-degil";
+    const grup: Record<string, Aday[]> = {}; const tekil: Aday[] = [];
+    for (const a of adaylar) { if (park(a)) (grup[tld(a.domain)] ||= []).push(a); else tekil.push(a); }
+    const items: RadyalOge[] = tekil.map((a) => ({ aday: a }));
+    for (const [t, u] of Object.entries(grup)) {
+      if (u.length >= 6) items.push({ kume: { tld: t, sayi: u.length, skor: Math.max(0, ...u.map((x) => x.skor || 0)), uyeler: u } });
+      else for (const a of u) items.push({ aday: a });
+    }
+    const sk = (o: RadyalOge) => o.kume ? o.kume.skor : (o.aday!.skor || 0);
+    return items.sort((a, b) => sk(b) - sk(a)).slice(0, 42);
+  }, [adaylar]);
+
+  const { w, h } = boyut;
+  const cx = w / 2, cy = h * 0.44;
+  const Rmax = Math.min(cx, cy) - 22;
+  const spacing = 112; // kartın açısal genişlik payı (px)
+  // İçten dışa 3 halkaya kadar; her halkanın çevresine göre kapasite.
+  const ringR = [Rmax * 0.42, Rmax * 0.71, Rmax].filter((r) => r >= 80);
+  const caps = ringR.map((r) => Math.max(4, Math.floor((2 * Math.PI * r) / spacing)));
+  const kapasite = caps.reduce((a, b) => a + b, 0);
+  const goster = ogeler.slice(0, kapasite);
+  const N = goster.length;
+  const konum: { oge: RadyalOge; x: number; y: number }[] = [];
+  let idx = 0;
+  for (let ri = 0; ri < ringR.length && idx < N; ri++) {
+    const kalanCap = caps.slice(ri).reduce((a, b) => a + b, 0);
+    const bu = ri === ringR.length - 1 ? N - idx : Math.min(caps[ri], Math.round((N - idx) * caps[ri] / kalanCap));
+    const r = ringR[ri];
+    for (let k = 0; k < bu && idx < N; k++) {
+      const ang = -Math.PI / 2 + (k / bu) * Math.PI * 2 + (ri % 2 ? Math.PI / bu : 0);
+      konum.push({ oge: goster[idx], x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r });
+      idx++;
+    }
+  }
+  const say = { tehlikeli: 0, supheli: 0, bilgi: 0 };
+  for (const o of ogeler) { const s = o.kume ? o.kume.skor : (o.aday!.skor || 0); say[radyalSeviye(s, koyu).grup]++; }
+  const gizli = ogeler.length - goster.length; // sığmayan düğüm sayısı (dürüst rozet)
+
+  const cardBg = koyu ? "#0f1d31" : "#ffffff";
+  const cardBd = koyu ? "#1f3550" : "#e4eaf3";
+  const txt = koyu ? "#dbe7f3" : "#1e2a3a";
+  const cizgi = koyu ? "#20344d" : "#d5dee9";
+  const merkezBd = koyu ? "#2a4d68" : "#cfe0f2";
+
+  return (
+    <div ref={kap} style={{ position: "relative", width: "100%", height: "100%" }}>
+      {/* Bağlantı çizgileri (kartların ALTINDA) */}
+      <svg width={w} height={h} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        {konum.map((p, idx) => (
+          <line key={idx} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke={cizgi} strokeWidth={1} />
+        ))}
+      </svg>
+      {/* Merkez marka düğümü */}
+      <div style={{ position: "absolute", left: cx, top: cy, transform: "translate(-50%,-50%)", width: 96, height: 96, borderRadius: "50%", background: cardBg, border: `2px solid ${merkezBd}`, boxShadow: koyu ? "0 0 0 6px rgba(58,144,216,.10)" : "0 0 0 6px rgba(58,144,216,.08)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
+        {logo ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={logo} alt={marka} style={{ width: 46, height: 46, objectFit: "contain" }} /> : <span className="material-symbols-outlined" style={{ fontSize: 40, color: "#3a90d8" }}>account_balance</span>}
+        <Text strong style={{ fontSize: 10.5, color: txt, marginTop: 2, textAlign: "center", lineHeight: 1.1, maxWidth: 90 }}>{marka}</Text>
+      </div>
+      {/* Kart düğümler */}
+      {konum.map((p, idx) => {
+        const o = p.oge; const kume = o.kume; const aday = o.aday;
+        const skor = kume ? kume.skor : (aday!.skor || 0);
+        const sv = radyalSeviye(skor, koyu);
+        const ad = kume ? `.${kume.tld} kümesi (${kume.sayi})` : aday!.domain;
+        const isSel = !kume && !!secili && aday!.domain === secili.domain;
+        return (
+          <div key={idx} onClick={() => { if (kume) onSelect(kume.uyeler[0]); else onSelect(aday!); }}
+            title={ad}
+            style={{ position: "absolute", left: p.x, top: p.y, transform: "translate(-50%,-50%)", zIndex: isSel ? 4 : 1,
+              display: "flex", alignItems: "center", gap: 6, maxWidth: 150, padding: "5px 9px 5px 6px", borderRadius: 10,
+              background: cardBg, border: `1.5px solid ${isSel ? sv.renk : cardBd}`, cursor: "pointer",
+              boxShadow: isSel ? `0 0 0 3px ${sv.renk}33` : (koyu ? "0 1px 4px rgba(0,0,0,.35)" : "0 1px 5px rgba(30,50,80,.10)"), transition: "box-shadow .15s,border-color .15s" }}>
+            <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", background: `${sv.renk}22`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14, color: sv.renk }}>{sv.ikon}</span>
+            </span>
+            <div style={{ minWidth: 0, display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
+              <Text style={{ fontSize: 10.5, color: txt, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 108, fontFamily: "'IBM Plex Mono',monospace" }}>{ad}</Text>
+              <span style={{ marginTop: 2, alignSelf: "flex-start", background: sv.renk, color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 5, padding: "0 5px", fontFamily: "'IBM Plex Mono',monospace" }}>{skor}</span>
+            </div>
+          </div>
+        );
+      })}
+      {/* Alt özet şeridi */}
+      <div style={{ position: "absolute", left: 10, right: 10, bottom: 8, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap",
+        background: koyu ? "rgba(10,20,34,.72)" : "rgba(255,255,255,.82)", border: `1px solid ${cardBd}`, borderRadius: 10, padding: "6px 10px", backdropFilter: "blur(4px)" }}>
+        <RadyalOzet renk="#ff4d5e" ikon="block" etiket="Tehlikeli / Zararlı" n={say.tehlikeli} koyu={koyu} />
+        <RadyalOzet renk="#f5921b" ikon="warning" etiket="Şüpheli" n={say.supheli} koyu={koyu} />
+        <RadyalOzet renk={koyu ? "#4a90d9" : "#3f7fc4"} ikon="open_in_new" etiket="Bilgi / Nötr" n={say.bilgi} koyu={koyu} />
+        <RadyalOzet renk={koyu ? "#8fb0d4" : "#5c748b"} ikon="hub" etiket="Toplam" n={ogeler.length} koyu={koyu} />
+        {gizli > 0 && <Text style={{ fontSize: 10, color: koyu ? "#8fa6bd" : "#5c748b" }}>+{gizli} sığmadı</Text>}
+      </div>
+    </div>
+  );
+}
+function RadyalOzet({ renk, ikon, etiket, n, koyu }: { renk: string; ikon: string; etiket: string; n: number; koyu: boolean }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <span className="material-symbols-outlined" style={{ fontSize: 16, color: renk }}>{ikon}</span>
+      <Text style={{ fontSize: 10.5, color: koyu ? "#8fa6bd" : "#5c748b" }}>{etiket}</Text>
+      <Text strong style={{ fontSize: 13, color: koyu ? "#dbe7f3" : "#1e2a3a", fontFamily: "'IBM Plex Mono',monospace" }}>{n}</Text>
+    </div>
+  );
+}
+
 function ThreatUniverse({ marka, adaylar, secili, rapor, onSelect, logo, koyu = true }: { marka: string; adaylar: Aday[]; secili: Aday | null; rapor: Rapor | null; onSelect: (a: Aday) => void; logo?: string | null; koyu?: boolean }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const st = useRef<{ nodes: any[]; merkez: any; altyapi: any[] }>({ nodes: [], merkez: null, altyapi: [] });
