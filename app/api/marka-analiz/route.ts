@@ -21,12 +21,17 @@ export async function GET(req: NextRequest) {
   const marka = (u.searchParams.get("marka") || "").toLowerCase().trim();
   if (!marka) return NextResponse.json({ hata: "marka gerekli." }, { status: 400 });
   const adet = Math.min(12, Math.max(1, Number(u.searchParams.get("adet")) || 6));
+  const force = u.searchParams.get("force") === "1";
+  const BAYAT_MS = 3 * 3600 * 1000; // analiz 3 saatten eskiyse verdict bayat → yeniden analiz et
 
   const ham = await markaAdaylariMarka(marka, 300).catch(() => [] as MarkaAday[]);
   const gecerli = ham.filter((a) => gercekTaklit(a.domain, a.marka));
-  // Öncelik: HENÜZ analiz edilmemiş > yüksek skor > yeni.
-  const secili = [...gecerli].sort((a, b) => {
-    const an = a.analizZaman ? 1 : 0, bn = b.analizZaman ? 1 : 0;
+  const bayatMi = (a: MarkaAday) => !a.analizZaman || (Date.now() - a.analizZaman) > BAYAT_MS;
+  // force → tümü yeniden; aksi halde yalnız hiç-analiz-edilmemiş VEYA bayat (>3s) olanlar.
+  const aday = force ? gecerli : gecerli.filter((a) => bayatMi(a));
+  // Öncelik: (force değilse) hiç-analiz-edilmemiş önce; sonra yüksek skor > yeni.
+  const secili = [...aday].sort((a, b) => {
+    const an = force ? 0 : (a.analizZaman ? 1 : 0), bn = force ? 0 : (b.analizZaman ? 1 : 0);
     return (an - bn) || ((b.skor || 0) - (a.skor || 0)) || ((b.zaman || 0) - (a.zaman || 0));
   }).slice(0, adet);
 

@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
   const oncelikli = gecerli.filter((a) => a.durum === "aktif-tuzak" || a.durum === "canli").sort((a, b) => (b.skor || 0) - (a.skor || 0));
   const oneCikanKay = (tekDomain ? gecerli : oncelikli).slice(0, tekDomain ? 1 : 4);
   // ÖNE ÇIKANLARDA AI VERDICT EKSİKSE ŞİMDİ ÜRET → rapor tek adımda AI'lı çıksın (görsel + metin analizi).
-  await Promise.all(oneCikanKay.filter((a) => !a.aiTur).slice(0, 4).map(async (a) => {
+  await Promise.all(oneCikanKay.filter((a) => !a.analizZaman || (Date.now() - a.analizZaman) > 3 * 3600 * 1000).slice(0, 4).map(async (a) => {
     try {
       const rr = await domainOsint(a.domain, undefined, true);
       const aiTur = rr.alanlar.find((x) => x.ad === "Görsel analiz (AI)" || x.ad === "İçerik analizi (AI)")?.deger || "";

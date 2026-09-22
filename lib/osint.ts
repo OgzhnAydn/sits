@@ -1344,7 +1344,7 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
   // Park/satılık sayfa metni — İNGİLİZCE + TÜRKÇE domain pazarları (Devir/satılık).
   // araskargo.net "Devir için müsait · Devir Bedeli ₺150.000" ile yakalanır.
   const parkMetinRe =
-    /for sale|is for sale|buy this domain|get this domain|domain (is )?for sale|parked (free|page)|this domain (is|may be) for sale|bu alan ad[ıi] sat[ıi]l[ıi]k|alan ad[ıi]n[ıi] sat[ıi]n al|devir için müsait|devir bedeli|sat[ıi]l[ıi]k alan ad|alan ad[ıi] devri|bu domaini? sat[ıi]n al|domain sat[ıi]ş|alan ad[ıi] sat[ıi]ş/i;
+    /for sale|is for sale|buy this domain|get this domain|domain (is )?for sale|parked (free|page)|this domain (is|may be) for sale|bu alan ad[ıi] sat[ıi]l[ıi]k|alan ad[ıi]n[ıi] sat[ıi]n al|devir için müsait|devir bedeli|sat[ıi]l[ıi]k alan ad|alan ad[ıi] devri|bu domaini? sat[ıi]n al|domain sat[ıi]ş|alan ad[ıi] sat[ıi]ş|domain (is|has) expired|your domain is expired|renew (the|your) domain|domain has expired|website content is unavailable|alan ad[ıi]n[ıi]z(ın)? süresi (dolmuş|doldu)|süresi dolan alan/i;
   // urlscan.io — ZENGİN çıkarım. urlscan siteyi GERÇEKTEN render eder (bizim fetch
   // Cloudflare Turnstile gibi bot-duvarına takılıp boş dönüyor) → search 'page' objesi
   // (anonim: başlık, dil, sertifika, ASN) + full result (API anahtarıyla: teknoloji,
@@ -1682,9 +1682,13 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
           // AI'ın "dolu sayfa + logo" demesine güvenme (halüsinasyon koruması).
           const baslikMetni = `${r.alanlar.find((x) => x.ad === "Sayfa başlığı (urlscan)")?.deger || ""} ${r.sayfa?.baslik || ""}`;
           const hataEkrani = HATA_RE.test(`${gj.tur} ${gj.aciklama || ""}`) || HATA_RE.test(baslikMetni);
-          r.alanlar.push({ ad: "Görsel analiz (AI)", deger: gj.tur });
-          if (hataEkrani) {
-            r.alanlar.push({ ad: "Görsel notu", deger: "Ekran görüntüsü hata/challenge sayfası — görsel içerik güvenilir değil, logo/form bulgusu uygulanmadı" });
+          // BAYAT GÖRSEL: sayfa ŞU AN park/satılık/süresi-dolmuş ise (parkli), urlscan ekran
+          // görüntüsü domain expire OLMADAN önceki (phishing) haline ait olabilir → AI'ın
+          // "kimlik avı/logo" iddiasını UYGULAMA (toki.online: bayat sahte form, şimdi Hostinger expired).
+          const bayatGorsel = hataEkrani || parkli;
+          r.alanlar.push({ ad: "Görsel analiz (AI)", deger: gj.tur + (parkli && !hataEkrani ? " (ekran görüntüsü BAYAT — alan adı şu an park/süresi dolmuş)" : "") });
+          if (bayatGorsel) {
+            r.alanlar.push({ ad: "Görsel notu", deger: parkli && !hataEkrani ? "Ekran görüntüsü BAYAT — alan adı şu an park/satılık/süresi dolmuş; görseldeki içerik güncel değil, kimlik-avı/logo bulgusu uygulanmadı" : "Ekran görüntüsü hata/challenge sayfası — görsel içerik güvenilir değil, logo/form bulgusu uygulanmadı" });
             // Kullanıcının GÖRDÜĞÜ ekran görüntüsünün ALTINA dürüst not: bu görüntü
             // sitenin gerçek içeriği değil (boş/varsayılan kurulum · hata · challenge ·
             // cloaking). Karar bu görüntüye değil resmî/teknik sinyallere dayanır.
@@ -1692,15 +1696,15 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
           }
           // Görsel doğrulandı → honesty-gate "içeriği görmedik" diye Orta'ya çekmesin.
           // (Hata ekranı gerçek içerik değil → r.sayfa'yı ondan besleme.)
-          if (!r.sayfa && !hataEkrani) r.sayfa = { baslik: gj.aciklama || gj.tur, aciklama: gj.aciklama || null, siteAdi: null, tur: gj.tur, ozetMetin: gj.aciklama || gj.tur };
-          if (gj.kimlikAvi && !hataEkrani) {
+          if (!r.sayfa && !bayatGorsel) r.sayfa = { baslik: gj.aciklama || gj.tur, aciklama: gj.aciklama || null, siteAdi: null, tur: gj.tur, ozetMetin: gj.aciklama || gj.tur };
+          if (gj.kimlikAvi && !bayatGorsel) {
             r.risk += 30;
             r.bulgular.unshift(`Ekran görüntüsünde: "${markaEslesme}" adını taşıyan bu sayfa kullanıcıdan şifre/kart/kimlik bilgisi İSTİYOR — kimlik avı (phishing) sayfası. Bilgi girme.`);
           }
           // GÖRSEL LOGO TAKLİDİ: AI, sayfada bir marka/kurum LOGOSU tespit ettiyse (adım 10).
-          // Hata/challenge ekranındaysa UYGULAMA (halüsinasyon koruması).
+          // Hata/challenge/park(bayat) ekranındaysa UYGULAMA (halüsinasyon koruması).
           const tk = (gj.taklitKurum || "").trim();
-          if (tk && tk.length > 2 && !/yok|none|belli değil|belirsiz/i.test(tk) && !hataEkrani) {
+          if (tk && tk.length > 2 && !/yok|none|belli değil|belirsiz/i.test(tk) && !bayatGorsel) {
             r.risk += 25;
             r.bulgular.unshift(`Görselde "${tk}" logosu/amblemi kullanılıyor — bu adres o kurumun/markanın resmî sitesi değil, logo taklidiyle güven kazanmaya çalışıyor.`);
             r.alanlar.push({ ad: "Logo taklidi (görsel)", deger: tk });
