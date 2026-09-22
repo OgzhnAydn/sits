@@ -840,7 +840,7 @@ function SaldiriGelisimi({ rapor, canli }: { rapor: Rapor | null; canli?: string
   const canliServis = canli === "live";
   const canliBilgiVar = Boolean(canli);
   const celiski = asama >= 4 && canliBilgiVar && !canliServis; // yüksek kanıt ama canlı içerik yok
-  const canliAd: Record<string, string> = { redirect: "başka adrese yönlendiriyor", parked: "park/satılık (pasif)", dead: "erişilemez/kaldırılmış", erisim_kisitli: "erişim kısıtlı (HTTP 403)", bilinmiyor: "durumu doğrulanamıyor" };
+  const canliAd: Record<string, string> = { redirect: "başka adrese yönlendiriyor", parked: "park/satılık (pasif)", dead: "erişilemez/kaldırılmış", erisim_kisitli: "sunucu ayakta ama içerik doğrulanamıyor (erişim kısıtlı / origin hatası)", bilinmiyor: "durumu doğrulanamıyor" };
   const durum = celiski
     ? { t: "CANLI İÇERİK DOĞRULANMADI", d: `Geçmiş taramalarda "${asamalar[Math.min(asama, asamalar.length - 1)]}" aşamasına dek işaretler gözlendi; ancak adres ŞU AN ${canliAd[canli!] || canli} — bu adreste canlı kimlik/kart toplama şu an DOĞRULANAMIYOR.`, type: "warning" as const, ikon: <ClockCircleOutlined /> }
     : asama >= 6

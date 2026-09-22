@@ -205,7 +205,20 @@ export async function canlilikProbe(domain: string): Promise<CanlilikSonuc> {
     sonuc.kokNeden = `Sunucu ayakta ama erişim kısıtlı (HTTP ${httpRes.status}) — içerik bot-duvarı/cloaking ardında olabilir ya da kilitli; canlı phishing içeriği DOĞRULANAMADI.`;
     return sonuc;
   }
-  // Diğer HTTP yanıtları SUNUCU AYAKTA = live (redirect/park/401/403 yukarıda ayrıldı).
+  // ORIGIN ERİŞİLEMEZ (5xx): CDN/edge cevap verse de GERÇEK sunucu çalışmıyor/erişilemez →
+  // site İÇERİK SUNMUYOR, "live/CANLI" DEĞİL. Cloudflare 520-527 origin hataları; 525 = origin
+  // ile SSL el sıkışması başarısız (yanlış yapılandırma/erişilemez). "canlı" demek AŞIRI İDDİA.
+  if (httpRes.status && httpRes.status >= 500) {
+    const st = httpRes.status;
+    const cf = st >= 520 && st <= 527;
+    sonuc.durum = "erisim_kisitli";
+    sonuc.kokNeden =
+      st === 525 ? `SSL el sıkışması başarısız (HTTP 525) — Cloudflare ile gerçek sunucu arasında TLS kurulamıyor; site şu an içerik SUNMUYOR (canlı içerik DOĞRULANAMADI).`
+      : cf ? `Gerçek sunucuya (origin) ulaşılamıyor — Cloudflare ${st}; edge ayakta ama origin kapalı/erişilemez, içerik SUNULMUYOR (doğrulanamadı).`
+      : `Sunucu hatası (HTTP ${st}) — uygulama yanıt veremiyor; içerik şu an sunulmuyor (canlı içerik doğrulanamadı).`;
+    return sonuc;
+  }
+  // Diğer HTTP yanıtları SUNUCU AYAKTA = live (redirect/park/401/403/5xx yukarıda ayrıldı).
   if (httpRes.status && httpRes.status >= 200) {
     const st = httpRes.status;
     sonuc.durum = "live";
@@ -213,7 +226,6 @@ export async function canlilikProbe(domain: string): Promise<CanlilikSonuc> {
     sonuc.kokNeden =
       st < 300 ? `Canlı web sunucusu (HTTP ${st}${sun}) — aktif içerik sunuyor.`
       : st === 404 ? `Sunucu ayakta, sayfa bulunamadı (HTTP 404) — altyapı hazır, içerik henüz yüklenmemiş olabilir.`
-      : st >= 500 ? `Sunucu ayakta ama uygulama hatası (HTTP ${st}) — veritabanı/kod hatası (kurulum yarım).`
       : `Sunucu ayakta (HTTP ${st}${sun}).`;
     return sonuc;
   }

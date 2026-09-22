@@ -806,12 +806,12 @@ export function kategoriKarti(rapor: OsintRapor): KategoriDurum[] {
   // Klon: sayfa başka bir sitenin birebir kopyası → neredeyse kesin marka taklidi.
   if (rapor.alanlar.some((x) => x.ad === "Klon kaynağı")) marka = Math.max(marka, 85);
 
-  // Zararlı Yazılım (Malware)
+  // Zararlı Yazılım (Malware) — YALNIZ gerçek malware sinyaliyle. VirusTotal "şüpheli" hükmü
+  // GENELDİR (çoğunlukla phishing/scam) ve kategori vermez → VT sayısını "malware" saymak
+  // AŞIRI-İDDİADIR (phishing domaini "Zararlı Yazılım Yüksek" gösteriyordu). USOM type=malware
+  // ya da açık malware kelimesi olmadıkça bu kategori "Yok" kalır.
   let malware = 0;
-  if (has(/malware|zararlı yazılım|social_engineering|unwanted_software|truva|trojan/)) malware = 70;
-  const vt = alan("virustotal").match(/(\d+)\s*\/\s*\d+/);
-  if (vt && Number(vt[1]) >= 3) malware = Math.max(malware, 60);
-  else if (vt && Number(vt[1]) >= 1) malware = Math.max(malware, 30);
+  if (has(/\bmalware\b|zararlı yazılım|social_engineering|unwanted_software|truva|trojan|kategori: (zararlı|malware)/)) malware = 70;
 
   // Dolandırıcılık (Scam)
   let scam = 0;
