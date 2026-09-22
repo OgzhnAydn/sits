@@ -330,6 +330,12 @@ function yakinTypo(label: string, k: string): boolean {
 // (vatandas/tebligat/mahkeme/adalet/evrak/dava/icra/vergi) — UYAP/GİB/adalet taklidi recall'ı için.
 const TR_BAGLAM = /proje|konut|basvuru|basvur|kampanya|cekilis|kura|tapu|daire|kredi|resmi|giris|destek|musteri|hesap|odeme|randevu|evim|bakanlik|idare|sorgu|login|secure|verify|account|onlin|bank|card|kart|mobil|wallet|\bpay\b|\btc\b|bilet|ucus|ucak|rezervasyon|seyahat|checkin|acceso|banca|cliente|particular|premi|bonus|hediye|-gov|gov-|govtr|gov\.tr|vatandas|tebligat|mahkeme|adalet|evrak|dava|icra|vergi/;
 
+// YABANCI İÇERİK BAĞLAMI (deny) — manga/anime/webtoon gibi Japonca/uzak-doğu medya siteleri
+// "toki" (=Japonca isim/zaman: Toki-sensei) gibi KISA anahtarları rastgele taşır ama Türk markası
+// TAKLİDİ DEĞİLDİR. Örn: toki-senseiwakigaetai.online = "Toki-sensei wa Kigaetai Manga Online".
+// Yalnız Türkçe/phishing bağlamı YOKKEN eler (gerçek tehdidi bastırmaz). Ayırt edici tokenler.
+const YABANCI_ICERIK = /manga|manhwa|manhua|webtoon|toonily|\banime\b|doujin|hentai|scanlat|sensei|senpai|waifu|otaku|isekai|shoujo|shojo|shounen|shonen|kigae|kawaii|nakama|mangak|yaoi|comic/;
+
 // Tek bir kalıp için taklit kontrolü (mevcut mantık + SIKI-BAĞLAM kapısı: kısa anahtar veya yaygın-kelime).
 function taklitKalip(d: string, k: string, yaygin?: boolean): boolean {
   const { label, altAlan, tld } = tescilliBilgi(d);
@@ -345,6 +351,9 @@ function taklitKalip(d: string, k: string, yaygin?: boolean): boolean {
     // tire-sınırlı/bitişik içermede meşru yabancı işletmeleri yakalar (ibis-toki, garantisjekk) →
     // tek başına yetmez, ek sinyal şart: riskli TLD VEYA tescilli alanda phishing/Türkçe bağlamı.
     if ((k.length <= 4 || yaygin) && !baglamVar) return false;
+    // MANGA/ANIME DENY: kısa/yaygın anahtar + yabancı medya bağlamı + Türkçe bağlam YOK → taklit değil
+    // (riskli TLD tek başına yeterken manga sitesini yakalamasın; gerçek TR phishing TR_BAGLAM taşır).
+    if ((k.length <= 4 || yaygin) && YABANCI_ICERIK.test(label) && !TR_BAGLAM.test(label)) return false;
     return true;
   }
   // Harf-oyunu typosquat (anadolumet, aselan, turkcel…) — alt-dize DEĞİL ama çok benziyor.
