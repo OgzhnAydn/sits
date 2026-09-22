@@ -21,7 +21,8 @@ Font.registerHyphenationCallback((w) => (w.length > 16 && /[.-]/.test(w) ? w.spl
 // Yalnız DEPOLANMIŞ/DOĞRULANMIŞ gerçek veri. Her cümle veriye dayanır (uydurma YOK).
 export type RaporTespit = { domain: string; skor: number; durum?: string; seviye?: string; zaman: number; sinyaller?: string[]; screenshot?: string | null; usomda?: boolean | null; engelli?: boolean | null; etbis?: boolean | null; alanlar?: { ad: string; deger: string }[];
   // Hafif teknik envanter (canlilikProbe + ip-api) — tam liste tablosu için
-  ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; canliNeden?: string; sslBitis?: string | null; sslGuvenli?: boolean | null; kaynak?: string; sertBaslangic?: string | null };
+  ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; canliNeden?: string; sslBitis?: string | null; sslGuvenli?: boolean | null; kaynak?: string; sertBaslangic?: string | null;
+  aiTur?: string; aiKimlikAvi?: boolean; aiNot?: string };
 export type MarkaRaporVeri = {
   markaAd: string;
   markaResmi?: string;         // resmî unvan/domain (kapak alt satırı)
@@ -322,6 +323,10 @@ function detayMetin(t: RaporTespit, markaAd?: string, markaResmi?: string): stri
     : "Bu göstergeler, adresin taklit veya sahte içerik amacıyla kullanılıyor olabileceğine işaret etmektedir.";
   P.push(`Yapılan ön değerlendirmede, ${birlestir} belirlenmiştir. ${sonuc}`);
 
+  // Yapay zekâ görsel içerik analizi (varsa) — kimlik-avı doğrulaması güçlü kanıttır.
+  if (t.aiKimlikAvi) P.push(`Ayrıca yapay zekâ destekli görsel içerik analizinde, adreste kullanıcıdan giriş / kimlik bilgisi isteyen bir form (${t.aiTur || "kimlik-avı paneli"}) doğrulanmıştır; bu, aktif bir kimlik avı (phishing) göstergesidir.`);
+  else if (t.aiTur) P.push(`Yapay zekâ görsel içerik analizinde sayfanın türü "${t.aiTur}" olarak değerlendirilmiştir.`);
+
   // ── 3) Hukuki çekince ──
   P.push("Kesin sınıflandırma için adresin teknik ve içerik bazlı olarak ayrıca incelenmesi gerekmektedir. Bir adresin risk göstergeleri taşıması veya izleme listelerinde yer alması, tek başına hukuki açıdan kesin bir sahtecilik ya da dolandırıcılık tespiti anlamına gelmez.");
 
@@ -359,6 +364,7 @@ function Kunye({ t }: { t: RaporTespit }) {
       </View>
       <View style={{ marginTop: 3, borderTopColor: CIZGI, borderTopWidth: 1, paddingTop: 3 }}>
         <KunyeSatir etiket="Yakalama" deger={yakalamaBilgi(t)} renk={t.kaynak === "certstream" ? TEAL : "#33405c"} />
+        {t.aiTur ? <KunyeSatir etiket="AI içerik" deger={`${t.aiTur}${t.aiKimlikAvi ? " · KİMLİK AVI FORMU DOĞRULANDI" : ""} (yapay zekâ görsel analizi)`} renk={t.aiKimlikAvi ? KIRMIZI : "#33405c"} /> : null}
       </View>
       {t.canliNeden ? <Text style={{ fontSize: 8, color: "#4a5568", marginTop: 4, lineHeight: 1.4 }}><Text style={{ fontWeight: "bold", color: GRI }}>Durum açıklaması: </Text>{t.canliNeden}</Text> : null}
     </View>

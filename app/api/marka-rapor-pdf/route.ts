@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
   const erkenlik = { toplam: erk.toplam || 0, bizOnce: (erk as { bizOnce?: number }).bizOnce || 0, usomdaYok: erk.usomdaYok || 0 };
 
   // ÖNE ÇIKAN = aktif tuzak / canlı (yüksek skor önce) → ekran görüntüsü + detay. Gerisi = tablo.
-  const tesp = (a: MarkaAday): RaporTespit => ({ domain: a.domain, skor: a.skor || 0, durum: a.durum, seviye: a.seviye, zaman: a.zaman || 0, sinyaller: a.sinyaller, kaynak: a.kaynak });
+  const tesp = (a: MarkaAday): RaporTespit => ({ domain: a.domain, skor: a.skor || 0, durum: a.durum, seviye: a.seviye, zaman: a.zaman || 0, sinyaller: a.sinyaller, kaynak: a.kaynak, aiTur: a.aiTur, aiKimlikAvi: a.aiKimlikAvi, aiNot: a.aiNot });
   const oncelikli = gecerli.filter((a) => a.durum === "aktif-tuzak" || a.durum === "canli").sort((a, b) => (b.skor || 0) - (a.skor || 0));
   const oneCikanKay = (tekDomain ? gecerli : oncelikli).slice(0, tekDomain ? 1 : 4);
   const oneCikanDom = new Set(oneCikanKay.map((a) => a.domain));
