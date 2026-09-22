@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { markaAdaylariMarka, markaErkenlik, kullaniciMarkalariGetir, markaAdayKaydet, type MarkaAday } from "@/lib/store";
 import { gercekTaklit, markaLogoAnahtar, KORUNAN_MARKALAR } from "@/lib/korunanMarkalar";
 import { domainOsint, saldiriAsamasi } from "@/lib/osint";
+import { etkinYasam } from "@/lib/yasamDongusu";
 import { markaRaporPdf, type RaporTespit } from "@/lib/pdf/MarkaRaporPdf";
 import { usomBiliniyor } from "@/lib/usom";
 import { btkEngelli } from "@/lib/btk";
@@ -94,12 +95,17 @@ export async function GET(req: NextRequest) {
   gecerli.sort((a, b) => (b.zaman || 0) - (a.zaman || 0));
 
   const sayil = (f: (a: MarkaAday) => boolean) => gecerli.filter(f).length;
+  const yasamlar = gecerli.map((a) => etkinYasam(a)); // yasamDurumu yoksa eski alanlardan türer
   const ozet = {
     toplam: gecerli.length,
     aktif: sayil((a) => a.durum === "aktif-tuzak"),
     canli: sayil((a) => a.durum === "canli"),
     park: sayil((a) => a.durum === "park" || a.durum === "yayinda-degil"),
     inceleme: sayil((a) => !["aktif-tuzak", "canli", "park", "yayinda-degil"].includes(a.durum || "")),
+    // Yaşam döngüsü (manşet = dogrulanan; izlemede/pasif ayrı) — "ayrı say".
+    dogrulanan: yasamlar.filter((d) => d === "DOGRULANDI").length,
+    izlemede: yasamlar.filter((d) => d === "IZLEMEDE").length,
+    pasif: yasamlar.filter((d) => d === "PASIF").length,
   };
 
   const erk = await markaErkenlik(marka).catch(() => ({ toplam: 0, bizOnce: 0, usomdaYok: 0 }));

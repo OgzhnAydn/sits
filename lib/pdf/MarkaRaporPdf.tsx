@@ -30,7 +30,7 @@ export type MarkaRaporVeri = {
   aralikEtiket: string;
   tarih: string;
   refNo: string;
-  ozet: { toplam: number; aktif: number; park: number; canli: number; inceleme: number };
+  ozet: { toplam: number; aktif: number; park: number; canli: number; inceleme: number; dogrulanan?: number; izlemede?: number; pasif?: number };
   erkenlik: { toplam: number; bizOnce: number; usomdaYok: number };
   oneCikan: RaporTespit[];
   digerleri: RaporTespit[];
@@ -410,9 +410,14 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
     </>
   );
 
-  const durumOzet = v.ozet.aktif > 0
-    ? `Bu dönemde ${v.markaAd} markası adına açılmış ${v.ozet.toplam} benzer adresin ${v.ozet.aktif} tanesi AKTİF tuzak olarak tespit edildi; ${v.ozet.canli} adres canlı, ${v.ozet.park} adres park/izlemede tutuldu.`
-    : `Bu dönemde ${v.markaAd} markası adına açılmış ${v.ozet.toplam} benzer adres tespit edilmiş ve her biri değerlendirilmiştir; bu dönemde AKTİF bir kimlik avı (phishing) tuzağı tespit edilmemiştir. ${v.ozet.canli} adres canlı, ${v.ozet.park} adres park/izlemede.`;
+  // YAŞAM DÖNGÜSÜ — "ayrı say": manşet = DOGRULANDI (aktif tehdit); izlemede (park/pasif) + kaldırılan ayrı.
+  const dog = v.ozet.dogrulanan ?? (v.ozet.aktif + v.ozet.canli);
+  const izl = v.ozet.izlemede ?? v.ozet.park;
+  const pas = v.ozet.pasif ?? 0;
+  const pasEk = pas > 0 ? `, ${pas} adres kaldırılmış` : "";
+  const durumOzet = dog > 0
+    ? `Bu dönemde ${v.markaAd} markası adına açılmış ${v.ozet.toplam} benzer adresin ${dog} tanesi şu an AKTİF tehdit (canlı, izinsiz marka taklidi) olarak doğrulanmıştır; ${izl} adres izlemede (park/pasif)${pasEk} durumdadır.`
+    : `Bu dönemde ${v.markaAd} markası adına açılmış ${v.ozet.toplam} benzer adres tespit edilmiş ve her biri değerlendirilmiştir; bu dönemde AKTİF bir kimlik avı (phishing) tuzağı doğrulanmamıştır. ${izl} adres izlemede (park/pasif)${pasEk}.`;
 
   const oneriliKay = [...v.oneCikan, ...v.digerleri.filter((t) => t.durum === "aktif-tuzak" || t.durum === "canli" || aksiyonGerekli(t))]
     .filter((t, i, a) => a.findIndex((x) => x.domain === t.domain) === i) // tekilleştir

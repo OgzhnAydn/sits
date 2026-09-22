@@ -24,7 +24,7 @@ import { db, firebaseHazir } from "./firebase";
 import { gercekTaklit } from "./korunanMarkalar";
 import { usomBilgi } from "./tehditListeleri";
 import type { Analiz } from "./analyze";
-import { gecisHesapla, type YasamDurumu, type YasamOlay, type YasamSinyali } from "./yasamDongusu";
+import { gecisHesapla, etkinYasam, type YasamDurumu, type YasamOlay, type YasamSinyali } from "./yasamDongusu";
 
 function belgeId(tip: string, deger: string) {
   return `${tip}_${deger.toLowerCase().replace(/[^a-z0-9]/g, "")}`.slice(0, 200);
@@ -328,9 +328,11 @@ export async function yasamGecisUygula(domain: string, onceki: YasamDurumu | und
 // MÜŞTERİ-BAZLI TESPİT ÖZETİ — "markanız için şu kadar tehdit tespit ettik".
 // Bir markanın tüm tespitlerini (yanlış-pozitif süzülü) toplar: toplam, aktif, park,
 // yüksek-riskli, operasyon (kampanya) sayısı + son tespitler.
-export type MarkaOzet = { toplam: number; aktif: number; park: number; yuksek: number; operasyon: number; canli: number; kumeTld: string; kumeAdet: number; ayri: number; sonlar: MarkaAday[] };
+export type MarkaOzet = { toplam: number; aktif: number; park: number; yuksek: number; operasyon: number; canli: number; kumeTld: string; kumeAdet: number; ayri: number; sonlar: MarkaAday[];
+  // ── YAŞAM DÖNGÜSÜ SAYIMLARI (manşet = dogrulanan; izlemede/pasif ayrı rozet) ──
+  dogrulanan: number; izlemede: number; pasif: number };
 export async function markaTespitOzeti(marka: string): Promise<MarkaOzet> {
-  const bos: MarkaOzet = { toplam: 0, aktif: 0, park: 0, yuksek: 0, operasyon: 0, canli: 0, kumeTld: "", kumeAdet: 0, ayri: 0, sonlar: [] };
+  const bos: MarkaOzet = { toplam: 0, aktif: 0, park: 0, yuksek: 0, operasyon: 0, canli: 0, kumeTld: "", kumeAdet: 0, ayri: 0, sonlar: [], dogrulanan: 0, izlemede: 0, pasif: 0 };
   if (!firebaseHazir || !db || !marka) return bos;
   try {
     // orderBy YOK → composite index gerekmesin; sıralamayı JS'te yap.
@@ -344,6 +346,8 @@ export async function markaTespitOzeti(marka: string): Promise<MarkaOzet> {
     const kumeVar = !!enKalabalik && enKalabalik[1] >= 5 && enKalabalik[1] / hepsi.length > 0.4;
     const kumeTld = kumeVar ? enKalabalik[0] : "";
     const kumeAdet = kumeVar ? enKalabalik[1] : 0;
+    // Yaşam döngüsü sayımları (etkinYasam: yasamDurumu yoksa eski alanlardan türer).
+    const yasam = hepsi.map((a) => etkinYasam(a));
     return {
       toplam: hepsi.length,
       aktif: hepsi.filter((a) => a.durum === "aktif-tuzak").length,
@@ -353,6 +357,10 @@ export async function markaTespitOzeti(marka: string): Promise<MarkaOzet> {
       operasyon: hepsi.filter((a) => a.kampanya && a.kampanya.domainSayisi > 1).length,
       kumeTld, kumeAdet, ayri: hepsi.length - kumeAdet,
       sonlar: hepsi.slice(0, 60),
+      // Manşet = DOGRULANDI (aktif tehdit); İZLEMEDE (park/expired, geçmişte aktif) ve PASIF (kaldırıldı) ayrı.
+      dogrulanan: yasam.filter((d) => d === "DOGRULANDI").length,
+      izlemede: yasam.filter((d) => d === "IZLEMEDE").length,
+      pasif: yasam.filter((d) => d === "PASIF").length,
     };
   } catch {
     return bos; // indeks yoksa (marka+zaman composite) sessiz boş dön

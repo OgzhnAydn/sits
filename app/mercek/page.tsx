@@ -17,12 +17,13 @@ import {
 import { markaDinle, cikis } from "@/lib/markaAuth";
 import { usePanoTema } from "@/lib/panoTema";
 import { markaLogo } from "@/lib/korunanMarkalar";
+import { etkinYasam, yasamEtiket, type YasamDurumu } from "@/lib/yasamDongusu";
 import AnalitikPanel from "./AnalitikPanel";
 
 const { Text, Title } = Typography;
 
 type AkisSatir = { i: number; kisa: string; domain: string; ca: string; marka: string | null };
-type Aday = { domain: string; marka: string; skor: number; durum?: string; zaman?: number; aiTur?: string; aiKimlikAvi?: boolean; aiNot?: string; analizZaman?: number };
+type Aday = { domain: string; marka: string; skor: number; durum?: string; zaman?: number; aiTur?: string; aiKimlikAvi?: boolean; aiNot?: string; analizZaman?: number; yasamDurumu?: import("@/lib/yasamDongusu").YasamDurumu };
 type Alan = { ad: string; deger: string };
 type Kategori = { ad: string; seviye: string };
 type Dedektif = { tur: string; guven: string; hedef?: string };
@@ -624,6 +625,11 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
             icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>refresh</span>} style={{ color: "var(--c-8fa6bd)", flexShrink: 0 }} />}
         </Flex>
         <Tag color={sev.c as string} style={{ marginTop: 8 }}>{sev.t}</Tag>
+        {(() => {
+          const yd: YasamDurumu = etkinYasam(aday);
+          const yc = yd === "DOGRULANDI" ? "red" : yd === "IZLEMEDE" ? "blue" : yd === "PASIF" ? "default" : yd === "ELENDI" ? "green" : "gold";
+          return <Tag color={yc} style={{ marginTop: 8 }} title="Yaşam döngüsü durumu">{yasamEtiket(yd)}</Tag>;
+        })()}
         <CanlilikRozet v={canliV} yuk={canliYuk} />
       </div>
       <div style={{ borderTop: "1px solid var(--c-17293c)", borderBottom: "1px solid var(--c-17293c)", padding: "10px 0" }}>

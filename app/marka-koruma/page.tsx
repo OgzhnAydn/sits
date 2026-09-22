@@ -68,7 +68,7 @@ export default function MarkaKoruma() {
   const [raporYuk, setRaporYuk] = useState(false);
   const [tarama, setTarama] = useState<Tarama | null>(null);
   const [taramaYuk, setTaramaYuk] = useState(false);
-  const [ozet, setOzet] = useState<{ markaAdi: string; toplam: number; aktif: number; park: number; yuksek: number; operasyon: number; canli?: number; kumeTld?: string; kumeAdet?: number; ayri?: number; sonlar?: TespitDetay[] } | null>(null);
+  const [ozet, setOzet] = useState<{ markaAdi: string; toplam: number; aktif: number; park: number; yuksek: number; operasyon: number; canli?: number; kumeTld?: string; kumeAdet?: number; ayri?: number; sonlar?: TespitDetay[]; dogrulanan?: number; izlemede?: number; pasif?: number } | null>(null);
   const [erkenlik, setErkenlik] = useState<{ toplam: number; bizOnce: number; usomdaYok: number; usomOnce: number; ortGun: number } | null>(null);
   const [detayAcik, setDetayAcik] = useState(false);
   const [detayFiltre, setDetayFiltre] = useState<"hepsi" | "aktif-tuzak" | "park" | "yuksek">("hepsi");
@@ -312,6 +312,19 @@ export default function MarkaKoruma() {
               Bugüne kadar markanız adına açılmış <b className="text-on-surface">{ozet.toplam}</b> sahte/şüpheli adres tespit ettik.
             </p>
           )}
+          {/* YAŞAM DÖNGÜSÜ AYRIMI — "ayrı say": manşet toplam ≠ hepsi şu an aktif. Dürüst kırılım. */}
+          {(() => {
+            const dog = ozet.dogrulanan ?? 0, izl = ozet.izlemede ?? 0, pas = ozet.pasif ?? 0;
+            if (dog + izl + pas === 0) return null;
+            return (
+              <p className="mt-1 text-[11px] text-on-surface-variant">
+                {dog > 0 && <>Şu an <b className="text-error">{dog}</b> aktif tehdit</>}
+                {izl > 0 && <>{dog > 0 ? " · " : ""}<b className="text-primary">{izl}</b> izlemede (park/pasif)</>}
+                {pas > 0 && <> · <b>{pas}</b> kaldırıldı</>}
+                .
+              </p>
+            );
+          })()}
           {/* CANLILIK GÖSTERGESİ — "donmuş mu?" endişesini yanıtlar: en yeni tespit + son pencerelerde kaç yeni.
              Yeni gelenlerin çoğu .ph kümesine katlandığından bireysel liste durağan görünüyor; bu satır akışın canlı olduğunu gösterir. */}
           {(() => {
@@ -341,15 +354,15 @@ export default function MarkaKoruma() {
               <>
                 <div><div className="font-display text-xl font-bold text-on-surface tabular-nums">{ozet.ayri}</div><div className="text-[10px] text-on-surface-variant">ayrı adres</div></div>
                 <div><div className="font-display text-xl font-bold text-secondary tabular-nums">{ozet.canli ?? 0}</div><div className="text-[10px] text-on-surface-variant">canlı</div></div>
-                <div><div className="font-display text-xl font-bold text-error tabular-nums">{ozet.aktif}</div><div className="text-[10px] text-on-surface-variant">aktif tuzak</div></div>
+                <div><div className="font-display text-xl font-bold text-error tabular-nums">{ozet.dogrulanan ?? 0}</div><div className="text-[10px] text-on-surface-variant">aktif tehdit</div></div>
                 <div><div className="font-display text-xl font-bold text-primary tabular-nums">{ozet.kumeAdet}</div><div className="text-[10px] text-on-surface-variant">.{ozet.kumeTld} park kümesi</div></div>
               </>
             ) : (
               <>
                 <div><div className="font-display text-xl font-bold text-on-surface tabular-nums">{ozet.toplam}</div><div className="text-[10px] text-on-surface-variant">toplam</div></div>
                 <div><div className="font-display text-xl font-bold text-error tabular-nums">{ozet.yuksek}</div><div className="text-[10px] text-on-surface-variant">yüksek risk</div></div>
-                <div><div className="font-display text-xl font-bold text-error tabular-nums">{ozet.aktif}</div><div className="text-[10px] text-on-surface-variant">aktif tuzak</div></div>
-                <div><div className="font-display text-xl font-bold text-primary tabular-nums">{ozet.park}</div><div className="text-[10px] text-on-surface-variant">park · izlemede</div></div>
+                <div><div className="font-display text-xl font-bold text-error tabular-nums">{ozet.dogrulanan ?? 0}</div><div className="text-[10px] text-on-surface-variant">aktif tehdit</div></div>
+                <div><div className="font-display text-xl font-bold text-primary tabular-nums">{ozet.izlemede ?? 0}</div><div className="text-[10px] text-on-surface-variant">izlemede</div></div>
               </>
             )}
           </div>

@@ -104,3 +104,18 @@ export const AKTIF_TEHDIT: YasamDurumu = "DOGRULANDI";
 export function aktifTehditMi(d?: YasamDurumu): boolean {
   return d === "DOGRULANDI";
 }
+
+// ETKİN YAŞAM DURUMU — `yasamDurumu` varsa onu, YOKSA eski alanlardan (durum/aiKimlikAvi)
+// türetir. Böylece Faz 2 sayımları henüz damgalanmamış kayıtlarda da doğru çalışır ve
+// tarama döngüsü yasamDurumu'nu doldurdukça kendini onarır (geriye-uyum).
+export function etkinYasam(a: { yasamDurumu?: YasamDurumu; durum?: string; aiKimlikAvi?: boolean }): YasamDurumu {
+  if (a.yasamDurumu) return a.yasamDurumu;
+  if (a.aiKimlikAvi || a.durum === "aktif-tuzak" || a.durum === "canli") return "DOGRULANDI";
+  if (a.durum === "park" || a.durum === "yayinda-degil") return "IZLEMEDE";
+  return "ADAY";
+}
+
+// Kullanıcıya gösterilecek kısa Türkçe etiket (rozet).
+export function yasamEtiket(d: YasamDurumu): string {
+  return { ADAY: "Aday", DOGRULANDI: "Aktif tehdit", IZLEMEDE: "İzlemede", PASIF: "Kaldırıldı", ELENDI: "Elendi" }[d];
+}
