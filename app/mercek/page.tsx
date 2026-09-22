@@ -631,17 +631,26 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
         <Progress percent={Math.min(100, risk)} showInfo={false} strokeColor={renk} trailColor="var(--c-17293c)" size={{ height: 6 }} style={{ marginTop: 6, marginBottom: 0 }} />
       </div>
 
-      {(aday.aiTur || aday.aiKimlikAvi) && (
-        <Flex vertical gap={4} style={{ background: aday.aiKimlikAvi ? "var(--c-2a0f12)" : "var(--c-0e1a2e)", border: `1px solid ${aday.aiKimlikAvi ? "var(--c-7a1f28)" : "var(--c-1d3350)"}`, borderRadius: 8, padding: "9px 11px" }}>
-          <Flex align="center" gap={7}>
-            <span className="material-symbols-outlined" style={{ fontSize: 16, color: aday.aiKimlikAvi ? "var(--c-ff5468)" : "var(--c-31c8a0)" }}>smart_toy</span>
-            <Text strong style={{ fontSize: 12, color: "var(--c-cfe0ef)" }}>AI içerik analizi</Text>
-            {aday.aiKimlikAvi && <Tag color="error" style={{ margin: 0, marginLeft: "auto" }}>KİMLİK AVI</Tag>}
+      {(() => {
+        // AI içerik verdict'i: önce TAZE rapor (tıklayınca çalışan domainOsint), yoksa stored aday.
+        const aiTur = rapor?.alanlar?.find((a) => a.ad === "Görsel analiz (AI)" || a.ad === "İçerik analizi (AI)")?.deger || aday.aiTur;
+        const aiKimlikAvi = (rapor?.bulgular || []).some((b) => /kimlik avı \(phishing\)|şifre\/kart\/kimlik bilgisi İSTİYOR|kimlik avı işareti|üçüncü bir tarafa aktar/i.test(b)) || aday.aiKimlikAvi;
+        const aiNot = rapor?.alanlar?.find((a) => a.ad === "Görsel notu")?.deger || (rapor?.alanlar?.find((a) => a.ad === "Logo taklidi (görsel)")?.deger ? `Görselde "${rapor.alanlar.find((a) => a.ad === "Logo taklidi (görsel)")?.deger}" logosu/amblemi kullanılıyor` : undefined) || aday.aiNot;
+        const cdn = rapor?.alanlar?.find((a) => a.ad === "CDN / koruma katmanı")?.deger;
+        if (!aiTur && !aiKimlikAvi && !cdn) return null;
+        return (
+          <Flex vertical gap={4} style={{ background: aiKimlikAvi ? "var(--c-2a0f12)" : "var(--c-0e1a2e)", border: `1px solid ${aiKimlikAvi ? "var(--c-7a1f28)" : "var(--c-1d3350)"}`, borderRadius: 8, padding: "9px 11px" }}>
+            {(aiTur || aiKimlikAvi) && <Flex align="center" gap={7}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16, color: aiKimlikAvi ? "var(--c-ff5468)" : "var(--c-31c8a0)" }}>smart_toy</span>
+              <Text strong style={{ fontSize: 12, color: "var(--c-cfe0ef)" }}>AI içerik analizi</Text>
+              {aiKimlikAvi && <Tag color="error" style={{ margin: 0, marginLeft: "auto" }}>KİMLİK AVI</Tag>}
+            </Flex>}
+            {aiTur && <Text style={{ fontSize: 11.5, color: "var(--c-a9c0da)" }}>İçerik: {aiTur}</Text>}
+            {aiNot && <Text style={{ fontSize: 10.5, color: "var(--c-8fa6bd)", lineHeight: 1.4 }}>{aiNot}</Text>}
+            {cdn && <Text style={{ fontSize: 10.5, color: "var(--c-8fb0d4)", lineHeight: 1.4 }}><Text style={{ fontWeight: 600, color: "var(--c-cfe0ef)" }}>CDN / koruma: </Text>{cdn}</Text>}
           </Flex>
-          {aday.aiTur && <Text style={{ fontSize: 11.5, color: "var(--c-a9c0da)" }}>Görsel: {aday.aiTur}</Text>}
-          {aday.aiNot && <Text style={{ fontSize: 10.5, color: "var(--c-8fa6bd)", lineHeight: 1.4 }}>{aday.aiNot}</Text>}
-        </Flex>
-      )}
+        );
+      })()}
       <EtbisRozet rapor={rapor} />
       <SaldiriGelisimi rapor={rapor} canli={canliV?.durum} />
 
