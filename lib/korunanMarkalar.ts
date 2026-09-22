@@ -137,7 +137,7 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   // küresel İspanyol Gestamp'ı (gestamp.com) yanlış-pozitif yakalamamak için.
   { anahtar: "beycelikgestamp", ad: "Beycelik Gestamp", resmi: ["beycelikgestamp.com.tr", "beycelik.com.tr"], kaliplari: ["beycelik"] },
   // ── Konut / gayrimenkul (sıkça taklit edilir: sahte TOKİ/konut başvuru-çekiliş siteleri) ──
-  { anahtar: "toki", ad: "TOKİ (Toplu Konut İdaresi)", resmi: ["toki.gov.tr"], kaliplari: ["toplukonutidaresi", "toplukonut", "konutidaresi"] },
+  { anahtar: "toki", ad: "TOKİ (Toplu Konut İdaresi)", resmi: ["toki.gov.tr"], kaliplari: ["toplukonutidaresi", "toplukonut", "konutidaresi"], logo: "https://www.toki.gov.tr/ContentV3/images/favicon.png" },
   { anahtar: "emlakkonut", ad: "Emlak Konut GYO", resmi: ["emlakkonut.com.tr"] },
   { anahtar: "emlakyonetim", ad: "Emlak Yönetim", resmi: ["emlakyonetim.com.tr"] },
   { anahtar: "emlakkatilim", ad: "Emlak Katılım (Katılım Bankası)", resmi: ["emlakkatilim.com.tr"] },
