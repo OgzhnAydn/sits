@@ -25,8 +25,8 @@ const { Text, Title } = Typography;
 type AkisSatir = { i: number; kisa: string; domain: string; ca: string; marka: string | null };
 type Aday = { domain: string; marka: string; skor: number; durum?: string; zaman?: number; aiTur?: string; aiKimlikAvi?: boolean; aiNot?: string; analizZaman?: number; yasamDurumu?: import("@/lib/yasamDongusu").YasamDurumu };
 type Alan = { ad: string; deger: string };
-type Kategori = { ad: string; seviye: string };
-type Dedektif = { tur: string; guven: string; hedef?: string };
+type Kategori = { ad: string; seviye: string; ikon?: string; skor?: number };
+type Dedektif = { tur: string; guven: string; hedef?: string; paraYontemi?: string; operasyon?: string; gerekce?: string[] };
 type Gecmis = { t: number; risk: number; asama: number };
 type Rapor = {
   risk: number; riskSeviye?: string; bulgular: string[]; alanlar: Alan[];
@@ -657,6 +657,8 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
           </Flex>
         );
       })()}
+      <SucTuruBlok rapor={rapor} />
+      <DedektifBlok rapor={rapor} />
       <EtbisRozet rapor={rapor} />
       <SaldiriGelisimi rapor={rapor} canli={canliV?.durum} />
 
@@ -673,25 +675,7 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
           ))}
         </Flex>
       </div>
-      {(() => {
-        // Boş "—" satırları GÖSTERME (panel "yarım/bozuk" görünmesin). Yalnız gerçek değeri
-        // olanı yaz. IP istisna: "A kaydı yok" anlamlı bir sinyal (site yayında değil) → kalır.
-        const cert = alan("En yeni sertifika") || alan("Sertifika (urlscan)");
-        const satirlar: { key: string; label: string; children: React.ReactNode }[] = [];
-        if (ilk) satirlar.push({ key: "1", label: "İlk Gözlenme", children: zmn(ilk) });
-        if (son) satirlar.push({ key: "2", label: "Son Gözlenme", children: zmn(son) });
-        if (rapor) satirlar.push({ key: "3", label: "IP Adresi", children: alan("IP adresi") || "A kaydı yok (yayında değil)" });
-        if (alan("Ağ (ASN)")) satirlar.push({ key: "4", label: "ASN", children: alan("Ağ (ASN)")! });
-        if (cert) satirlar.push({ key: "5", label: "Sertifika", children: cert });
-        if (rapor?.dna && rapor.dna.eslesenler.length > 0) satirlar.push({ key: "6", label: "Kardeş domain", children: `${rapor.dna.eslesenler.length} (kampanya)` });
-        if (!satirlar.length) return null;
-        return (
-          <Descriptions column={1} size="small" colon={false} items={satirlar}
-            labelStyle={{ color: "var(--c-5c748b)", fontSize: 11.5 }}
-            contentStyle={{ color: "var(--c-cfe0ef)", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, justifyContent: "flex-end", textAlign: "right" }}
-          />
-        );
-      })()}
+      <TeknikKunye rapor={rapor} ilk={ilk} son={son} />
       <PasifDnsBolum domain={aday.domain} />
       <KarsilastirGorsel resmiDom={resmiDom} fakeDom={aday.domain} fakeShot={rapor?.ekranGoruntusu} benzerlik={benzerlik} markaAdi={markaAdi} />
 
@@ -712,6 +696,99 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
         </Button>
       </Flex>
     </Flex>
+  );
+}
+
+// SUÇ TÜRÜ DEĞERLENDİRMESİ — tek skor yerine kategori bazlı (phishing/marka/zararlı/
+// dolandırıcılık/bahis). Veri rapor.kategoriler'de (API zaten üretiyor); panelde de gösterilir.
+const KAT_RENK: Record<string, string> = { "Yüksek": "var(--c-ff5468)", "Şüpheli": "var(--c-fa8c16)", "Belirsiz": "var(--c-faad14)", "Yok": "var(--c-5c748b)" };
+function SucTuruBlok({ rapor }: { rapor: Rapor | null }) {
+  const kat = rapor?.kategoriler;
+  if (!kat || kat.length === 0) return null;
+  return (
+    <div style={{ border: "1px solid var(--c-17293c)", borderRadius: 8, padding: "10px 11px" }}>
+      <Flex align="center" gap={6} style={{ marginBottom: 8 }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 15, color: "var(--c-4a90d9)" }}>fact_check</span>
+        <Text strong style={{ fontSize: 11, letterSpacing: ".05em", color: "var(--c-cfe0ef)" }}>Suç Türü Değerlendirmesi</Text>
+      </Flex>
+      <Flex vertical gap={6}>
+        {kat.map((k) => {
+          const c = KAT_RENK[k.seviye] || KAT_RENK["Yok"];
+          return (
+            <Flex key={k.ad} align="center" gap={8}>
+              {k.ikon && <span className="material-symbols-outlined" style={{ fontSize: 15, color: c }}>{k.ikon}</span>}
+              <Text style={{ fontSize: 12, color: "var(--c-a7bccf)", flex: 1 }}>{k.ad}</Text>
+              <span style={{ width: 6, height: 6, borderRadius: 3, background: c }} />
+              <Text strong style={{ fontSize: 11.5, color: c, width: 58, textAlign: "right" }}>{k.seviye}</Text>
+            </Flex>
+          );
+        })}
+      </Flex>
+      <Text style={{ display: "block", marginTop: 8, fontSize: 10, color: "var(--c-5c748b)", lineHeight: 1.4 }}>Her tehdit türü ayrı değerlendirilir. &quot;Belirsiz&quot; = zayıf işaret, insan doğrulaması gerekir.</Text>
+    </div>
+  );
+}
+
+// AI DEDEKTİF HÜKMÜ — gerekçeli uzman değerlendirmesi + Kanıt→Sonuç zinciri (rapor.dedektif).
+function DedektifBlok({ rapor }: { rapor: Rapor | null }) {
+  const d = rapor?.dedektif;
+  if (!d || !d.tur) return null;
+  return (
+    <div style={{ border: "1px solid var(--c-1d3350)", borderRadius: 8, overflow: "hidden", background: "var(--c-0e1a2e)" }}>
+      <Flex align="center" justify="space-between" style={{ padding: "8px 11px", borderBottom: "1px solid var(--c-17293c)" }}>
+        <Flex align="center" gap={6}>
+          <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--c-4a90d9)" }}>neurology</span>
+          <Text strong style={{ fontSize: 11, letterSpacing: ".05em", color: "var(--c-8fb0d4)" }}>AI Dedektif Hükmü</Text>
+        </Flex>
+        <Tag color="blue" style={{ margin: 0 }}>Güven: {d.guven}</Tag>
+      </Flex>
+      <div style={{ padding: "10px 11px" }}>
+        <Text strong style={{ fontSize: 13.5, color: "var(--c-cfe0ef)", display: "block" }}>{d.tur}</Text>
+        <Flex wrap gap={6} style={{ marginTop: 7 }}>
+          {d.hedef && <span style={{ background: "var(--c-0b1420)", borderRadius: 999, padding: "2px 9px", fontSize: 10.5, color: "var(--c-8fa6bd)" }}>Hedef: <b style={{ color: "var(--c-cfe0ef)" }}>{d.hedef}</b></span>}
+          {d.paraYontemi && <span style={{ background: "var(--c-0b1420)", borderRadius: 999, padding: "2px 9px", fontSize: 10.5, color: "var(--c-8fa6bd)" }}>Para: <b style={{ color: "var(--c-cfe0ef)" }}>{d.paraYontemi}</b></span>}
+        </Flex>
+        {d.operasyon && <Text style={{ display: "block", marginTop: 8, fontSize: 11.5, color: "var(--c-a7bccf)", lineHeight: 1.45 }}><b style={{ color: "var(--c-cfe0ef)" }}>Operasyon:</b> {d.operasyon}</Text>}
+        {d.gerekce && d.gerekce.length > 0 && (
+          <div style={{ marginTop: 9, paddingTop: 9, borderTop: "1px solid var(--c-17293c)" }}>
+            <Text style={{ display: "block", marginBottom: 5, fontSize: 9.5, letterSpacing: ".06em", color: "var(--c-5c748b)", textTransform: "uppercase" }}>Kanıt → Sonuç</Text>
+            <Flex vertical gap={5}>
+              {d.gerekce.map((g, i) => (
+                <Flex key={i} gap={7} align="flex-start">
+                  <Text style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9.5, fontWeight: 700, color: "var(--c-4a90d9)", marginTop: 1 }}>{String(i + 1).padStart(2, "0")}</Text>
+                  <Text style={{ fontSize: 11.5, color: "var(--c-cfe0ef)", lineHeight: 1.45 }}>{g}</Text>
+                </Flex>
+              ))}
+            </Flex>
+          </div>
+        )}
+        <Text style={{ display: "block", marginTop: 8, fontSize: 9.5, color: "var(--c-5c748b)" }}>Yapay zekâ, toplanan sinyallerden mantık yürüterek üretti — yalnız kanıta dayalı.</Text>
+      </div>
+    </div>
+  );
+}
+
+// TAM TEKNİK İSTİHBARAT — rapordaki TÜM açık kaynak alanları (IP/ASN/NS/MX/CA/CT/VirusTotal/
+// domain yaşı…) + İlk/Son gözlenme + kardeş domain. Butona gerek yok; hepsi panelde.
+function TeknikKunye({ rapor, ilk, son }: { rapor: Rapor | null; ilk?: number; son?: number }) {
+  const z = (t?: number) => t ? new Date(t).toLocaleString("tr-TR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+  const satirlar: { key: string; label: string; children: React.ReactNode }[] = [];
+  if (ilk) satirlar.push({ key: "ilk", label: "İlk Gözlenme", children: z(ilk) });
+  if (son) satirlar.push({ key: "son", label: "Son Gözlenme", children: z(son) });
+  const alanlar = rapor?.alanlar || [];
+  alanlar.forEach((a, i) => { if (a.deger && a.deger !== "—") satirlar.push({ key: `a${i}`, label: a.ad, children: a.deger }); });
+  if (rapor?.dna && rapor.dna.eslesenler.length > 0) satirlar.push({ key: "kardes", label: "Kardeş domain", children: `${rapor.dna.eslesenler.length} (kampanya)` });
+  if (!satirlar.length) return null;
+  return (
+    <div>
+      <Text strong style={{ fontSize: 11, letterSpacing: ".05em", color: "var(--c-cfe0ef)", display: "block", marginBottom: 6 }}>
+        Teknik İstihbarat <Text style={{ fontSize: 10, color: "var(--c-5c748b)" }}>· {satirlar.length} açık kaynak verisi</Text>
+      </Text>
+      <Descriptions column={1} size="small" colon={false} items={satirlar}
+        labelStyle={{ color: "var(--c-5c748b)", fontSize: 11 }}
+        contentStyle={{ color: "var(--c-cfe0ef)", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, justifyContent: "flex-end", textAlign: "right", wordBreak: "break-all" }}
+      />
+    </div>
   );
 }
 
