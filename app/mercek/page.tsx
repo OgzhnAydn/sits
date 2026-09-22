@@ -976,24 +976,28 @@ function MarkaRadyal({ marka, adaylar, secili, onSelect, logo, koyu = true }: { 
   }, [adaylar]);
 
   const { w, h } = boyut;
-  const cx = w / 2, cy = h * 0.44;
-  const Rmax = Math.min(cx, cy) - 22;
-  const spacing = 112; // kartın açısal genişlik payı (px)
-  // İçten dışa 3 halkaya kadar; her halkanın çevresine göre kapasite.
-  const ringR = [Rmax * 0.42, Rmax * 0.71, Rmax].filter((r) => r >= 80);
-  const caps = ringR.map((r) => Math.max(4, Math.floor((2 * Math.PI * r) / spacing)));
+  const cx = w / 2;
+  const araH = h - 46;              // alt özet şeridi için pay
+  const cy = araH / 2 + 4;
+  const Rx = cx - 108, Ry = cy - 24; // yatay: etiket payı; ELİPS → tüm yüksekliği kullan
+  const spacing = 106;               // düğümler arası açısal pay (px)
+  const M = ogeler.length;
+  const ringN = M <= 7 ? 1 : M <= 18 ? 2 : 3;
+  // İç halka merkez logosuyla ÇAKIŞMASIN diye innermost fraksiyon büyük tutulur.
+  const fr = ringN === 1 ? [0.78] : ringN === 2 ? [0.6, 1] : [0.5, 0.75, 1];
+  const ringRx = fr.map((f) => Rx * f), ringRy = fr.map((f) => Ry * f);
+  const caps = fr.map((_, i) => { const per = 2 * Math.PI * Math.sqrt((ringRx[i] ** 2 + ringRy[i] ** 2) / 2); return Math.max(4, Math.floor(per / spacing)); });
   const kapasite = caps.reduce((a, b) => a + b, 0);
   const goster = ogeler.slice(0, kapasite);
   const N = goster.length;
-  const konum: { oge: RadyalOge; x: number; y: number }[] = [];
+  const konum: { oge: RadyalOge; x: number; y: number; ang: number }[] = [];
   let idx = 0;
-  for (let ri = 0; ri < ringR.length && idx < N; ri++) {
+  for (let ri = 0; ri < ringN && idx < N; ri++) {
     const kalanCap = caps.slice(ri).reduce((a, b) => a + b, 0);
-    const bu = ri === ringR.length - 1 ? N - idx : Math.min(caps[ri], Math.round((N - idx) * caps[ri] / kalanCap));
-    const r = ringR[ri];
+    const bu = ri === ringN - 1 ? N - idx : Math.min(caps[ri], Math.round((N - idx) * caps[ri] / kalanCap));
     for (let k = 0; k < bu && idx < N; k++) {
       const ang = -Math.PI / 2 + (k / bu) * Math.PI * 2 + (ri % 2 ? Math.PI / bu : 0);
-      konum.push({ oge: goster[idx], x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r });
+      konum.push({ oge: goster[idx], x: cx + Math.cos(ang) * ringRx[ri], y: cy + Math.sin(ang) * ringRy[ri], ang });
       idx++;
     }
   }
@@ -1016,30 +1020,31 @@ function MarkaRadyal({ marka, adaylar, secili, onSelect, logo, koyu = true }: { 
         ))}
       </svg>
       {/* Merkez marka düğümü */}
-      <div style={{ position: "absolute", left: cx, top: cy, transform: "translate(-50%,-50%)", width: 96, height: 96, borderRadius: "50%", background: cardBg, border: `2px solid ${merkezBd}`, boxShadow: koyu ? "0 0 0 6px rgba(58,144,216,.10)" : "0 0 0 6px rgba(58,144,216,.08)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
-        {logo ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={logo} alt={marka} style={{ width: 46, height: 46, objectFit: "contain" }} /> : <span className="material-symbols-outlined" style={{ fontSize: 40, color: "#3a90d8" }}>account_balance</span>}
-        <Text strong style={{ fontSize: 10.5, color: txt, marginTop: 2, textAlign: "center", lineHeight: 1.1, maxWidth: 90 }}>{marka}</Text>
+      <div style={{ position: "absolute", left: cx, top: cy, transform: "translate(-50%,-50%)", width: 78, height: 78, borderRadius: "50%", background: cardBg, border: `2px solid ${merkezBd}`, boxShadow: koyu ? "0 0 0 5px rgba(58,144,216,.10)" : "0 0 0 5px rgba(58,144,216,.08)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
+        {logo ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={logo} alt={marka} style={{ width: 38, height: 38, objectFit: "contain" }} /> : <span className="material-symbols-outlined" style={{ fontSize: 34, color: "#3a90d8" }}>account_balance</span>}
+        <Text strong style={{ fontSize: 9, color: txt, marginTop: 1, textAlign: "center", lineHeight: 1, maxWidth: 72, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{marka}</Text>
       </div>
-      {/* Kart düğümler */}
-      {konum.map((p, idx) => {
+      {/* Düğümler: küçük daire (durum ikonu) + DIŞA yaslı etiket (domain + skor) → üst üste binmez */}
+      {konum.map((p, ki) => {
         const o = p.oge; const kume = o.kume; const aday = o.aday;
         const skor = kume ? kume.skor : (aday!.skor || 0);
         const sv = radyalSeviye(skor, koyu);
-        const ad = kume ? `.${kume.tld} kümesi (${kume.sayi})` : aday!.domain;
+        const tam = kume ? `.${kume.tld} kümesi (${kume.sayi})` : aday!.domain;
+        const ad = tam.length > 14 ? tam.slice(0, 13) + "…" : tam;
         const isSel = !kume && !!secili && aday!.domain === secili.domain;
+        const sag = Math.cos(p.ang) >= -0.02; // sağ yarı → etiket sağa aç, sol yarı → sola
         return (
-          <div key={idx} onClick={() => { if (kume) onSelect(kume.uyeler[0]); else onSelect(aday!); }}
-            title={ad}
-            style={{ position: "absolute", left: p.x, top: p.y, transform: "translate(-50%,-50%)", zIndex: isSel ? 4 : 1,
-              display: "flex", alignItems: "center", gap: 6, maxWidth: 150, padding: "5px 9px 5px 6px", borderRadius: 10,
-              background: cardBg, border: `1.5px solid ${isSel ? sv.renk : cardBd}`, cursor: "pointer",
-              boxShadow: isSel ? `0 0 0 3px ${sv.renk}33` : (koyu ? "0 1px 4px rgba(0,0,0,.35)" : "0 1px 5px rgba(30,50,80,.10)"), transition: "box-shadow .15s,border-color .15s" }}>
-            <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", background: `${sv.renk}22`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 14, color: sv.renk }}>{sv.ikon}</span>
-            </span>
-            <div style={{ minWidth: 0, display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
-              <Text style={{ fontSize: 10.5, color: txt, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 108, fontFamily: "'IBM Plex Mono',monospace" }}>{ad}</Text>
-              <span style={{ marginTop: 2, alignSelf: "flex-start", background: sv.renk, color: "#fff", fontSize: 9.5, fontWeight: 700, borderRadius: 5, padding: "0 5px", fontFamily: "'IBM Plex Mono',monospace" }}>{skor}</span>
+          <div key={ki} onClick={() => { if (kume) onSelect(kume.uyeler[0]); else onSelect(aday!); }} title={tam}
+            style={{ position: "absolute", left: p.x, top: p.y, transform: "translate(-50%,-50%)", zIndex: isSel ? 5 : 1, cursor: "pointer" }}>
+            <div style={{ width: 28, height: 28, borderRadius: "50%", background: cardBg, border: `2px solid ${sv.renk}`,
+              boxShadow: isSel ? `0 0 0 4px ${sv.renk}44` : (koyu ? "0 1px 3px rgba(0,0,0,.45)" : "0 1px 3px rgba(30,50,80,.18)"),
+              display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 17, color: sv.renk }}>{sv.ikon}</span>
+            </div>
+            <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", ...(sag ? { left: 32 } : { right: 32 }),
+              display: "flex", flexDirection: "column", alignItems: sag ? "flex-start" : "flex-end", whiteSpace: "nowrap", pointerEvents: "none" }}>
+              <Text style={{ fontSize: 10, color: isSel ? sv.renk : txt, fontWeight: isSel ? 700 : 400, fontFamily: "'IBM Plex Mono',monospace", lineHeight: 1.1 }}>{ad}</Text>
+              <span style={{ marginTop: 1, background: sv.renk, color: "#fff", fontSize: 8.5, fontWeight: 700, borderRadius: 4, padding: "0 4px", fontFamily: "'IBM Plex Mono',monospace" }}>{skor}</span>
             </div>
           </div>
         );
