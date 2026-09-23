@@ -441,6 +441,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
           {/* SAĞ: 4 varlık detayı */}
           <Col xs={24} lg={6}>
             <Card size="small" style={{ height: "100%" }} title={baslik(4, "SEÇİLEN VARLIK DETAYI")}>
+              {markaFiltre && <CanliKoruma veri={resmiSaglik} onSec={(d) => analizEt({ domain: d, marka: markaFiltre, skor: 0, durum: "canli" })} />}
               <EntityDetail aday={secili} rapor={rapor} yukleniyor={yukleniyor} markaAdi={markaAdi} resmiDom={secili ? resmiMap[secili.marka] : undefined} onYenile={() => secili && analizEt(secili, true)} />
             </Card>
           </Col>
@@ -895,6 +896,48 @@ function ResmiVarliklar({ veri, yuk, onSec }: { veri: { varliklar: VarlikSaglik[
         </Flex>
         <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)", display: "block", marginTop: 5, lineHeight: 1.4 }}>Bunları biz keşfettik (müşteri göndermedi) — attack surface. Sertifika dolmuş/riskli olan müşteriye bulgu olarak sunulur.</Text>
       </>)}
+    </div>
+  );
+}
+
+// CANLI KORUMA — sağ kolonun EN ÜSTÜ: müşterinin resmî varlıkları minik ekran görüntüsü +
+// "CANLI KORUMA" rozetiyle. "Sitelerinizi aktif koruyoruz" güvencesi. Tıklayınca detayını açar.
+function CanliKoruma({ veri, onSec }: { veri: { varliklar: VarlikSaglik[] } | null; onSec: (d: string) => void }) {
+  const list = veri?.varliklar || [];
+  if (!list.length) return null;
+  const ss = (d: string) => `https://s0.wp.com/mshots/v1/${encodeURIComponent("https://" + d)}?w=320`;
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <Flex align="center" gap={6} style={{ marginBottom: 8 }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--c-31c8a0)" }}>verified_user</span>
+        <Text strong style={{ fontSize: 11, color: "var(--c-cfe0ef)", letterSpacing: ".05em" }}>CANLI KORUMA</Text>
+        <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)", marginLeft: "auto" }}>resmî varlıklarınız</Text>
+      </Flex>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        {list.map((v) => {
+          const c = vRenk(v.durum);
+          return (
+            <div key={v.domain} onClick={() => onSec(v.domain)} title={`${v.domain} · ${v.not}`}
+              style={{ cursor: "pointer", border: `1px solid var(--c-17293c)`, borderRadius: 8, overflow: "hidden", background: "var(--c-0e1a2e)" }}>
+              <div style={{ position: "relative", height: 66, background: "var(--c-0b1524)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span className="material-symbols-outlined" style={{ position: "absolute", fontSize: 22, color: "var(--c-2a4d68)" }}>public</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={ss(v.domain)} alt={v.domain} loading="lazy" style={{ position: "relative", width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                <span style={{ position: "absolute", top: 4, left: 4, display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(11,21,36,.85)", borderRadius: 5, padding: "2px 6px" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: 3, background: c }} />
+                  <Text style={{ fontSize: 8, color: "#dbe7f3", fontWeight: 700, letterSpacing: ".03em" }}>CANLI KORUMA</Text>
+                </span>
+              </div>
+              <div style={{ padding: "4px 6px", display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 6, height: 6, borderRadius: 3, background: c, flexShrink: 0 }} />
+                <Text style={{ fontSize: 9.5, fontFamily: "'IBM Plex Mono',monospace", color: "var(--c-a9c0da)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.domain}</Text>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ borderBottom: "1px solid var(--c-17293c)", marginTop: 12 }} />
     </div>
   );
 }
