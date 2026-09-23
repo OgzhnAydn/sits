@@ -157,6 +157,9 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   // Gelir İdaresi Başkanlığı — anahtar "gib" DEĞİL (3 harf + "gibi" gürültüsü); ayırt edici
   // glued/tireli kalıplar + vergi-iadesi tuzağı (GİB taklidi phishing'in ana yemi).
   { anahtar: "geliridaresi", ad: "Gelir İdaresi Başkanlığı", resmi: ["gib.gov.tr"], kaliplari: ["gelir-idaresi", "gib-gov", "gibgov", "gib-vergi", "vergidairesi", "vergi-dairesi", "vergiiadesi", "vergi-iadesi"] },
+  // Göç İdaresi Başkanlığı — anahtar "goc" DEĞİL (3 harf, gürültü); e-ikamet (oturma izni
+  // başvurusu) yabancıları hedefleyen phishing'in ana yemi → ikamet/randevu kalıpları.
+  { anahtar: "gocidaresi", ad: "Göç İdaresi Başkanlığı", resmi: ["goc.gov.tr"], kaliplari: ["goc-idaresi", "goç-idaresi", "e-ikamet", "eikamet", "ikamet-randevu", "ikamet-basvuru", "ikametbasvuru", "oturma-izni", "oturmaizni"], resmiVarliklar: ["goc.gov.tr", "e-ikamet.goc.gov.tr"] },
   // ── Enerji ──
   // logo: favicon.ico BOŞ → Google favicon servisi küre döndürüyor; gerçek PNG favicon açıkça verilir.
   { anahtar: "enerjisa", ad: "Enerjisa", resmi: ["enerjisa.com.tr", "enerjisauretim.com.tr"], logo: "https://www.enerjisa.com.tr/assets/favicon/favicon_512x512.png" },
@@ -221,6 +224,7 @@ export const KAMU_KURUMLARI: KamuKurumu[] = [
   { ad: "e-Devlet Kapısı", kelimeler: ["e-devlet", "edevlet", "türkiye.gov.tr", "e-government"], resmi: "turkiye.gov.tr" },
   { ad: "SGK", kelimeler: ["sosyal güvenlik kurumu", "sgk", "sosyal guvenlik kurumu"], resmi: "sgk.gov.tr" },
   { ad: "Gelir İdaresi Başkanlığı", kelimeler: ["gelir idaresi", "gelir idaresi başkanlığı", "gelir idaresi baskanligi", "vergi dairesi", "gib.gov.tr"], resmi: "gib.gov.tr" },
+  { ad: "Göç İdaresi Başkanlığı", kelimeler: ["göç idaresi", "goc idaresi", "göç idaresi başkanlığı", "e-ikamet", "ikamet izni", "oturma izni", "goc.gov.tr"], resmi: "goc.gov.tr" },
   { ad: "KOSGEB", kelimeler: ["kosgeb", "küçük ve orta ölçekli"], resmi: "kosgeb.gov.tr" },
   { ad: "İŞKUR", kelimeler: ["işkur", "türkiye iş kurumu", "iş kur"], resmi: "iskur.gov.tr" },
   { ad: "AFAD", kelimeler: ["afad", "afet ve acil durum"], resmi: "afad.gov.tr" },
