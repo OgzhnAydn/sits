@@ -75,18 +75,28 @@ async function varlikSagligi(domain: string): Promise<VarlikSaglik> {
   return { domain, durum, ip, certGun: cert.gun, certVeren: cert.veren, http, karaListe, not };
 }
 
+const kesfCache: Record<string, { v: (VarlikSaglik & { aciklama: string })[]; zaman: number }> = {};
+
 export async function GET(req: NextRequest) {
   const marka = (new URL(req.url).searchParams.get("marka") || "").toLowerCase().trim();
   const m = KORUNAN_MARKALAR.find((x) => x.anahtar === marka);
   const liste = m?.resmiVarliklar || [];
-  if (!liste.length) return NextResponse.json({ marka, varliklar: [], ozet: { toplam: 0, saglikli: 0, dikkat: 0, sorunlu: 0 } }, { headers: { "Cache-Control": "no-store" } });
+  const kesfListe = m?.kesfedilenVarliklar || [];
+  if (!liste.length && !kesfListe.length) return NextResponse.json({ marka, varliklar: [], kesfedilen: [], ozet: { toplam: 0, saglikli: 0, dikkat: 0, sorunlu: 0 } }, { headers: { "Cache-Control": "no-store" } });
 
+  // MÜŞTERİ listesi (yetkili)
   const c = cache[marka];
   let varliklar: VarlikSaglik[];
   if (c && Date.now() - c.zaman < TTL) varliklar = c.v;
   else { varliklar = await Promise.all(liste.map(varlikSagligi)); cache[marka] = { v: varliklar, zaman: Date.now() }; }
 
+  // KEŞFEDİLEN listesi (CT/DNS — müşteri onayı bekler)
+  const kc = kesfCache[marka];
+  let kesfedilen: (VarlikSaglik & { aciklama: string })[];
+  if (kc && Date.now() - kc.zaman < TTL) kesfedilen = kc.v;
+  else { kesfedilen = await Promise.all(kesfListe.map(async (k) => ({ ...(await varlikSagligi(k.domain)), aciklama: k.aciklama }))); kesfCache[marka] = { v: kesfedilen, zaman: Date.now() }; }
+
   const say = (d: VarlikSaglik["durum"]) => varliklar.filter((x) => x.durum === d).length;
   const ozet = { toplam: varliklar.length, saglikli: say("saglikli"), dikkat: say("dikkat") + say("dogrulanamadi"), sorunlu: say("sorunlu") };
-  return NextResponse.json({ marka, varliklar, ozet, guncelleme: (cache[marka]?.zaman) || Date.now() }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ marka, varliklar, kesfedilen, ozet, guncelleme: cache[marka]?.zaman || Date.now() }, { headers: { "Cache-Control": "no-store" } });
 }

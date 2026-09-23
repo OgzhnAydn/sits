@@ -147,7 +147,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
   const [oturum, setOturum] = useState<boolean | null>(null);
   const [operator, setOperator] = useState(false); // marka="*" → tüm markalara dalabilir
   const [resmiMap, setResmiMap] = useState<Record<string, string>>({});
-  const [resmiSaglik, setResmiSaglik] = useState<{ varliklar: VarlikSaglik[]; ozet: { toplam: number; saglikli: number; dikkat: number; sorunlu: number } } | null>(null);
+  const [resmiSaglik, setResmiSaglik] = useState<{ varliklar: VarlikSaglik[]; kesfedilen?: VarlikSaglik[]; ozet: { toplam: number; saglikli: number; dikkat: number; sorunlu: number } } | null>(null);
   const [resmiYuk, setResmiYuk] = useState(false);
   const [markaListe, setMarkaListe] = useState<{ anahtar: string; ad: string }[]>([]);
   const gorulen = useRef<Set<number>>(new Set());
@@ -844,28 +844,57 @@ function TeknikKunye({ rapor, ilk, son }: { rapor: Rapor | null; ilk?: number; s
 // e-ticaret olmayan → ETBİS beklenmez) hiçbir şey çizme.
 // RESMÎ VARLIKLAR — müşterinin izlenmesini istediği resmî adreslerin sağlığı (/api/resmi-saglik).
 // Sertifika + DNS temelli DÜRÜST izleme; bizim bulut-IP probumuzun 404'ü resmî sitede alarm değildir.
-type VarlikSaglik = { domain: string; durum: string; ip: string | null; certGun: number | null; certVeren: string | null; http: number | null; karaListe: boolean; not: string };
-function ResmiVarliklar({ veri, yuk, onSec }: { veri: { varliklar: VarlikSaglik[]; ozet: { toplam: number; saglikli: number; dikkat: number; sorunlu: number } } | null; yuk: boolean; onSec: (d: string) => void }) {
-  if (!veri || !veri.varliklar?.length) return null;
-  const renk = (d: string) => d === "saglikli" ? "var(--c-31c8a0)" : d === "sorunlu" ? "var(--c-ff5468)" : "var(--c-faad14)";
-  const ik = (d: string) => d === "saglikli" ? "check_circle" : d === "sorunlu" ? "error" : "help";
+type VarlikSaglik = { domain: string; durum: string; ip: string | null; certGun: number | null; certVeren: string | null; http: number | null; karaListe: boolean; not: string; aciklama?: string };
+const vRenk = (d: string) => d === "saglikli" ? "var(--c-31c8a0)" : d === "sorunlu" ? "var(--c-ff5468)" : "var(--c-faad14)";
+const vIk = (d: string) => d === "saglikli" ? "check_circle" : d === "sorunlu" ? "error" : "help";
+function VarlikSatir({ v, onSec }: { v: VarlikSaglik; onSec: (d: string) => void }) {
+  const c = vRenk(v.durum);
+  const cert = v.certGun != null ? (v.certGun <= 0 ? "sertifika DOLMUŞ" : `sertifika ${v.certGun}g`) : (v.durum === "dogrulanamadi" ? "doğrulanamadı" : "sertifika —");
+  const sorunlu = v.durum === "sorunlu" || v.durum === "dikkat";
+  return (
+    <div onClick={() => onSec(v.domain)} title={v.not}
+      style={{ cursor: "pointer", padding: "6px 8px", margin: "0 -8px", borderRadius: 8, borderLeft: `2px solid ${c}` }}>
+      <Flex align="center" gap={8}>
+        <span className="material-symbols-outlined" style={{ fontSize: 15, color: c }}>{vIk(v.durum)}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ display: "block", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, color: "var(--c-cfe0ef)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.domain}</Text>
+          {v.aciklama && <Text style={{ fontSize: 9.5, color: "var(--c-8fa6bd)" }}>{v.aciklama}</Text>}
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <Text style={{ display: "block", fontSize: 10.5, color: c, whiteSpace: "nowrap" }}>{cert}</Text>
+          {v.http != null && <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)" }}>HTTP {v.http}</Text>}
+        </div>
+      </Flex>
+      {sorunlu && <Text style={{ display: "block", fontSize: 9.5, color: c, marginTop: 3, marginLeft: 23, lineHeight: 1.4 }}>{v.not}</Text>}
+    </div>
+  );
+}
+function ResmiVarliklar({ veri, yuk, onSec }: { veri: { varliklar: VarlikSaglik[]; kesfedilen?: VarlikSaglik[]; ozet: { toplam: number; saglikli: number; dikkat: number; sorunlu: number } } | null; yuk: boolean; onSec: (d: string) => void }) {
+  if (!veri || (!veri.varliklar?.length && !veri.kesfedilen?.length)) return null;
+  const kesf = veri.kesfedilen || [];
+  const kesfSorun = kesf.filter((k) => k.durum === "sorunlu").length;
   return (
     <div style={{ marginTop: 14 }}>
       <Flex align="center" justify="space-between" style={{ marginBottom: 6 }}>
-        <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)", letterSpacing: ".08em", textTransform: "uppercase" }}>Resmî Varlıklar {yuk && <Spin size="small" />}</Text>
+        <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)", letterSpacing: ".08em", textTransform: "uppercase" }}>Resmî Varlıklar · sizin {yuk && <Spin size="small" />}</Text>
         <Text style={{ fontSize: 10, color: "var(--c-31c8a0)" }}>{veri.ozet.saglikli}/{veri.ozet.toplam} sağlıklı</Text>
       </Flex>
       <Flex vertical gap={2}>
-        {veri.varliklar.map((v) => (
-          <Flex key={v.domain} align="center" gap={8} onClick={() => onSec(v.domain)} title={v.not}
-            style={{ cursor: "pointer", padding: "6px 8px", margin: "0 -8px", borderRadius: 8, borderLeft: `2px solid ${renk(v.durum)}` }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 15, color: renk(v.durum) }}>{ik(v.durum)}</span>
-            <Text style={{ flex: 1, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, color: "var(--c-cfe0ef)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.domain}</Text>
-            <Text style={{ fontSize: 10.5, color: renk(v.durum), whiteSpace: "nowrap" }}>{v.certGun != null ? (v.certGun <= 0 ? "sertifika dolmuş" : `${v.certGun}g`) : (v.durum === "dogrulanamadi" ? "doğrulanamadı" : "—")}</Text>
-          </Flex>
-        ))}
+        {veri.varliklar.map((v) => <VarlikSatir key={v.domain} v={v} onSec={onSec} />)}
       </Flex>
-      <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)", display: "block", marginTop: 5, lineHeight: 1.4 }}>Sertifika + DNS temelli · resmî sitede probumuzun 404'ü alarm sayılmaz</Text>
+
+      {kesf.length > 0 && (<>
+        <Flex align="center" justify="space-between" style={{ marginTop: 12, marginBottom: 6 }}>
+          <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)", letterSpacing: ".08em", textTransform: "uppercase" }}>Keşfedilen · CT/DNS</Text>
+          {kesfSorun > 0
+            ? <Text style={{ fontSize: 10, color: "var(--c-ff5468)" }}>{kesfSorun} bulgu</Text>
+            : <Text style={{ fontSize: 10, color: "var(--c-5c748b)" }}>onay bekliyor</Text>}
+        </Flex>
+        <Flex vertical gap={2}>
+          {kesf.map((v) => <VarlikSatir key={v.domain} v={v} onSec={onSec} />)}
+        </Flex>
+        <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)", display: "block", marginTop: 5, lineHeight: 1.4 }}>Bunları biz keşfettik (müşteri göndermedi) — attack surface. Sertifika dolmuş/riskli olan müşteriye bulgu olarak sunulur.</Text>
+      </>)}
     </div>
   );
 }

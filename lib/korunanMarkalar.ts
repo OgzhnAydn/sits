@@ -10,7 +10,9 @@
 // İşaretli markalar, kısa anahtarlar gibi SIKI-BAĞLAM kapısına tabi (riskli TLD veya phishing bağlamı şart).
 // resmiVarliklar: müşterinin "izleyin" dediği resmî adresler (sağlık takibi + grafik iç halkası).
 // resmi[] ile aynı korumadadır (asla sahte sayılmaz); bu liste ayrıca EKRANDA izlenir.
-export type KorunanMarka = { anahtar: string; ad: string; resmi: string[]; kaliplari?: string[]; yaygin?: boolean; logo?: string; resmiVarliklar?: string[] };
+// kesfedilenVarliklar: müşterinin GÖNDERMEDİĞİ ama bizim CT/DNS ile keşfettiğimiz gerçek alt
+// alanlar (attack surface). AYRI kategori: müşteri onayı bekler, resmî listeyi kirletmez.
+export type KorunanMarka = { anahtar: string; ad: string; resmi: string[]; kaliplari?: string[]; yaygin?: boolean; logo?: string; resmiVarliklar?: string[]; kesfedilenVarliklar?: { domain: string; aciklama: string }[] };
 
 // TEK KAYNAK: hem CertStream avcısı hem domainOsint (typosquatting + favicon
 // karşılaştırması) bu listeyi kullanır. Böylece her korunan marka için favicon
@@ -139,7 +141,15 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   // küresel İspanyol Gestamp'ı (gestamp.com) yanlış-pozitif yakalamamak için.
   { anahtar: "beycelikgestamp", ad: "Beycelik Gestamp", resmi: ["beycelikgestamp.com.tr", "beycelik.com.tr"], kaliplari: ["beycelik"] },
   // ── Konut / gayrimenkul (sıkça taklit edilir: sahte TOKİ/konut başvuru-çekiliş siteleri) ──
-  { anahtar: "toki", ad: "TOKİ (Toplu Konut İdaresi)", resmi: ["toki.gov.tr"], kaliplari: ["toplukonutidaresi", "toplukonut", "konutidaresi"], logo: "https://www.toki.gov.tr/ContentV3/images/favicon.png", resmiVarliklar: ["toki.gov.tr", "talep.toki.gov.tr", "taksit.toki.gov.tr", "satis.toki.gov.tr"] },
+  { anahtar: "toki", ad: "TOKİ (Toplu Konut İdaresi)", resmi: ["toki.gov.tr"], kaliplari: ["toplukonutidaresi", "toplukonut", "konutidaresi"], logo: "https://www.toki.gov.tr/ContentV3/images/favicon.png", resmiVarliklar: ["toki.gov.tr", "talep.toki.gov.tr", "taksit.toki.gov.tr", "satis.toki.gov.tr"],
+    kesfedilenVarliklar: [
+      { domain: "ytw1.toki.gov.tr", aciklama: "Web sunucusu (nginx)" },
+      { domain: "autodiscover.toki.gov.tr", aciklama: "Exchange/Outlook otomatik yapılandırma" },
+      { domain: "webmail.toki.gov.tr", aciklama: "Webmail (OWA)" },
+      { domain: "tokimail.toki.gov.tr", aciklama: "E-posta sunucusu" },
+      { domain: "mail.toki.gov.tr", aciklama: "E-posta (iç ağ olabilir)" },
+      { domain: "owa.toki.gov.tr", aciklama: "Outlook Web Access (iç ağ olabilir)" },
+    ] },
   { anahtar: "emlakkonut", ad: "Emlak Konut GYO", resmi: ["emlakkonut.com.tr"] },
   { anahtar: "emlakyonetim", ad: "Emlak Yönetim", resmi: ["emlakyonetim.com.tr"] },
   { anahtar: "emlakkatilim", ad: "Emlak Katılım (Katılım Bankası)", resmi: ["emlakkatilim.com.tr"] },
