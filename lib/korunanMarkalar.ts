@@ -8,7 +8,9 @@
 // yaygin: anahtar aynı zamanda yabancı yaygın kelime / coğrafi ad (pegasus=mitoloji, santander=şehir,
 // iberia=yarımada, albaraka=Arapça bereket, correos=İsp. posta) → o ülkedeki meşru işletmeleri yakalar.
 // İşaretli markalar, kısa anahtarlar gibi SIKI-BAĞLAM kapısına tabi (riskli TLD veya phishing bağlamı şart).
-export type KorunanMarka = { anahtar: string; ad: string; resmi: string[]; kaliplari?: string[]; yaygin?: boolean; logo?: string };
+// resmiVarliklar: müşterinin "izleyin" dediği resmî adresler (sağlık takibi + grafik iç halkası).
+// resmi[] ile aynı korumadadır (asla sahte sayılmaz); bu liste ayrıca EKRANDA izlenir.
+export type KorunanMarka = { anahtar: string; ad: string; resmi: string[]; kaliplari?: string[]; yaygin?: boolean; logo?: string; resmiVarliklar?: string[] };
 
 // TEK KAYNAK: hem CertStream avcısı hem domainOsint (typosquatting + favicon
 // karşılaştırması) bu listeyi kullanır. Böylece her korunan marka için favicon
@@ -137,7 +139,7 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   // küresel İspanyol Gestamp'ı (gestamp.com) yanlış-pozitif yakalamamak için.
   { anahtar: "beycelikgestamp", ad: "Beycelik Gestamp", resmi: ["beycelikgestamp.com.tr", "beycelik.com.tr"], kaliplari: ["beycelik"] },
   // ── Konut / gayrimenkul (sıkça taklit edilir: sahte TOKİ/konut başvuru-çekiliş siteleri) ──
-  { anahtar: "toki", ad: "TOKİ (Toplu Konut İdaresi)", resmi: ["toki.gov.tr"], kaliplari: ["toplukonutidaresi", "toplukonut", "konutidaresi"], logo: "https://www.toki.gov.tr/ContentV3/images/favicon.png" },
+  { anahtar: "toki", ad: "TOKİ (Toplu Konut İdaresi)", resmi: ["toki.gov.tr"], kaliplari: ["toplukonutidaresi", "toplukonut", "konutidaresi"], logo: "https://www.toki.gov.tr/ContentV3/images/favicon.png", resmiVarliklar: ["toki.gov.tr", "talep.toki.gov.tr", "taksit.toki.gov.tr", "satis.toki.gov.tr"] },
   { anahtar: "emlakkonut", ad: "Emlak Konut GYO", resmi: ["emlakkonut.com.tr"] },
   { anahtar: "emlakyonetim", ad: "Emlak Yönetim", resmi: ["emlakyonetim.com.tr"] },
   { anahtar: "emlakkatilim", ad: "Emlak Katılım (Katılım Bankası)", resmi: ["emlakkatilim.com.tr"] },

@@ -147,6 +147,8 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
   const [oturum, setOturum] = useState<boolean | null>(null);
   const [operator, setOperator] = useState(false); // marka="*" → tüm markalara dalabilir
   const [resmiMap, setResmiMap] = useState<Record<string, string>>({});
+  const [resmiSaglik, setResmiSaglik] = useState<{ varliklar: VarlikSaglik[]; ozet: { toplam: number; saglikli: number; dikkat: number; sorunlu: number } } | null>(null);
+  const [resmiYuk, setResmiYuk] = useState(false);
   const [markaListe, setMarkaListe] = useState<{ anahtar: string; ad: string }[]>([]);
   const gorulen = useRef<Set<number>>(new Set());
   const yeniSet = useRef<Set<string>>(new Set());
@@ -165,6 +167,14 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
       setResmiMap(m); setMarkaListe(liste);
     }).catch(() => {});
   }, []);
+
+  // RESMÎ VARLIK SAĞLIĞI — marka seçiliyken çek (panel + grafik iç halkası ORTAK kullanır → tek fetch).
+  useEffect(() => {
+    if (!markaFiltre) { setResmiSaglik(null); return; }
+    let iptal = false; setResmiYuk(true);
+    fetch(`/api/resmi-saglik?marka=${encodeURIComponent(markaFiltre)}`).then((r) => r.json()).then((j) => { if (!iptal) setResmiSaglik(j); }).catch(() => {}).finally(() => { if (!iptal) setResmiYuk(false); });
+    return () => { iptal = true; };
+  }, [markaFiltre]);
 
   // Operatör bir markaya geçince/temizleyince URL'i de güncelle (paylaşılabilir + geri tutarlı).
   const markaSec = useCallback((anahtar: string) => {
@@ -386,6 +396,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                 <StatSatir ikon={<ClusterOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Ortak Nokta & Atıf" renk="var(--c-4d9fe0)" aktif={gorunum === "ortak"} onClick={() => setGorunum("ortak")} />
                 <StatSatir ikon={<AppstoreOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Mobil & Reklam" renk="var(--c-4d9fe0)" aktif={gorunum === "mobilreklam"} onClick={() => setGorunum("mobilreklam")} />
                 <StatSatir ikon={<ThunderboltOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Öncelik & USOM" renk="var(--c-4d9fe0)" aktif={gorunum === "oncelik"} onClick={() => setGorunum("oncelik")} son />
+                {markaFiltre && <ResmiVarliklar veri={resmiSaglik} yuk={resmiYuk} onSec={(d) => analizEt({ domain: d, marka: markaFiltre, skor: 0, durum: "canli" })} />}
               </Card>
             </Flex>
           </Col>
@@ -421,7 +432,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                     options={[{ label: "Radyal", value: "radyal" }, { label: "Evren", value: "evren" }]} />
                 </div>
                 {grafGorunum === "radyal"
-                  ? <MarkaRadyal marka={markaAdi} adaylar={grafikAdaylar} secili={secili} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} />
+                  ? <MarkaRadyal marka={markaAdi} adaylar={grafikAdaylar} secili={secili} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} resmiVarliklar={markaFiltre ? (resmiSaglik?.varliklar || []) : []} onResmiSec={(d) => markaFiltre && analizEt({ domain: d, marka: markaFiltre, skor: 0, durum: "canli" })} />
                   : <ThreatUniverse marka={markaAdi} adaylar={grafikAdaylar} secili={secili} rapor={rapor} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} />}
               </div>
             </Card>
@@ -831,6 +842,34 @@ function TeknikKunye({ rapor, ilk, son }: { rapor: Rapor | null; ilk?: number; s
 // ETBİS ROZETİ — Ticaret Bakanlığı e-ticaret sicili durumu (resmî meşruiyet sinyali).
 // Rapordaki "ETBİS" alanına göre yeşil/kırmızı/nötr rozet. Alan yoksa (banka/kamu gibi
 // e-ticaret olmayan → ETBİS beklenmez) hiçbir şey çizme.
+// RESMÎ VARLIKLAR — müşterinin izlenmesini istediği resmî adreslerin sağlığı (/api/resmi-saglik).
+// Sertifika + DNS temelli DÜRÜST izleme; bizim bulut-IP probumuzun 404'ü resmî sitede alarm değildir.
+type VarlikSaglik = { domain: string; durum: string; ip: string | null; certGun: number | null; certVeren: string | null; http: number | null; karaListe: boolean; not: string };
+function ResmiVarliklar({ veri, yuk, onSec }: { veri: { varliklar: VarlikSaglik[]; ozet: { toplam: number; saglikli: number; dikkat: number; sorunlu: number } } | null; yuk: boolean; onSec: (d: string) => void }) {
+  if (!veri || !veri.varliklar?.length) return null;
+  const renk = (d: string) => d === "saglikli" ? "var(--c-31c8a0)" : d === "sorunlu" ? "var(--c-ff5468)" : "var(--c-faad14)";
+  const ik = (d: string) => d === "saglikli" ? "check_circle" : d === "sorunlu" ? "error" : "help";
+  return (
+    <div style={{ marginTop: 14 }}>
+      <Flex align="center" justify="space-between" style={{ marginBottom: 6 }}>
+        <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)", letterSpacing: ".08em", textTransform: "uppercase" }}>Resmî Varlıklar {yuk && <Spin size="small" />}</Text>
+        <Text style={{ fontSize: 10, color: "var(--c-31c8a0)" }}>{veri.ozet.saglikli}/{veri.ozet.toplam} sağlıklı</Text>
+      </Flex>
+      <Flex vertical gap={2}>
+        {veri.varliklar.map((v) => (
+          <Flex key={v.domain} align="center" gap={8} onClick={() => onSec(v.domain)} title={v.not}
+            style={{ cursor: "pointer", padding: "6px 8px", margin: "0 -8px", borderRadius: 8, borderLeft: `2px solid ${renk(v.durum)}` }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 15, color: renk(v.durum) }}>{ik(v.durum)}</span>
+            <Text style={{ flex: 1, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, color: "var(--c-cfe0ef)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.domain}</Text>
+            <Text style={{ fontSize: 10.5, color: renk(v.durum), whiteSpace: "nowrap" }}>{v.certGun != null ? (v.certGun <= 0 ? "sertifika dolmuş" : `${v.certGun}g`) : (v.durum === "dogrulanamadi" ? "doğrulanamadı" : "—")}</Text>
+          </Flex>
+        ))}
+      </Flex>
+      <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)", display: "block", marginTop: 5, lineHeight: 1.4 }}>Sertifika + DNS temelli · resmî sitede probumuzun 404'ü alarm sayılmaz</Text>
+    </div>
+  );
+}
+
 function EtbisRozet({ rapor }: { rapor: Rapor | null }) {
   const deger = rapor?.alanlar?.find((a) => a.ad === "ETBİS")?.deger;
   if (!deger) return null;
@@ -979,7 +1018,7 @@ function radyalSeviye(skor: number, koyu: boolean): { renk: string; ikon: string
   if (skor >= 30) return { renk: "#f5921b", ikon: "warning", grup: "supheli" };
   return { renk: koyu ? "#4a90d9" : "#3f7fc4", ikon: "open_in_new", grup: "bilgi" };
 }
-function MarkaRadyal({ marka, adaylar, secili, onSelect, logo, koyu = true }: { marka: string; adaylar: Aday[]; secili: Aday | null; onSelect: (a: Aday) => void; logo?: string | null; koyu?: boolean }) {
+function MarkaRadyal({ marka, adaylar, secili, onSelect, logo, koyu = true, resmiVarliklar = [], onResmiSec }: { marka: string; adaylar: Aday[]; secili: Aday | null; onSelect: (a: Aday) => void; logo?: string | null; koyu?: boolean; resmiVarliklar?: { domain: string; durum: string }[]; onResmiSec?: (d: string) => void }) {
   const kap = useRef<HTMLDivElement>(null);
   const [boyut, setBoyut] = useState({ w: 900, h: 460 });
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -1081,6 +1120,27 @@ function MarkaRadyal({ marka, adaylar, secili, onSelect, logo, koyu = true }: { 
               background: vurgu ? (koyu ? "#0f1d31" : "#ffffff") : "transparent", border: `1px solid ${vurgu ? sv.renk : "transparent"}`, borderRadius: 6, padding: vurgu ? "2px 7px" : "0 2px",
               boxShadow: vurgu ? (koyu ? "0 2px 8px rgba(0,0,0,.5)" : "0 2px 10px rgba(30,50,80,.2)") : "none" }}>
               <Text style={{ fontSize: 10, color: vurgu ? txt : (koyu ? "#9db4cc" : "#425268"), fontWeight: vurgu ? 700 : 500, fontFamily: "'IBM Plex Mono',monospace" }}>{ad}</Text>
+            </div>
+          </div>
+        );
+      })}
+      {/* İÇ HALKA — resmî varlıklar (senin, korunan): sağlık renkli kalkan, merkeze en yakın */}
+      {resmiVarliklar.slice(0, 8).map((rv, ri) => {
+        const rN = Math.min(resmiVarliklar.length, 8);
+        const ang = -Math.PI / 2 + (ri / rN) * Math.PI * 2;
+        const irx = Math.max(64, Rx * 0.33), iry = Math.max(58, Ry * 0.33);
+        const x = cx + Math.cos(ang) * irx, y = cy + Math.sin(ang) * iry;
+        const c = rv.durum === "saglikli" ? "#31c8a0" : rv.durum === "sorunlu" ? "#ff4d5e" : "#f5a91b";
+        const kisa = rv.domain.replace(/\.toki\.gov\.tr$/i, "").replace(/\.gov\.tr$/i, "") || rv.domain;
+        const sag = Math.cos(ang) >= -0.02;
+        return (
+          <div key={"rv" + ri} onClick={() => onResmiSec?.(rv.domain)} title={`${rv.domain} · resmî varlık`}
+            style={{ position: "absolute", left: x, top: y, transform: "translate(-50%,-50%)", zIndex: 3, cursor: "pointer" }}>
+            <div style={{ width: 22, height: 22, borderRadius: "50%", background: koyu ? "#0b1524" : "#fff", border: `2px solid ${c}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 13, color: c }}>verified_user</span>
+            </div>
+            <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", ...(sag ? { left: 25 } : { right: 25 }), whiteSpace: "nowrap", pointerEvents: "none" }}>
+              <Text style={{ fontSize: 9.5, color: c, fontWeight: 600, fontFamily: "'IBM Plex Mono',monospace" }}>{rv.domain === "toki.gov.tr" || kisa === rv.domain ? "kök" : kisa}</Text>
             </div>
           </div>
         );
