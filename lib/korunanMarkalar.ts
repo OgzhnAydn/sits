@@ -154,6 +154,9 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "emlakyonetim", ad: "Emlak Yönetim", resmi: ["emlakyonetim.com.tr"] },
   { anahtar: "emlakkatilim", ad: "Emlak Katılım (Katılım Bankası)", resmi: ["emlakkatilim.com.tr"] },
   { anahtar: "sehircilik", ad: "Çevre, Şehircilik ve İklim Değişikliği Bakanlığı", resmi: ["csb.gov.tr"] },
+  // Gelir İdaresi Başkanlığı — anahtar "gib" DEĞİL (3 harf + "gibi" gürültüsü); ayırt edici
+  // glued/tireli kalıplar + vergi-iadesi tuzağı (GİB taklidi phishing'in ana yemi).
+  { anahtar: "geliridaresi", ad: "Gelir İdaresi Başkanlığı", resmi: ["gib.gov.tr"], kaliplari: ["gelir-idaresi", "gib-gov", "gibgov", "gib-vergi", "vergidairesi", "vergi-dairesi", "vergiiadesi", "vergi-iadesi"] },
   // ── Enerji ──
   // logo: favicon.ico BOŞ → Google favicon servisi küre döndürüyor; gerçek PNG favicon açıkça verilir.
   { anahtar: "enerjisa", ad: "Enerjisa", resmi: ["enerjisa.com.tr", "enerjisauretim.com.tr"], logo: "https://www.enerjisa.com.tr/assets/favicon/favicon_512x512.png" },
@@ -217,7 +220,7 @@ export const KAMU_KURUMLARI: KamuKurumu[] = [
   { ad: "Çalışma ve Sosyal Güvenlik Bakanlığı", kelimeler: ["çalışma ve sosyal güvenlik", "çalışma bakanlığı"], resmi: "csgb.gov.tr" },
   { ad: "e-Devlet Kapısı", kelimeler: ["e-devlet", "edevlet", "türkiye.gov.tr", "e-government"], resmi: "turkiye.gov.tr" },
   { ad: "SGK", kelimeler: ["sosyal güvenlik kurumu", "sgk", "sosyal guvenlik kurumu"], resmi: "sgk.gov.tr" },
-  { ad: "Gelir İdaresi Başkanlığı", kelimeler: ["gelir idaresi", "gib", "vergi dairesi"], resmi: "gib.gov.tr" },
+  { ad: "Gelir İdaresi Başkanlığı", kelimeler: ["gelir idaresi", "gelir idaresi başkanlığı", "gelir idaresi baskanligi", "vergi dairesi", "gib.gov.tr"], resmi: "gib.gov.tr" },
   { ad: "KOSGEB", kelimeler: ["kosgeb", "küçük ve orta ölçekli"], resmi: "kosgeb.gov.tr" },
   { ad: "İŞKUR", kelimeler: ["işkur", "türkiye iş kurumu", "iş kur"], resmi: "iskur.gov.tr" },
   { ad: "AFAD", kelimeler: ["afad", "afet ve acil durum"], resmi: "afad.gov.tr" },
