@@ -905,7 +905,7 @@ function ResmiVarliklar({ veri, yuk, onSec }: { veri: { varliklar: VarlikSaglik[
 function CanliKoruma({ veri, onSec }: { veri: { varliklar: VarlikSaglik[] } | null; onSec: (d: string) => void }) {
   const list = veri?.varliklar || [];
   if (!list.length) return null;
-  const ss = (d: string) => `https://s0.wp.com/mshots/v1/${encodeURIComponent("https://" + d)}?w=320`;
+  const ss = (d: string) => `https://image.thum.io/get/wait/6/width/400/https://${d}`;
   return (
     <div style={{ marginBottom: 12 }}>
       <Flex align="center" gap={6} style={{ marginBottom: 8 }}>
