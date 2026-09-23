@@ -920,14 +920,18 @@ function CanliKoruma({ veri, onSec }: { veri: { varliklar: VarlikSaglik[] } | nu
             <div key={v.domain} onClick={() => onSec(v.domain)} title={`${v.domain} · ${v.not}`}
               style={{ cursor: "pointer", border: `1px solid var(--c-17293c)`, borderRadius: 8, overflow: "hidden", background: "var(--c-0e1a2e)" }}>
               <div style={{ position: "relative", height: 66, background: "var(--c-0b1524)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span className="material-symbols-outlined" style={{ position: "absolute", fontSize: 22, color: "var(--c-2a4d68)" }}>public</span>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={ss(v.domain)} alt={v.domain} loading="lazy" style={{ position: "relative", width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }}
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
-                <span style={{ position: "absolute", top: 4, left: 4, display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(11,21,36,.85)", borderRadius: 5, padding: "2px 6px" }}>
-                  <span style={{ width: 6, height: 6, borderRadius: 3, background: c }} />
-                  <Text style={{ fontSize: 8, color: "#dbe7f3", fontWeight: 700, letterSpacing: ".03em" }}>CANLI KORUMA</Text>
-                </span>
+                <span className="material-symbols-outlined" style={{ position: "absolute", fontSize: 22, color: "var(--c-2a4d68)" }}>{v.ip ? "public" : "cloud_off"}</span>
+                {v.ip ? (<>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={ss(v.domain)} alt={v.domain} loading="lazy" style={{ position: "relative", width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                  <span style={{ position: "absolute", top: 4, left: 4, display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(11,21,36,.85)", borderRadius: 5, padding: "2px 6px" }}>
+                    <span style={{ width: 6, height: 6, borderRadius: 3, background: c }} />
+                    <Text style={{ fontSize: 8, color: "#dbe7f3", fontWeight: 700, letterSpacing: ".03em" }}>CANLI KORUMA</Text>
+                  </span>
+                </>) : (
+                  <Text style={{ position: "relative", fontSize: 9.5, color: "var(--c-8fa6bd)" }}>erişilemez</Text>
+                )}
               </div>
               <div style={{ padding: "4px 6px", display: "flex", alignItems: "center", gap: 4 }}>
                 <span style={{ width: 6, height: 6, borderRadius: 3, background: c, flexShrink: 0 }} />
