@@ -338,21 +338,28 @@ export async function kampanyaCozumle(seed: string): Promise<Kampanya> {
     })
   );
 
-  // 4) ÜYELİK + BAĞLI BİLEŞEN. "Aynı operasyon" = tohumla ALTYAPIYI paylaşan marka
-  // klonları: aynı IP (güçlü) ya da aynı ASN+marka (orta). Aynı markayı taşıyıp farklı
-  // altyapıdakiler AYRI kampanya olabilir → 'diger' olarak dürüstçe ayrılır.
+  // CDN/paylaşımlı altyapı ASN'leri — MİLYONLARCA site paylaşır → IP/ASN "aynı operasyon"
+  // KANITI DEĞİLDİR (paylaşımlı-altyapı FP'si). Bu altyapıda yalnız favicon-kiti (aynı klon)
+  // gerçek bağdır. Cloudflare, AWS, Google, Fastly, Akamai, Azure, DO, OVH, Hetzner, Namecheap…
+  const CDN_ASN = new Set(["as13335", "as16509", "as15169", "as54113", "as20940", "as8075", "as13238", "as14061", "as16276", "as24940", "as14618", "as396982", "as19551", "as209242", "as132892", "as22612", "as8100", "as40034", "as394695", "as63949", "as20473", "as51167"]);
+  const cdnMi = (asn?: string) => !!asn && CDN_ASN.has(asn.toLowerCase().replace(/\s.*/, ""));
+  const cdnAltyapi = cdnMi(seedAsn); // tohum CDN'de mi? → IP/ASN gruplaması güvenilmez
+
+  // 4) ÜYELİK + BAĞLI BİLEŞEN. "Aynı operasyon" = tohumla GERÇEK altyapı bağı olan marka
+  // klonları: aynı klon (favicon) HER ZAMAN; aynı ADANMIŞ IP/ASN yalnız CDN DEĞİLSE. CDN'de
+  // IP/ASN paylaşımlı → bağ sayılmaz, o domainler 'diger' (ayrı olabilir) olarak dürüstçe ayrılır.
   const uyeAdaylar = adaylar.filter((a) => a.markaAd || favEsit.has(a.domain));
   const uyeler: KampanyaDugum[] = [];
-  const diger: string[] = []; // aynı marka, farklı altyapı (ayrı operasyon olabilir)
+  const diger: string[] = []; // aynı marka ama gerçek altyapı bağı yok (ayrı operasyon olabilir)
   for (const a of uyeAdaylar) {
-    const ayniIpMi = seedIp && a.ip === seedIp;
-    const ayniAsnMi = seedAsn && a.asn === seedAsn;
+    const ayniIpMi = seedIp && a.ip === seedIp && !cdnAltyapi;   // CDN paylaşımlı IP → güvenilmez
+    const ayniAsnMi = seedAsn && a.asn === seedAsn && !cdnAltyapi; // CDN ASN → milyonlarca site, bağ değil
     let neden: string | null = null;
-    if (favEsit.has(a.domain)) neden = "aynı sunucu + aynı klon sayfa";
-    else if (ayniIpMi) neden = "aynı sunucu (IP) + marka adı";
+    if (favEsit.has(a.domain)) neden = "aynı klon sayfa (favicon) — gerçek bağ";
+    else if (ayniIpMi) neden = "aynı adanmış sunucu (IP) + marka adı";
     else if (ayniAsnMi && a.markaAd) neden = "aynı ağ (ASN) + marka adı";
     if (neden) uyeler.push({ domain: a.domain, ip: a.ip, asn: a.asn, ulke: a.ulke, ekran: a.ekran, canli: Boolean(a.ip), neden });
-    else if (a.markaAd) diger.push(a.domain); // marka klonu ama tohumun altyapısında değil
+    else if (a.markaAd) diger.push(a.domain); // marka adını taşıyor ama gerçek altyapı bağı yok
   }
   // Üyeler için RDAP tarihleri (zaman çizelgesi) — sınırlı.
   await Promise.all(

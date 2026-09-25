@@ -676,7 +676,7 @@ function PasifDnsBolum({ domain }: { domain: string }) {
 
 // OPERASYON İNCELEMESİ MODALI — bir sahteden yola çıkıp tüm çeteyi haritalar (/api/kampanya):
 // kardeş domainler + IP/ASN + dolandırıcının kanalları (Telegram) + istenen veriler.
-type KampanyaVeri = { seed: string; marka?: string; ozet: string; domainler: { domain: string; ip?: string; canli: boolean; zararli?: boolean; favEslesme?: boolean; neden: string }[]; ipler: string[]; asnler: string[]; telegramlar: string[]; iletisimKanallari: string[]; exfil: string[]; istenenAlanlar: string[]; ilkTarih?: string };
+type KampanyaVeri = { seed: string; marka?: string; ozet: string; domainler: { domain: string; ip?: string; canli: boolean; zararli?: boolean; favEslesme?: boolean; neden: string }[]; ipler: string[]; asnler: string[]; telegramlar: string[]; iletisimKanallari: string[]; exfil: string[]; istenenAlanlar: string[]; ilkTarih?: string; diger?: string[] };
 function InceleModal({ domain, rapor, canliV, open, onClose }: { domain: string; rapor: Rapor | null; canliV: { durum: string; kokNeden: string; redirectHedef?: string | null; redirectZinciri?: string[]; cloaking?: boolean; cloakingNot?: string } | null; open: boolean; onClose: () => void }) {
   const [veri, setVeri] = useState<KampanyaVeri | null>(null);
   const [yuk, setYuk] = useState(false);
@@ -751,6 +751,14 @@ function InceleModal({ domain, rapor, canliV, open, onClose }: { domain: string;
                   </Flex>
                 ))}
               </div>
+              {veri.diger && veri.diger.length > 0 && (
+                <div style={{ borderTop: "1px dashed var(--c-17293c)", paddingTop: 8 }}>
+                  <Text style={{ fontSize: 10.5, color: "var(--c-8fa6bd)" }}><Text strong style={{ color: "var(--c-cfe0ef)" }}>Aynı markayı taşıyan {veri.diger.length} domain daha</Text> — ama bu operasyonla <Text strong>altyapı bağı YOK</Text> (CDN paylaşımı ≠ bağ). Ayrı çeteler olabilir; kanıt olmadan aynı sayılmaz.</Text>
+                  <Flex wrap gap={4} style={{ marginTop: 5 }}>
+                    {veri.diger.slice(0, 20).map((d, i) => <Text key={i} style={{ fontSize: 10, color: "var(--c-8fb0d4)", fontFamily: "'IBM Plex Mono',monospace", background: "var(--c-0e2036)", borderRadius: 4, padding: "1px 6px" }}>{d}</Text>)}
+                  </Flex>
+                </div>
+              )}
               {veri.ilkTarih && <Text style={{ fontSize: 10, color: "var(--c-5c748b)" }}>Operasyonun ilk izi: {veri.ilkTarih}</Text>}
             </Flex>
           )}
