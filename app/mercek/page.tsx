@@ -569,7 +569,7 @@ function nedenTehdit(r: Rapor | null) {
 // Taze canlılık damgası — domainin ŞU ANKİ durumu (/api/canlilik). Kesinlik kapısı motorda:
 // "KALDIRILMIŞ" ancak NXDOMAIN×2 (iki çözücü) ile; emin değilse "DURUM DOĞRULANAMADI" der,
 // asla canlı bir siteyi yanlışlıkla "ölü" damgalamaz. Skor=ciddiyet, bu=güncel durum (ayrı).
-function CanlilikRozet({ v, yuk }: { v: { durum: string; kokNeden: string; redirectHedef?: string | null } | null; yuk: boolean }) {
+function CanlilikRozet({ v, yuk }: { v: { durum: string; kokNeden: string; redirectHedef?: string | null; redirectZinciri?: string[]; cloaking?: boolean; cloakingNot?: string } | null; yuk: boolean }) {
   const M: Record<string, { ad: string; renk: string }> = {
     live: { ad: "CANLI", renk: "#ff5468" },
     redirect: { ad: "YÖNLENDİRİYOR", renk: "#e5772f" },
@@ -588,20 +588,32 @@ function CanlilikRozet({ v, yuk }: { v: { durum: string; kokNeden: string; redir
         <Text strong style={{ fontSize: 11, color: m.renk, letterSpacing: 0.5 }}>ŞU AN: {m.ad}</Text>
       </Flex>
       {v.kokNeden && <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)", display: "block", marginTop: 3, lineHeight: 1.4 }}>{v.kokNeden}</Text>}
-      {v.redirectHedef && (() => {
-        const host = (() => { try { return new URL(v.redirectHedef!).hostname.replace(/^www\./, ""); } catch { return ""; } })();
+      {(v.redirectHedef || (v.redirectZinciri && v.redirectZinciri.length > 0)) && (() => {
+        const son = (v.redirectZinciri && v.redirectZinciri.at(-1)) || v.redirectHedef || "";
+        const host = (() => { try { return new URL(son).hostname.replace(/^www\./, ""); } catch { return ""; } })();
         const park = /forsale|godaddy|sedo|dan\.com|afternic|parkingcrew|lander|bodis|hugedomains/i.test(host);
-        const kanal = /t\.me|telegram|wa\.me|whatsapp/i.test(v.redirectHedef!);
+        const kanal = /t\.me|telegram|wa\.me|whatsapp/i.test(son);
         const et = park ? "park/satılık" : kanal ? "⚠ dolandırıcılık kanalı" : "çapraz-domain";
+        const kisalt = (u: string) => u.replace(/^https?:\/\//, "").replace(/\/$/, "").slice(0, 46);
+        const zincir = v.redirectZinciri && v.redirectZinciri.length ? v.redirectZinciri : (son ? [son] : []);
         return (
           <Flex align="flex-start" gap={5} style={{ marginTop: 5 }}>
             <span className="material-symbols-outlined" style={{ fontSize: 14, color: m.renk, flexShrink: 0 }}>subdirectory_arrow_right</span>
-            <Text style={{ fontSize: 10, color: "var(--c-8fb0d4)", fontFamily: "'IBM Plex Mono',monospace", wordBreak: "break-all", lineHeight: 1.35 }}>
-              <Text style={{ color: "var(--c-8fa6bd)", fontWeight: 600 }}>Yönlendirme ({et}) → </Text>{v.redirectHedef!.replace(/^https?:\/\//, "").slice(0, 100)}
-            </Text>
+            <div style={{ minWidth: 0 }}>
+              <Text style={{ fontSize: 9.5, color: "var(--c-8fa6bd)", fontWeight: 600 }}>Yönlendirme ({et}){zincir.length > 1 ? ` · ${zincir.length} adım` : ""}</Text>
+              <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, color: "var(--c-8fb0d4)", lineHeight: 1.5, wordBreak: "break-all" }}>
+                {zincir.map((u, i) => <div key={i}>{i > 0 && <span style={{ color: "var(--c-5c748b)" }}>↳ </span>}{kisalt(u)}</div>)}
+              </div>
+            </div>
           </Flex>
         );
       })()}
+      {v.cloaking && (
+        <Flex align="flex-start" gap={5} style={{ marginTop: 5, background: "rgba(255,84,104,.12)", border: "1px solid rgba(255,84,104,.35)", borderRadius: 5, padding: "4px 7px" }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 14, color: "#ff5468", flexShrink: 0 }}>visibility_off</span>
+          <Text style={{ fontSize: 9.5, color: "#ff9aa4", lineHeight: 1.4 }}>{v.cloakingNot || "Gizleme (cloaking) tespit edildi — kim istediğine göre farklı hedef."}</Text>
+        </Flex>
+      )}
     </div>
   );
 }
@@ -657,7 +669,7 @@ function PasifDnsBolum({ domain }: { domain: string }) {
 function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }: { aday: Aday | null; rapor: Rapor | null; yukleniyor: boolean; markaAdi: string; resmiDom?: string; onYenile?: () => void }) {
   // Taze canlılık ŞU AN durumu — TEK sefer çek; hem "ŞU AN" rozetine hem Saldırı Gelişimi
   // uzlaştırmasına verilir (birikmiş kanıt vs güncel gerçeklik çelişkisini önler).
-  const [canliV, setCanliV] = useState<{ durum: string; kokNeden: string; redirectHedef?: string | null } | null>(null);
+  const [canliV, setCanliV] = useState<{ durum: string; kokNeden: string; redirectHedef?: string | null; redirectZinciri?: string[]; cloaking?: boolean; cloakingNot?: string } | null>(null);
   const [canliYuk, setCanliYuk] = useState(false);
   const domainZ = aday?.domain;
   useEffect(() => {

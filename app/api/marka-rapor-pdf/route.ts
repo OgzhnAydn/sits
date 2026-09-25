@@ -16,7 +16,7 @@ import { reklamTara } from "@/lib/reklamTarama";
 async function ipApi(ip: string): Promise<{ as?: string; country?: string; org?: string; isp?: string; hosting?: boolean }> {
   try { const r = await fetch(`http://ip-api.com/json/${ip}?fields=country,as,org,isp,hosting`, { signal: AbortSignal.timeout(5000) }); return await r.json(); } catch { return {}; }
 }
-async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; canliNeden?: string; sslBitis?: string | null; sertBaslangic?: string | null; usomda?: boolean | null; engelli?: boolean | null; sslGuvenli?: boolean | null }> {
+async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; canliNeden?: string; sslBitis?: string | null; sertBaslangic?: string | null; usomda?: boolean | null; engelli?: boolean | null; sslGuvenli?: boolean | null; redirectHedef?: string | null; redirectZinciri?: string[]; cloaking?: boolean }> {
   try {
     // canlılık + USOM PARALEL — her adrese "canlı mı + USOM'da mı" birlikte bakılır (bildir kararı için).
     const [c, usomda] = await Promise.all([canlilikProbe(domain), usomBiliniyor(domain).catch(() => null)]);
@@ -31,6 +31,7 @@ async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string;
       ulke: g.country || "",
       altyapi: g.hosting ? "CDN/proxy" : (org ? "Veri merkezi" : ""),
       canliDurum: c.durum, canliNeden: c.kokNeden, sslBitis: c.ssl.bitis, sertBaslangic: c.ssl.baslangic ?? null, usomda, engelli, sslGuvenli: c.ssl.guvenilir,
+      redirectHedef: c.redirectHedef, redirectZinciri: c.redirectZinciri, cloaking: c.cloaking,
     };
   } catch { return {}; }
 }

@@ -22,7 +22,7 @@ Font.registerHyphenationCallback((w) => (w.length > 16 && /[.-]/.test(w) ? w.spl
 export type RaporTespit = { domain: string; skor: number; durum?: string; seviye?: string; zaman: number; sinyaller?: string[]; screenshot?: string | null; usomda?: boolean | null; engelli?: boolean | null; etbis?: boolean | null; alanlar?: { ad: string; deger: string }[];
   // Hafif teknik envanter (canlilikProbe + ip-api) — tam liste tablosu için
   ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; canliNeden?: string; sslBitis?: string | null; sslGuvenli?: boolean | null; kaynak?: string; sertBaslangic?: string | null;
-  aiTur?: string; aiKimlikAvi?: boolean; aiNot?: string };
+  aiTur?: string; aiKimlikAvi?: boolean; aiNot?: string; redirectHedef?: string | null; redirectZinciri?: string[]; cloaking?: boolean };
 export type MarkaRaporVeri = {
   markaAd: string;
   markaResmi?: string;         // resmî unvan/domain (kapak alt satırı)
@@ -365,6 +365,15 @@ function Kunye({ t }: { t: RaporTespit }) {
       <View style={{ marginTop: 3, borderTopColor: CIZGI, borderTopWidth: 1, paddingTop: 3 }}>
         <KunyeSatir etiket="Yakalama" deger={yakalamaBilgi(t)} renk={t.kaynak === "certstream" ? TEAL : "#33405c"} />
         {t.aiTur ? <KunyeSatir etiket="AI içerik" deger={`${t.aiTur}${t.aiKimlikAvi ? " · KİMLİK AVI FORMU DOĞRULANDI" : ""} (yapay zekâ görsel analizi)`} renk={t.aiKimlikAvi ? KIRMIZI : "#33405c"} /> : null}
+        {(() => {
+          const son = (t.redirectZinciri && t.redirectZinciri[t.redirectZinciri.length - 1]) || t.redirectHedef;
+          if (!son) return null;
+          const kisa = (u: string) => u.replace(/^https?:\/\//, "").replace(/\/$/, "").slice(0, 60);
+          const n = t.redirectZinciri && t.redirectZinciri.length > 1 ? ` (${t.redirectZinciri.length} adım)` : "";
+          const park = /forsale|godaddy|sedo|dan\.com|afternic|parkingcrew|lander|bodis|hugedomains/i.test(son);
+          return <KunyeSatir etiket="Yönlendirme" deger={`${kisa(son)}${park ? " · park/satılık" : ""}${n}`} renk={park ? "#33405c" : "#b25e09"} />;
+        })()}
+        {t.cloaking ? <KunyeSatir etiket="Gizleme" deger="Cloaking — bota ve tarayıcıya FARKLI hedef gösteriyor" renk={KIRMIZI} /> : null}
       </View>
       {t.canliNeden ? <Text style={{ fontSize: 8, color: "#4a5568", marginTop: 4, lineHeight: 1.4 }}><Text style={{ fontWeight: "bold", color: GRI }}>Durum açıklaması: </Text>{t.canliNeden}</Text> : null}
     </View>

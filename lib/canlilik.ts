@@ -19,7 +19,10 @@ export type CanlilikSonuc = {
   dns: { cozuldu: boolean; ip: string | null; cname: string | null };
   http: { status: number | null; sunucu: string | null; hata: string | null };
   ssl: { gecerli: boolean | null; guvenilir: boolean | null; veren: string | null; bitis: string | null; baslangic?: string | null };
-  redirectHedef: string | null;   // yönlendirme varsa nereye
+  redirectHedef: string | null;   // yönlendirme varsa İLK çapraz-host hedef (sınıflandırma)
+  redirectZinciri?: string[];     // TAM zincir: A → B → C → son (her hop)
+  cloaking?: boolean;             // bot vs tarayıcı parmak-izinde FARKLI hedef → gizleme
+  cloakingNot?: string;
   kokNeden: string;               // insan-okunur açıklama (kök neden analizi)
   zaman: number;
 };
@@ -149,6 +152,24 @@ export async function canlilikProbe(domain: string): Promise<CanlilikSonuc> {
   sonuc.ssl = ssl;
   sonuc.http = { status: httpRes.status, sunucu: httpRes.sunucu, hata: httpRes.hata };
   sonuc.redirectHedef = httpRes.redirectHedef;
+  if (httpRes.zincir.length) sonuc.redirectZinciri = httpRes.zincir;
+
+  // CLOAKING (parmak-izi karşılaştırması): tarayıcı ile BOT parmak-izinde FARKLI hedefe
+  // gidiyorsa → site kim istediğine göre farklı davranıyor (gizleme). Yalnız yönlendirme
+  // varken bak (maliyet). NOT: bu UA/dil-tabanlı cloaking'i yakalar; IP-COĞRAFİ cloaking
+  // (bota park, Türk IP'ye tuzak) için TR vantaj noktası gerekir.
+  if (httpRes.redirectHedef || httpRes.sonHedef) {
+    try {
+      const botRes = await httpProbe(d, { "User-Agent": "curl/8.4.0", Accept: "*/*" });
+      const h = (u: string | null) => { try { return u ? new URL(u).hostname.replace(/^www\./, "") : ""; } catch { return ""; } };
+      const tara = h(httpRes.sonHedef) || h(httpRes.redirectHedef);
+      const bot = h(botRes.sonHedef) || h(botRes.redirectHedef);
+      if (tara && bot && tara !== bot) {
+        sonuc.cloaking = true;
+        sonuc.cloakingNot = `Gizleme (cloaking): tarayıcıya "${tara}", bota "${bot}" gösteriyor — kim istediğine göre farklı hedef.`;
+      }
+    } catch { /* cloaking sondası başarısız → atla */ }
+  }
 
   // 3) SINIFLANDIRMA + KÖK NEDEN
   // KESİNLİK: Buraya geldiysek DNS ÇÖZÜLDÜ → alan adı VAR, "kaldırılmış" DİYEMEYİZ. HTTP sondası
@@ -234,53 +255,57 @@ export async function canlilikProbe(domain: string): Promise<CanlilikSonuc> {
   return sonuc;
 }
 
-// HTTP sondası: redirect'i MANUEL izle (hedefi yakala), park/kanal içeriğini oku.
-async function httpProbe(domain: string): Promise<{ status: number | null; sunucu: string | null; hata: string | null; redirectHedef: string | null; park: boolean }> {
+// HTTP sondası: redirect'i MANUEL izle (TAM zinciri yakala), park/kanal içeriğini oku.
+// ua parametresi → cloaking için farklı parmak-izleriyle (tarayıcı vs bot) çağrılabilir.
+async function httpProbe(domain: string, ua: Record<string, string> = TARAYICI): Promise<{ status: number | null; sunucu: string | null; hata: string | null; redirectHedef: string | null; park: boolean; zincir: string[]; sonHedef: string | null }> {
   let current = `https://${domain}/`;
-  for (let i = 0; i < 4; i++) {
+  const zincir: string[] = [];
+  let redirectHedef: string | null = null; // İLK çapraz-host hedef (mevcut sınıflandırma korunur)
+  const kok = domain.replace(/^www\./, "");
+  const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
+  for (let i = 0; i < 6; i++) {
     let r: Response;
     try {
-      r = await fetch(current, { redirect: "manual", headers: TARAYICI, signal: AbortSignal.timeout(9000) });
+      r = await fetch(current, { redirect: "manual", headers: ua, signal: AbortSignal.timeout(9000) });
     } catch (e) {
       const msg = (e as Error).message.toLowerCase();
       const hata = /econnrefused|refused/.test(msg) ? "refused" : /certificate|ssl|tls|handshake/.test(msg) ? "ssl" : /timeout|aborted/.test(msg) ? "timeout" : "hata";
-      // İlk denemede https başarısızsa http'ye düş (bir kez).
       if (i === 0 && current.startsWith("https://")) { current = `http://${domain}/`; continue; }
-      return { status: null, sunucu: null, hata, redirectHedef: null, park: false };
+      return { status: null, sunucu: null, hata, redirectHedef, park: false, zincir, sonHedef: zincir.at(-1) || null };
     }
     const sunucu = r.headers.get("server");
     if (r.status >= 300 && r.status < 400) {
       const loc = r.headers.get("location");
       if (loc) {
         const hedef = new URL(loc, current).toString();
-        // Aynı hosta (http→https, /→/tr) yönlendirme "cloaking" değil — izlemeye devam et.
-        try {
-          if (new URL(hedef).hostname.replace(/^www\./, "") === domain.replace(/^www\./, "")) { current = hedef; continue; }
-        } catch { /* */ }
-        return { status: r.status, sunucu, hata: null, redirectHedef: hedef, park: false };
+        zincir.push(hedef);
+        if (!redirectHedef && host(hedef) !== kok) redirectHedef = hedef;
+        current = hedef; continue; // ÇAPRAZ dahil zincirin sonuna kadar izle
       }
     }
-    // 200/4xx/5xx — gövdeyi (park/kanal için) oku.
     let park = false;
     if (r.status === 200) {
       try {
         const html = (await r.text()).slice(0, 8000);
         park = PARK_IMZA.test(html);
-        // İstemci-taraflı yönlendirme: meta-refresh VEYA sayfa başındaki JS location.
-        // (GoDaddy satılık sayfası forsale.godaddy.com'a JS ile atar; yalnız meta bakmak yetmez.)
+        // İstemci-taraflı yönlendirme: meta-refresh VEYA JS location.
         const meta = html.match(/<meta[^>]+http-equiv=["']?refresh["']?[^>]+url=([^"'>\s]+)/i);
         const js = html.match(/(?:window\.|top\.|self\.|document\.)?location(?:\.href)?\s*=\s*["']([^"']+)["']/i)
           || html.match(/location\.(?:replace|assign)\s*\(\s*["']([^"']+)["']/i);
         const ham = (meta && meta[1]) || (js && js[1]);
         if (ham) {
           const hedef = new URL(ham.replace(/^['"]|['"]$/g, "").trim(), current).toString();
-          if (/^https?:/i.test(hedef) && new URL(hedef).hostname.replace(/^www\./, "") !== domain.replace(/^www\./, "")) {
-            return { status: r.status, sunucu, hata: null, redirectHedef: hedef, park };
+          // AYNI-host istemci yönlendirmesini de izle (gov-tr.com → /lander → forsale). Döngü
+          // koruması: kendine/görülene gitme, hop bütçesi 6.
+          if (/^https?:/i.test(hedef) && hedef !== current && !zincir.includes(hedef)) {
+            zincir.push(hedef);
+            if (!redirectHedef && host(hedef) !== kok) redirectHedef = hedef;
+            current = hedef; continue;
           }
         }
       } catch { /* gövde okunamadı */ }
     }
-    return { status: r.status, sunucu, hata: null, redirectHedef: null, park };
+    return { status: r.status, sunucu, hata: null, redirectHedef, park, zincir, sonHedef: zincir.at(-1) || null };
   }
-  return { status: null, sunucu: null, hata: "timeout", redirectHedef: null, park: false };
+  return { status: null, sunucu: null, hata: "timeout", redirectHedef, park: false, zincir, sonHedef: zincir.at(-1) || null };
 }
