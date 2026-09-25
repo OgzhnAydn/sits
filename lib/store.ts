@@ -277,6 +277,10 @@ export type MarkaAday = {
   aiNot?: string;          // 1 cümle özet
   analizZaman?: number;    // en son derin analiz zamanı (ms)
   // ── YAŞAM DÖNGÜSÜ (canlılık `durum`'dan AYRI; lib/yasamDongusu.ts durum makinesi) ──
+  manuel?: boolean;             // operatör "Şüpheli Ekle" ile ekledi / içerik-taklidi doğrulandı
+                                // → rastgele isimli (edevlet içermeyen) sahte de markaya bağlanır,
+                                //   isim-filtresi (gercekTaklit) onu ELEMEZ.
+  iceriktaklit?: string;        // içerik-tabanlı taklit kanıtı (kurum adı / favicon eşleşmesi)
   yasamDurumu?: YasamDurumu;    // ADAY | DOGRULANDI | IZLEMEDE | PASIF | ELENDI
   yasamGecmisi?: YasamOlay[];   // her geçiş loglanır (denetim izi)
   dogrulanmaZamani?: number;    // İLK DOGRULANDI anı (ms) — geçmiş ciddiyet damgası (retirement-ts analogu)
@@ -337,7 +341,7 @@ export async function markaTespitOzeti(marka: string): Promise<MarkaOzet> {
   try {
     // orderBy YOK → composite index gerekmesin; sıralamayı JS'te yap.
     const snap = await getDocs(query(collection(db, "marka_adaylari"), where("marka", "==", marka), fbLimit(500)));
-    const hepsi = snap.docs.map((d) => d.data() as MarkaAday).filter((a) => gercekTaklit(a.domain, a.marka)).sort((a, b) => (b.zaman || 0) - (a.zaman || 0));
+    const hepsi = snap.docs.map((d) => d.data() as MarkaAday).filter((a) => a.manuel || gercekTaklit(a.domain, a.marka)).sort((a, b) => (b.zaman || 0) - (a.zaman || 0));
     // PARK KÜMESİ tespiti: tek TLD son-ekinde yoğunlaşan toplu-kayıt (tek operasyon) →
     // 56 park domaini ayrı ayrı "tehdit" saymak sayıyı şişirir; kümeyi TEK operasyon gibi ayır.
     const tldSay: Record<string, number> = {};
@@ -376,7 +380,7 @@ export async function markaErkenlik(marka: string): Promise<MarkaErkenlik> {
   try {
     const snap = await getDocs(query(collection(db, "marka_adaylari"), where("marka", "==", marka), fbLimit(300)));
     const adaylar = snap.docs.map((d) => d.data() as MarkaAday)
-      .filter((a) => gercekTaklit(a.domain, a.marka))
+      .filter((a) => a.manuel || gercekTaklit(a.domain, a.marka))
       .sort((a, b) => (b.zaman || 0) - (a.zaman || 0))
       .slice(0, 25); // USOM sorgusu maliyetli → en yeni 25 ile sınırla
     let bizOnce = 0, usomdaYok = 0, usomOnce = 0;

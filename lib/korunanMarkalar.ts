@@ -237,6 +237,20 @@ export const KAMU_KURUMLARI: KamuKurumu[] = [
   { ad: "Millî Savunma Bakanlığı", kelimeler: ["millî savunma bakanlığı", "milli savunma bakanligi", "msb.gov.tr", "genelkurmay"], resmi: "msb.gov.tr" },
 ];
 
+// STATİK BİLİNEN SAHTELER — operatörün DOĞRULADIĞI, İSMİ markayı taşımayan içerik-kopyası
+// sahteler (tcrtuk.com → e-Devlet içeriği). manuel:true → isim-filtresini (gercekTaklit) ATLAR,
+// markanın altında grafikte/panelde görünür. Yalnız doğrulanmışı ekle (uydurma yok).
+export type BilinenSahte = { domain: string; marka: string; markaAdi: string; skor: number; seviye: string; sinyaller: string[]; kaynak: string; durum?: string; zaman: number; manuel: true; iceriktaklit?: string; aiKimlikAvi?: boolean };
+export const BILINEN_SAHTELER: BilinenSahte[] = [
+  { domain: "tcrtuk.com", marka: "edevlet", markaAdi: "e-Devlet", skor: 90, seviye: "Yüksek",
+    sinyaller: ["İçerik e-Devlet / Hazine ve Maliye Bakanlığı sayfasını KOPYALIYOR (türkiye.gov.tr, 'giriş yap', form).", "Rastgele domain — isim taklidi değil, İÇERİK taklidi (bu yüzden isimle yakalanmaz).", "IP 188.114.96.7 (Cloudflare) — başka TR sahteleriyle aynı altyapı."],
+    kaynak: "ihbar", durum: "canli", zaman: Date.parse("2026-09-25T00:00:00Z"), manuel: true, iceriktaklit: "e-Devlet / Hazine ve Maliye içerik kopyası", aiKimlikAvi: true },
+];
+export function bilinenSahteler(marka: string): BilinenSahte[] {
+  const k = String(marka || "").toLowerCase();
+  return BILINEN_SAHTELER.filter((x) => x.marka === k);
+}
+
 // Kısa anahtarlar (ör. "ern", 3 harf) anahtar/substring bazlı eşleşmede gürültü yapar —
 // "modern", "intern" gibi domainleri yanlışlıkla "taklit" sanır. Bu yüzden anahtar-bazlı
 // işler (global avcı, urlscan taraması, typosquat, kampanya eşleştirmesi) yalnızca

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { markaAdaylariGetir, markaAdaylariMarka } from "@/lib/store";
-import { gercekTaklit } from "@/lib/korunanMarkalar";
+import { markaAdaylariGetir, markaAdaylariMarka, type MarkaAday } from "@/lib/store";
+import { gercekTaklit, bilinenSahteler } from "@/lib/korunanMarkalar";
 
 export const runtime = "nodejs";
 
@@ -13,7 +13,11 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const marka = (new URL(req.url).searchParams.get("marka") || "").trim().toLowerCase();
   const ham = marka ? await markaAdaylariMarka(marka, 300) : await markaAdaylariGetir(200);
-  const gecerli = ham.filter((a) => gercekTaklit(a.domain, a.marka));
+  // STATİK bilinen sahteler (operatör-doğrulanmış içerik-kopyaları) — DB'de olmasa da göster.
+  const statik = (marka ? bilinenSahteler(marka) : []) as unknown as MarkaAday[];
+  const varOlan = new Set(ham.map((a) => a.domain));
+  const birlesik = [...statik.filter((s) => !varOlan.has(s.domain)), ...ham];
+  const gecerli = birlesik.filter((a) => a.manuel || gercekTaklit(a.domain, a.marka));
   const adaylar = marka ? gecerli.slice(0, 300) : gecerli.slice(0, 80);
   // ?incele=1 → elenenleri de göster (süzgeç kalitesini görmek için)
   if (new URL(req.url).searchParams.get("incele") === "1") {
