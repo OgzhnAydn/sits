@@ -1232,15 +1232,16 @@ function MarkaRadyal({ marka, adaylar, secili, onSelect, logo, koyu = true, resm
         const isSel = !kume && !!secili && aday!.domain === secili.domain;
         const vurgu = isSel || hoverIdx === ki;
         const sag = Math.cos(p.ang) >= -0.02;
-        const cap = 30;
+        // SEÇİLİ = üzerinde çalışılan → daire BÜYÜR (isSel en büyük, hover orta, diğer normal).
+        const cap = isSel ? 48 : (hoverIdx === ki ? 38 : 30);
         return (
           <div key={ki} onClick={() => { if (kume) onSelect(kume.uyeler[0]); else onSelect(aday!); }}
             onMouseEnter={() => setHoverIdx(ki)} onMouseLeave={() => setHoverIdx((v) => v === ki ? null : v)} title={tam}
             style={{ position: "absolute", left: p.x, top: p.y, transform: "translate(-50%,-50%)", zIndex: vurgu ? 6 : 1, cursor: "pointer" }}>
-            <div style={{ width: cap, height: cap, borderRadius: "50%", background: sv.renk, border: `2px solid ${koyu ? "#0b1524" : "#fff"}`,
-              boxShadow: vurgu ? `0 0 0 4px ${sv.renk}55` : (koyu ? "0 1px 3px rgba(0,0,0,.5)" : "0 1px 4px rgba(30,50,80,.25)"),
-              display: "flex", alignItems: "center", justifyContent: "center", transition: "box-shadow .12s" }}>
-              <Text style={{ fontSize: 10, fontWeight: 700, color: "#fff", fontFamily: "'IBM Plex Mono',monospace" }}>{skor}</Text>
+            <div style={{ width: cap, height: cap, borderRadius: "50%", background: sv.renk, border: `${isSel ? 3 : 2}px solid ${koyu ? "#0b1524" : "#fff"}`,
+              boxShadow: isSel ? `0 0 0 5px ${sv.renk}66, 0 2px 8px rgba(0,0,0,.4)` : (hoverIdx === ki ? `0 0 0 4px ${sv.renk}55` : (koyu ? "0 1px 3px rgba(0,0,0,.5)" : "0 1px 4px rgba(30,50,80,.25)")),
+              display: "flex", alignItems: "center", justifyContent: "center", transition: "width .15s ease, height .15s ease, box-shadow .12s" }}>
+              <Text style={{ fontSize: isSel ? 14 : 10, fontWeight: 700, color: "#fff", fontFamily: "'IBM Plex Mono',monospace" }}>{skor}</Text>
             </div>
             {/* SABİT etiket — radyal dışa yaslı; hover/seçilide kutu + öne çıkar, aksi halde düz yazı */}
             <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", ...(sag ? { left: cap + 4 } : { right: cap + 4 }),
