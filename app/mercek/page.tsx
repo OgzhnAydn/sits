@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   ConfigProvider, theme, Row, Col, Card, Statistic, Progress, Table, Tag, Segmented,
-  Button, Descriptions, Avatar, Flex, Badge, Empty, Spin, Typography, Space, Timeline, Alert, Select, Dropdown,
+  Button, Descriptions, Avatar, Flex, Badge, Empty, Spin, Typography, Space, Timeline, Alert, Select, Dropdown, Modal,
 } from "antd";
 import {
   EyeOutlined, SafetyCertificateOutlined, SearchOutlined, ClusterOutlined, ThunderboltOutlined,
@@ -674,12 +674,82 @@ function PasifDnsBolum({ domain }: { domain: string }) {
   );
 }
 
+// OPERASYON İNCELEMESİ MODALI — bir sahteden yola çıkıp tüm çeteyi haritalar (/api/kampanya):
+// kardeş domainler + IP/ASN + dolandırıcının kanalları (Telegram) + istenen veriler.
+type KampanyaVeri = { seed: string; marka?: string; ozet: string; domainler: { domain: string; ip?: string; canli: boolean; zararli?: boolean; favEslesme?: boolean; neden: string }[]; ipler: string[]; asnler: string[]; telegramlar: string[]; iletisimKanallari: string[]; exfil: string[]; istenenAlanlar: string[]; ilkTarih?: string };
+function KampanyaModal({ domain, open, onClose }: { domain: string; open: boolean; onClose: () => void }) {
+  const [veri, setVeri] = useState<KampanyaVeri | null>(null);
+  const [yuk, setYuk] = useState(false);
+  const [hata, setHata] = useState("");
+  useEffect(() => {
+    if (!open) { setVeri(null); setHata(""); return; }
+    let iptal = false; setYuk(true); setHata("");
+    fetch("/api/kampanya", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ giris: domain }) })
+      .then((r) => r.json()).then((j) => { if (iptal) return; if (j.hata) setHata(j.hata); else setVeri(j); })
+      .catch(() => { if (!iptal) setHata("Çözümleme başarısız — tekrar dene."); }).finally(() => { if (!iptal) setYuk(false); });
+    return () => { iptal = true; };
+  }, [open, domain]);
+  const kanallar = veri ? [...new Set([...(veri.iletisimKanallari || []), ...(veri.telegramlar || [])])] : [];
+  const Metrik = ({ n, t }: { n: number; t: string }) => (
+    <div style={{ background: "#0f1d31", borderRadius: 8, padding: "8px 6px", textAlign: "center" }}>
+      <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 18, fontWeight: 700, color: "#dbe7f3" }}>{n}</div>
+      <div style={{ fontSize: 10, color: "#8fa6bd" }}>{t}</div>
+    </div>
+  );
+  return (
+    <Modal open={open} onCancel={onClose} footer={null} width={660} destroyOnClose
+      title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><span className="material-symbols-outlined" style={{ fontSize: 18, color: "#4a90d9" }}>travel_explore</span>Operasyon İncelemesi · <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13 }}>{domain}</span></span>}>
+      {yuk && <Flex align="center" justify="center" gap={10} style={{ padding: "44px 0" }}><Spin /><Text style={{ color: "#8fa6bd" }}>Operasyon haritalanıyor — kardeş domainler, IP, kanallar…</Text></Flex>}
+      {hata && !yuk && <Text style={{ color: "#8fa6bd" }}>{hata}</Text>}
+      {veri && !yuk && (
+        <Flex vertical gap={14} style={{ paddingTop: 4 }}>
+          <Text style={{ fontSize: 12.5, color: "#c9d8e8", lineHeight: 1.5 }}>{veri.ozet}</Text>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+            <Metrik n={veri.domainler.length} t="ilişkili domain" />
+            <Metrik n={veri.ipler.length} t="IP" />
+            <Metrik n={veri.asnler.length} t="ASN" />
+            <Metrik n={kanallar.length} t="çete kanalı" />
+          </div>
+          {kanallar.length > 0 && (
+            <div style={{ background: "#2a0f12", border: "1px solid #7a1f28", borderRadius: 8, padding: "8px 11px" }}>
+              <Text strong style={{ fontSize: 11, color: "#ff9aa4", letterSpacing: ".04em" }}>⚠ ÇETENİN KANALLARI (veri buraya gidiyor)</Text>
+              <Flex vertical gap={2} style={{ marginTop: 5 }}>
+                {kanallar.slice(0, 8).map((k, i) => <Text key={i} style={{ fontSize: 11, color: "#ffb3ba", fontFamily: "'IBM Plex Mono',monospace", wordBreak: "break-all" }}>· {k}</Text>)}
+              </Flex>
+            </div>
+          )}
+          {veri.istenenAlanlar?.length > 0 && (
+            <Text style={{ fontSize: 11.5, color: "#c9d8e8" }}><Text strong style={{ color: "#dbe7f3" }}>İstenen veriler: </Text>{veri.istenenAlanlar.join(", ")}</Text>
+          )}
+          <div>
+            <Text strong style={{ fontSize: 11, color: "#8fa6bd", letterSpacing: ".05em" }}>İLİŞKİLİ DOMAINLER ({veri.domainler.length})</Text>
+            <div style={{ marginTop: 6, maxHeight: 260, overflow: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+              {veri.domainler.map((d, i) => (
+                <Flex key={i} align="center" gap={8} style={{ padding: "5px 8px", borderRadius: 6, background: "#0e1a2e", border: "1px solid #17293c" }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 4, background: d.zararli ? "#ff4d5e" : d.canli ? "#f5921b" : "#5c748b", flexShrink: 0 }} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <Text style={{ display: "block", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, color: "#dbe7f3", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.domain}</Text>
+                    <Text style={{ fontSize: 9.5, color: "#8fa6bd" }}>{d.favEslesme ? "aynı klon kit · " : ""}{d.neden}</Text>
+                  </div>
+                  {d.ip && <Text style={{ fontSize: 10, color: "#8fb0d4", fontFamily: "'IBM Plex Mono',monospace", flexShrink: 0 }}>{d.ip}</Text>}
+                </Flex>
+              ))}
+            </div>
+          </div>
+          {veri.ilkTarih && <Text style={{ fontSize: 10, color: "#5c748b" }}>Operasyonun ilk izi: {veri.ilkTarih}</Text>}
+        </Flex>
+      )}
+    </Modal>
+  );
+}
+
 function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }: { aday: Aday | null; rapor: Rapor | null; yukleniyor: boolean; markaAdi: string; resmiDom?: string; onYenile?: () => void }) {
   // Taze canlılık ŞU AN durumu — TEK sefer çek; hem "ŞU AN" rozetine hem Saldırı Gelişimi
   // uzlaştırmasına verilir (birikmiş kanıt vs güncel gerçeklik çelişkisini önler).
   const [canliV, setCanliV] = useState<{ durum: string; kokNeden: string; redirectHedef?: string | null; redirectZinciri?: string[]; cloaking?: boolean; cloakingNot?: string } | null>(null);
   const [canliYuk, setCanliYuk] = useState(false);
   const [bildirimZaman, setBildirimZaman] = useState<number | null>(null); // optimistik "bildirildi"
+  const [inceleAcik, setInceleAcik] = useState(false); // "İncele" → operasyon modalı
   const domainZ = aday?.domain;
   useEffect(() => { setBildirimZaman(null); }, [domainZ]);
   useEffect(() => {
@@ -786,10 +856,13 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
           onClick={() => { try { navigator.clipboard?.writeText(aday.domain); } catch { /* pano yoksa geç */ } window.open("https://www.usom.gov.tr/ihbar", "_blank", "noopener,noreferrer"); fetch("/api/bildirim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domain: aday.domain }) }).catch(() => {}); setBildirimZaman(Date.now()); }}
           style={{ height: 40, fontWeight: 600 }}>{(aday.bildirim?.zaman || bildirimZaman) ? "USOM'a Yeniden Bildir" : "USOM'a Bildir"}</Button>
         <Text type="secondary" style={{ fontSize: 10, textAlign: "center", marginTop: -2 }}>Alan adı panoya kopyalanır · ihbarı sen gönderirsin</Text>
+        <Button block icon={<span className="material-symbols-outlined" style={{ fontSize: 17, lineHeight: 1 }}>travel_explore</span>}
+          onClick={() => setInceleAcik(true)} style={{ height: 38, fontWeight: 600, borderColor: "var(--c-4a90d9)", color: "var(--c-4a90d9)" }}>İncele — operasyonu çöz</Button>
         <Flex gap={8}>
           <Button block danger icon={<ExportOutlined />} href={`http://${aday.domain}`} target="_blank" rel="noopener noreferrer nofollow">Siteyi Gör</Button>
           <Button block icon={<FileSearchOutlined />} href={`/sorgula?q=${encodeURIComponent(aday.domain)}`}>Tam Rapor</Button>
         </Flex>
+        <KampanyaModal domain={aday.domain} open={inceleAcik} onClose={() => setInceleAcik(false)} />
         <Button block icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>picture_as_pdf</span>}
           href={`/api/marka-rapor-pdf?marka=${encodeURIComponent(aday.marka)}&domain=${encodeURIComponent(aday.domain)}`} target="_blank" rel="noopener">
           Bu tespit için rapor (PDF)
