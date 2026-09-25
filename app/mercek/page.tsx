@@ -676,28 +676,41 @@ function PasifDnsBolum({ domain }: { domain: string }) {
 
 // OPERASYON İNCELEMESİ MODALI — bir sahteden yola çıkıp tüm çeteyi haritalar (/api/kampanya):
 // kardeş domainler + IP/ASN + dolandırıcının kanalları (Telegram) + istenen veriler.
-type KampanyaVeri = { seed: string; marka?: string; ozet: string; domainler: { domain: string; ip?: string; canli: boolean; zararli?: boolean; favEslesme?: boolean; neden: string }[]; ipler: string[]; asnler: string[]; telegramlar: string[]; iletisimKanallari: string[]; exfil: string[]; istenenAlanlar: string[]; ilkTarih?: string; diger?: string[] };
-function InceleModal({ domain, rapor, canliV, open, onClose }: { domain: string; rapor: Rapor | null; canliV: { durum: string; kokNeden: string; redirectHedef?: string | null; redirectZinciri?: string[]; cloaking?: boolean; cloakingNot?: string } | null; open: boolean; onClose: () => void }) {
-  const [veri, setVeri] = useState<KampanyaVeri | null>(null);
-  const [yuk, setYuk] = useState(false);
-  const [hata, setHata] = useState("");
-  useEffect(() => {
-    if (!open) { setVeri(null); setHata(""); return; }
-    let iptal = false; setYuk(true); setHata("");
-    fetch("/api/kampanya", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ giris: domain }) })
-      .then((r) => r.json()).then((j) => { if (iptal) return; if (j.hata) setHata(j.hata); else setVeri(j); })
-      .catch(() => { if (!iptal) setHata("Operasyon çözümlemesi başarısız — tekrar dene."); }).finally(() => { if (!iptal) setYuk(false); });
-    return () => { iptal = true; };
-  }, [open, domain]);
-  const kanallar = veri ? [...new Set([...(veri.iletisimKanallari || []), ...(veri.telegramlar || [])])] : [];
-  const risk = rapor?.risk ?? 0;
-  const rRenk = risk >= 60 ? "var(--c-f5222d)" : risk >= 30 ? "var(--c-faad14)" : "var(--c-31c8b0)";
+// AI İÇERİK ANALİZİ BLOĞU — panel + İncele modalı ORTAK kullanır (tek kaynak, sapma yok).
+function AiIcerikBlok({ rapor, aday }: { rapor: Rapor | null; aday: { aiTur?: string; aiKimlikAvi?: boolean; aiNot?: string } }) {
+  const aiTur = rapor?.alanlar?.find((a) => a.ad === "Görsel analiz (AI)" || a.ad === "İçerik analizi (AI)")?.deger || aday.aiTur;
+  const aiKimlikAvi = (rapor?.bulgular || []).some((b) => /kimlik avı \(phishing\)|şifre\/kart\/kimlik bilgisi İSTİYOR|kimlik avı işareti|üçüncü bir tarafa aktar/i.test(b)) || aday.aiKimlikAvi;
+  const aiNot = rapor?.alanlar?.find((a) => a.ad === "Görsel notu")?.deger || (rapor?.alanlar?.find((a) => a.ad === "Logo taklidi (görsel)")?.deger ? `Görselde "${rapor.alanlar.find((a) => a.ad === "Logo taklidi (görsel)")?.deger}" logosu/amblemi kullanılıyor` : undefined) || aday.aiNot;
+  const cdn = rapor?.alanlar?.find((a) => a.ad === "CDN / koruma katmanı")?.deger;
+  if (!aiTur && !aiKimlikAvi && !cdn) return null;
+  return (
+    <Flex vertical gap={4} style={{ background: aiKimlikAvi ? "var(--c-2a0d13)" : "var(--c-0e1a2e)", border: `1px solid ${aiKimlikAvi ? "var(--c-5a2226)" : "var(--c-1d3350)"}`, borderRadius: 8, padding: "9px 11px" }}>
+      {(aiTur || aiKimlikAvi) && <Flex align="center" gap={7}>
+        <span className="material-symbols-outlined" style={{ fontSize: 16, color: aiKimlikAvi ? "var(--c-ff5468)" : "var(--c-31c8a0)" }}>smart_toy</span>
+        <Text strong style={{ fontSize: 12, color: "var(--c-cfe0ef)" }}>AI içerik analizi</Text>
+        {aiKimlikAvi && <Tag color="error" style={{ margin: 0, marginLeft: "auto" }}>KİMLİK AVI</Tag>}
+      </Flex>}
+      {aiTur && <Text style={{ fontSize: 11.5, color: "var(--c-a9c0da)" }}>İçerik: {aiTur}</Text>}
+      {aiNot && <Text style={{ fontSize: 10.5, color: "var(--c-8fa6bd)", lineHeight: 1.4 }}>{aiNot}</Text>}
+      {cdn && <Text style={{ fontSize: 10.5, color: "var(--c-8fb0d4)", lineHeight: 1.4 }}><Text style={{ fontWeight: 600, color: "var(--c-cfe0ef)" }}>CDN / koruma: </Text>{cdn}</Text>}
+    </Flex>
+  );
+}
+
+// İNCELE MODALI — YALNIZ seçilen linkin TAM analizi (paneldeki her şey), operasyon YOK.
+function InceleModal({ aday, rapor, canliV, markaAdi, resmiDom, open, onClose }: { aday: Aday; rapor: Rapor | null; canliV: { durum: string; kokNeden: string; redirectHedef?: string | null; redirectZinciri?: string[]; cloaking?: boolean; cloakingNot?: string } | null; markaAdi: string; resmiDom?: string; open: boolean; onClose: () => void }) {
+  const risk = rapor?.risk ?? aday.skor;
+  const rRenk = seviye(risk).renk;
+  const neden = nedenTehdit(rapor);
+  const mgv = rapor?.alanlar?.find((a) => a.ad === "Marka taklidi güveni")?.deger?.match(/(\d+)\s*\/\s*100/);
+  const benzerlik = mgv ? Number(mgv[1]) : undefined;
+  const gecmis = rapor?.gecmis || [];
+  const ilk = gecmis[0]?.t, son = gecmis[gecmis.length - 1]?.t;
   return (
     <Modal open={open} onCancel={onClose} footer={null} width={720} destroyOnClose
       getContainer={() => (typeof document !== "undefined" && (document.querySelector(".pano") as HTMLElement)) || (typeof document !== "undefined" ? document.body : (undefined as unknown as HTMLElement))}
-      title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--c-4a90d9)" }}>travel_explore</span>İnceleme · <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13 }}>{domain}</span></span>}>
-      <Flex vertical gap={12} style={{ paddingTop: 4, maxHeight: "72vh", overflow: "auto" }}>
-        {/* GÜVEN SKORU + CANLILIK (paneldeki gerçeklikle aynı) */}
+      title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--c-4a90d9)" }}>travel_explore</span>İnceleme · <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13 }}>{aday.domain}</span></span>}>
+      <Flex vertical gap={12} style={{ paddingTop: 4, maxHeight: "74vh", overflow: "auto" }}>
         {rapor && (
           <div style={{ border: "1px solid var(--c-17293c)", borderRadius: 8, padding: "8px 11px" }}>
             <Flex align="center" gap={10}>
@@ -707,62 +720,26 @@ function InceleModal({ domain, rapor, canliV, open, onClose }: { domain: string;
           </div>
         )}
         <CanlilikRozet v={canliV} yuk={false} />
-        {/* PANELDEKİ TÜM ANALİZ — birebir aynı bileşenler (doğru veri) */}
+        <AiIcerikBlok rapor={rapor} aday={aday} />
         <SucTuruBlok rapor={rapor} />
         <DedektifBlok rapor={rapor} />
-        <TeknikKunye rapor={rapor} />
-        {/* OPERASYON — çete haritası (async) */}
-        <div style={{ borderTop: "1px solid var(--c-17293c)", paddingTop: 10 }}>
-          <Flex align="center" gap={6} style={{ marginBottom: 8 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--c-ff5468)" }}>hub</span>
-            <Text strong style={{ fontSize: 11, letterSpacing: ".05em", color: "var(--c-cfe0ef)" }}>OPERASYON — ÇETE HARİTASI {yuk && <Spin size="small" />}</Text>
+        <EtbisRozet rapor={rapor} />
+        <SaldiriGelisimi rapor={rapor} canli={canliV?.durum} />
+        <div>
+          <Text strong style={{ fontSize: 11, letterSpacing: ".05em" }}>Neden Tehdit?</Text>
+          {neden.length === 0 && <div><Text type="secondary" style={{ fontSize: 11 }}>Güçlü sinyal yok — düşük öncelik.</Text></div>}
+          <Flex vertical gap={6} style={{ marginTop: 8 }}>
+            {neden.map((n, i) => (
+              <Flex key={i} align="center" gap={8}>
+                <SafetyCertificateOutlined style={{ color: "var(--c-31c8a0)", fontSize: 13 }} />
+                <Text style={{ fontSize: 12, color: "var(--c-a7bccf)" }}>{n.t}</Text>
+                {n.m && <Text strong style={{ marginLeft: "auto", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5 }}>{n.m}</Text>}
+              </Flex>
+            ))}
           </Flex>
-          {yuk && <Text style={{ fontSize: 11, color: "var(--c-8fa6bd)" }}>Kardeş domainler, IP, çete kanalları haritalanıyor…</Text>}
-          {hata && !yuk && <Text style={{ fontSize: 11, color: "var(--c-8fa6bd)" }}>{hata}</Text>}
-          {veri && !yuk && (
-            <Flex vertical gap={12}>
-              <Text style={{ fontSize: 12, color: "var(--c-a7bccf)", lineHeight: 1.5 }}>{veri.ozet}</Text>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
-                {[[veri.domainler.length, "ilişkili domain"], [veri.ipler.length, "IP"], [veri.asnler.length, "ASN"], [kanallar.length, "çete kanalı"]].map(([n, t], i) => (
-                  <div key={i} style={{ background: "var(--c-152337)", borderRadius: 8, padding: "8px 6px", textAlign: "center" }}>
-                    <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 18, fontWeight: 700, color: "var(--c-cfe0ef)" }}>{n}</div>
-                    <div style={{ fontSize: 10, color: "var(--c-8fa6bd)" }}>{t}</div>
-                  </div>
-                ))}
-              </div>
-              {kanallar.length > 0 && (
-                <div style={{ background: "var(--c-2a0d13)", border: "1px solid var(--c-5a2226)", borderRadius: 8, padding: "8px 11px" }}>
-                  <Text strong style={{ fontSize: 11, color: "var(--c-ff9aa4)", letterSpacing: ".04em" }}>⚠ ÇETENİN KANALLARI (veri buraya gidiyor)</Text>
-                  <Flex vertical gap={2} style={{ marginTop: 5 }}>
-                    {kanallar.slice(0, 8).map((k, i) => <Text key={i} style={{ fontSize: 11, color: "var(--c-ff9aa4)", fontFamily: "'IBM Plex Mono',monospace", wordBreak: "break-all" }}>· {k}</Text>)}
-                  </Flex>
-                </div>
-              )}
-              {veri.istenenAlanlar?.length > 0 && <Text style={{ fontSize: 11.5, color: "var(--c-a7bccf)" }}><Text strong style={{ color: "var(--c-cfe0ef)" }}>İstenen veriler: </Text>{veri.istenenAlanlar.join(", ")}</Text>}
-              <div style={{ maxHeight: 240, overflow: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
-                {veri.domainler.map((d, i) => (
-                  <Flex key={i} align="center" gap={8} style={{ padding: "5px 8px", borderRadius: 6, background: "var(--c-0e1a2e)", border: "1px solid var(--c-17293c)" }}>
-                    <span style={{ width: 7, height: 7, borderRadius: 4, background: d.zararli ? "#ff4d5e" : d.canli ? "#f5921b" : "#5c748b", flexShrink: 0 }} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <Text style={{ display: "block", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, color: "var(--c-cfe0ef)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.domain}</Text>
-                      <Text style={{ fontSize: 9.5, color: "var(--c-8fa6bd)" }}>{d.favEslesme ? "aynı klon kit · " : ""}{d.neden}</Text>
-                    </div>
-                    {d.ip && <Text style={{ fontSize: 10, color: "var(--c-8fb0d4)", fontFamily: "'IBM Plex Mono',monospace", flexShrink: 0 }}>{d.ip}</Text>}
-                  </Flex>
-                ))}
-              </div>
-              {veri.diger && veri.diger.length > 0 && (
-                <div style={{ borderTop: "1px dashed var(--c-17293c)", paddingTop: 8 }}>
-                  <Text style={{ fontSize: 10.5, color: "var(--c-8fa6bd)" }}><Text strong style={{ color: "var(--c-cfe0ef)" }}>Aynı markayı taşıyan {veri.diger.length} domain daha</Text> — ama bu operasyonla <Text strong>altyapı bağı YOK</Text> (CDN paylaşımı ≠ bağ). Ayrı çeteler olabilir; kanıt olmadan aynı sayılmaz.</Text>
-                  <Flex wrap gap={4} style={{ marginTop: 5 }}>
-                    {veri.diger.slice(0, 20).map((d, i) => <Text key={i} style={{ fontSize: 10, color: "var(--c-8fb0d4)", fontFamily: "'IBM Plex Mono',monospace", background: "var(--c-0e2036)", borderRadius: 4, padding: "1px 6px" }}>{d}</Text>)}
-                  </Flex>
-                </div>
-              )}
-              {veri.ilkTarih && <Text style={{ fontSize: 10, color: "var(--c-5c748b)" }}>Operasyonun ilk izi: {veri.ilkTarih}</Text>}
-            </Flex>
-          )}
         </div>
+        <TeknikKunye rapor={rapor} ilk={ilk} son={son} />
+        <KarsilastirGorsel resmiDom={resmiDom} fakeDom={aday.domain} fakeShot={rapor?.ekranGoruntusu} benzerlik={benzerlik} markaAdi={markaAdi} />
       </Flex>
     </Modal>
   );
@@ -816,26 +793,7 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
         <Progress percent={Math.min(100, risk)} showInfo={false} strokeColor={renk} trailColor="var(--c-17293c)" size={{ height: 6 }} style={{ marginTop: 6, marginBottom: 0 }} />
       </div>
 
-      {(() => {
-        // AI içerik verdict'i: önce TAZE rapor (tıklayınca çalışan domainOsint), yoksa stored aday.
-        const aiTur = rapor?.alanlar?.find((a) => a.ad === "Görsel analiz (AI)" || a.ad === "İçerik analizi (AI)")?.deger || aday.aiTur;
-        const aiKimlikAvi = (rapor?.bulgular || []).some((b) => /kimlik avı \(phishing\)|şifre\/kart\/kimlik bilgisi İSTİYOR|kimlik avı işareti|üçüncü bir tarafa aktar/i.test(b)) || aday.aiKimlikAvi;
-        const aiNot = rapor?.alanlar?.find((a) => a.ad === "Görsel notu")?.deger || (rapor?.alanlar?.find((a) => a.ad === "Logo taklidi (görsel)")?.deger ? `Görselde "${rapor.alanlar.find((a) => a.ad === "Logo taklidi (görsel)")?.deger}" logosu/amblemi kullanılıyor` : undefined) || aday.aiNot;
-        const cdn = rapor?.alanlar?.find((a) => a.ad === "CDN / koruma katmanı")?.deger;
-        if (!aiTur && !aiKimlikAvi && !cdn) return null;
-        return (
-          <Flex vertical gap={4} style={{ background: aiKimlikAvi ? "var(--c-2a0d13)" : "var(--c-0e1a2e)", border: `1px solid ${aiKimlikAvi ? "var(--c-5a2226)" : "var(--c-1d3350)"}`, borderRadius: 8, padding: "9px 11px" }}>
-            {(aiTur || aiKimlikAvi) && <Flex align="center" gap={7}>
-              <span className="material-symbols-outlined" style={{ fontSize: 16, color: aiKimlikAvi ? "var(--c-ff5468)" : "var(--c-31c8a0)" }}>smart_toy</span>
-              <Text strong style={{ fontSize: 12, color: "var(--c-cfe0ef)" }}>AI içerik analizi</Text>
-              {aiKimlikAvi && <Tag color="error" style={{ margin: 0, marginLeft: "auto" }}>KİMLİK AVI</Tag>}
-            </Flex>}
-            {aiTur && <Text style={{ fontSize: 11.5, color: "var(--c-a9c0da)" }}>İçerik: {aiTur}</Text>}
-            {aiNot && <Text style={{ fontSize: 10.5, color: "var(--c-8fa6bd)", lineHeight: 1.4 }}>{aiNot}</Text>}
-            {cdn && <Text style={{ fontSize: 10.5, color: "var(--c-8fb0d4)", lineHeight: 1.4 }}><Text style={{ fontWeight: 600, color: "var(--c-cfe0ef)" }}>CDN / koruma: </Text>{cdn}</Text>}
-          </Flex>
-        );
-      })()}
+      <AiIcerikBlok rapor={rapor} aday={aday} />
       <SucTuruBlok rapor={rapor} />
       <DedektifBlok rapor={rapor} />
       <EtbisRozet rapor={rapor} />
@@ -887,7 +845,7 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
           <Button block danger icon={<ExportOutlined />} href={`http://${aday.domain}`} target="_blank" rel="noopener noreferrer nofollow">Siteyi Gör</Button>
           <Button block icon={<FileSearchOutlined />} href={`/sorgula?q=${encodeURIComponent(aday.domain)}`}>Tam Rapor</Button>
         </Flex>
-        <InceleModal domain={aday.domain} rapor={rapor} canliV={canliV} open={inceleAcik} onClose={() => setInceleAcik(false)} />
+        <InceleModal aday={aday} rapor={rapor} canliV={canliV} markaAdi={markaAdi} resmiDom={resmiDom} open={inceleAcik} onClose={() => setInceleAcik(false)} />
         <Button block icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>picture_as_pdf</span>}
           href={`/api/marka-rapor-pdf?marka=${encodeURIComponent(aday.marka)}&domain=${encodeURIComponent(aday.domain)}`} target="_blank" rel="noopener">
           Bu tespit için rapor (PDF)
