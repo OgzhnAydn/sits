@@ -23,7 +23,7 @@ import AnalitikPanel from "./AnalitikPanel";
 const { Text, Title } = Typography;
 
 type AkisSatir = { i: number; kisa: string; domain: string; ca: string; marka: string | null };
-type Aday = { domain: string; marka: string; skor: number; durum?: string; zaman?: number; aiTur?: string; aiKimlikAvi?: boolean; aiNot?: string; analizZaman?: number; yasamDurumu?: import("@/lib/yasamDongusu").YasamDurumu };
+type Aday = { domain: string; marka: string; skor: number; durum?: string; zaman?: number; aiTur?: string; aiKimlikAvi?: boolean; aiNot?: string; analizZaman?: number; yasamDurumu?: import("@/lib/yasamDongusu").YasamDurumu; bildirim?: { zaman: number; kaynak?: string } };
 type Alan = { ad: string; deger: string };
 type Kategori = { ad: string; seviye: string; ikon?: string; skor?: number };
 type Dedektif = { tur: string; guven: string; hedef?: string; paraYontemi?: string; operasyon?: string; gerekce?: string[] };
@@ -34,7 +34,9 @@ type Rapor = {
   asama?: number; asamalar?: string[]; gecmis?: Gecmis[];
   dna?: { imza: string; parcalar: { k: string; v: string }[]; eslesenler: string[] };
 };
-type Filtre = "hepsi" | "aktif" | "park" | "inceleme" | "yeni";
+type Filtre = "hepsi" | "aktif" | "park" | "inceleme" | "yeni" | "bildirildi" | "kapatildi";
+const bildirildiMi = (a: Aday) => !!a.bildirim;
+const kapatildiMi = (a: Aday) => a.durum === "yayinda-degil"; // artık erişilemez/kaldırılmış (dürüst sinyal)
 
 // DURUM = tespit anındaki gerçek yaşam-durumu (grafik ile AYNI kaynak). Sayaçları buna
 // göre böleriz — ham skora göre DEĞİL. Yoksa park edilmiş domain "Yüksek Güven" görünür
@@ -245,6 +247,8 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
     filtre === "hepsi" ? true : filtre === "aktif" ? aktifTuzakMi(a) :
     filtre === "park" ? parkPasifMi(a) :
     filtre === "inceleme" ? (!aktifTuzakMi(a) && !parkPasifMi(a)) :
+    filtre === "bildirildi" ? bildirildiMi(a) :
+    filtre === "kapatildi" ? kapatildiMi(a) :
     filtre === "yeni" ? yeniSet.current.has(a.domain) : true;
   const gosterilen = markaAdaylari.filter(filtrele);
   // Grafik için zaman penceresi (kalabalığı azalt) — aday.zaman'a göre süz.
@@ -265,6 +269,8 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
     park: markaAdaylari.filter(parkPasifMi).length,
     inceleme: markaAdaylari.filter((a) => !aktifTuzakMi(a) && !parkPasifMi(a)).length,
     yeni: markaAdaylari.filter((a) => yeniSet.current.has(a.domain)).length,
+    bildirildi: markaAdaylari.filter(bildirildiMi).length,
+    kapatildi: markaAdaylari.filter(kapatildiMi).length,
   };
   // Panel başlığı markanın TAM ADINI (ad) göstersin — anahtar değil (ör. "yurtdisiturkler" →
   // "YURTDISITURKLER" yerine "Yurtdışı Türkler ve Akraba Topluluklar Başkanlığı"). Ad yoksa anahtara düş.
@@ -386,7 +392,9 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                   <StatSatir ikon={<WarningOutlined style={{ color: "var(--c-ff5468)" }} />} t="Aktif Tuzak" n={sayim.aktif} renk="var(--c-ff5468)" aktif={filtre === "aktif"} onClick={() => setFiltre("aktif")} />
                   <StatSatir ikon={<ClusterOutlined style={{ color: "var(--c-8fb0d4)" }} />} t="Park · İzlemede" n={sayim.park} renk="var(--c-8fb0d4)" aktif={filtre === "park"} onClick={() => setFiltre("park")} />
                   <StatSatir ikon={<SearchOutlined style={{ color: "var(--c-faad14)" }} />} t="İnceleniyor" n={sayim.inceleme} renk="var(--c-faad14)" aktif={filtre === "inceleme"} onClick={() => setFiltre("inceleme")} />
-                  <StatSatir ikon={<ThunderboltOutlined style={{ color: "var(--c-31c8b0)" }} />} t="Yeni Gözlem" n={sayim.yeni} renk="var(--c-31c8b0)" aktif={filtre === "yeni"} onClick={() => setFiltre("yeni")} son />
+                  <StatSatir ikon={<ThunderboltOutlined style={{ color: "var(--c-31c8b0)" }} />} t="Yeni Gözlem" n={sayim.yeni} renk="var(--c-31c8b0)" aktif={filtre === "yeni"} onClick={() => setFiltre("yeni")} />
+                  <StatSatir ikon={<span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--c-4a90d9)" }}>flag</span>} t="Bildirilenler (USOM)" n={sayim.bildirildi} renk="var(--c-4a90d9)" aktif={filtre === "bildirildi"} onClick={() => setFiltre("bildirildi")} />
+                  <StatSatir ikon={<span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--c-31c8a0)" }}>check_circle</span>} t="Kapatılanlar" n={sayim.kapatildi} renk="var(--c-31c8a0)" aktif={filtre === "kapatildi"} onClick={() => setFiltre("kapatildi")} son />
                 </div>
                 <Text type="secondary" style={{ fontSize: 10, display: "block", marginTop: 6, textAlign: "center" }}>satıra tıkla → grafiği süz</Text>
                 {/* GÖRÜNÜM MENÜSÜ — üstteki filtre satırlarıyla aynı düz menü. Tıklayınca sağdaki
@@ -671,7 +679,9 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
   // uzlaştırmasına verilir (birikmiş kanıt vs güncel gerçeklik çelişkisini önler).
   const [canliV, setCanliV] = useState<{ durum: string; kokNeden: string; redirectHedef?: string | null; redirectZinciri?: string[]; cloaking?: boolean; cloakingNot?: string } | null>(null);
   const [canliYuk, setCanliYuk] = useState(false);
+  const [bildirimZaman, setBildirimZaman] = useState<number | null>(null); // optimistik "bildirildi"
   const domainZ = aday?.domain;
+  useEffect(() => { setBildirimZaman(null); }, [domainZ]);
   useEffect(() => {
     if (!domainZ) { setCanliV(null); return; }
     let iptal = false; setCanliV(null); setCanliYuk(true);
@@ -753,12 +763,28 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, onYenile }:
       <PasifDnsBolum domain={aday.domain} />
       <KarsilastirGorsel resmiDom={resmiDom} fakeDom={aday.domain} fakeShot={rapor?.ekranGoruntusu} benzerlik={benzerlik} markaAdi={markaAdi} />
 
+      {(() => {
+        // BİLDİRİM / KAPATMA DURUMU — "kapatıldı" iddia edilmez, DOĞRULANIR (USOM engel / erişilemez).
+        const reported = aday.bildirim?.zaman || bildirimZaman;
+        const engelAlan = rapor?.alanlar?.find((a) => a.ad === "Engelleme durumu")?.deger || "";
+        const usomEngel = /Zaten biliniyor|engelli/i.test(engelAlan);
+        const olu = canliV?.durum === "dead" || aday.durum === "yayinda-degil";
+        const kapatildi = usomEngel || olu;
+        if (!reported && !kapatildi) return null;
+        return (
+          <div style={{ borderRadius: 8, padding: "7px 10px", background: kapatildi ? "var(--c-0e2f1e)" : "var(--c-0e1a2e)", border: `1px solid ${kapatildi ? "var(--c-31c8a0)" : "var(--c-1d3350)"}` }}>
+            {reported ? <Flex align="center" gap={6}><span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-4a90d9)" }}>flag</span><Text style={{ fontSize: 11, color: "var(--c-8fb0d4)" }}>USOM&apos;a bildirildi · {new Date(reported).toLocaleDateString("tr-TR")}</Text></Flex> : null}
+            {kapatildi ? <Flex align="center" gap={6} style={{ marginTop: reported ? 4 : 0 }}><span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-31c8a0)" }}>check_circle</span><Text style={{ fontSize: 11, color: "var(--c-3ee08a)" }}>Kapatıldı — {usomEngel ? "USOM/BTK engelli" : "adres artık erişilemez"}</Text></Flex> : null}
+            {reported && !kapatildi ? <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)", display: "block", marginTop: 3 }}>Takipte — kapanış USOM listesi/erişilemezlikle otomatik doğrulanır.</Text> : null}
+          </div>
+        );
+      })()}
       <Flex vertical gap={8}>
         {/* BİRİNCİL AKSİYON: "izle" değil "yap". USOM resmî ihbar formunu açar (ihbarı
-            kullanıcı gönderir — otomatik göndermeyiz; dürüst). Alanı panoya kopyalar. */}
+            kullanıcı gönderir — otomatik göndermeyiz; dürüst). Alanı panoya kopyalar + bildirim işaretler. */}
         <Button type="primary" icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>flag</span>}
-          onClick={() => { try { navigator.clipboard?.writeText(aday.domain); } catch { /* pano yoksa geç */ } window.open("https://www.usom.gov.tr/ihbar", "_blank", "noopener,noreferrer"); }}
-          style={{ height: 40, fontWeight: 600 }}>USOM'a Bildir</Button>
+          onClick={() => { try { navigator.clipboard?.writeText(aday.domain); } catch { /* pano yoksa geç */ } window.open("https://www.usom.gov.tr/ihbar", "_blank", "noopener,noreferrer"); fetch("/api/bildirim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domain: aday.domain }) }).catch(() => {}); setBildirimZaman(Date.now()); }}
+          style={{ height: 40, fontWeight: 600 }}>{(aday.bildirim?.zaman || bildirimZaman) ? "USOM'a Yeniden Bildir" : "USOM'a Bildir"}</Button>
         <Text type="secondary" style={{ fontSize: 10, textAlign: "center", marginTop: -2 }}>Alan adı panoya kopyalanır · ihbarı sen gönderirsin</Text>
         <Flex gap={8}>
           <Button block danger icon={<ExportOutlined />} href={`http://${aday.domain}`} target="_blank" rel="noopener noreferrer nofollow">Siteyi Gör</Button>

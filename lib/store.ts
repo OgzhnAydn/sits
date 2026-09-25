@@ -277,6 +277,7 @@ export type MarkaAday = {
   aiNot?: string;          // 1 cümle özet
   analizZaman?: number;    // en son derin analiz zamanı (ms)
   // ── YAŞAM DÖNGÜSÜ (canlılık `durum`'dan AYRI; lib/yasamDongusu.ts durum makinesi) ──
+  bildirim?: { zaman: number; kaynak?: string }; // USOM'a bildirildi (operatör aksiyonu + tarih)
   manuel?: boolean;             // operatör "Şüpheli Ekle" ile ekledi / içerik-taklidi doğrulandı
                                 // → rastgele isimli (edevlet içermeyen) sahte de markaya bağlanır,
                                 //   isim-filtresi (gercekTaklit) onu ELEMEZ.
@@ -683,6 +684,15 @@ export async function adayDurumGuncelle(domain: string, durum: string, skor: num
     await setDoc(doc(db, "marka_adaylari", belgeId("dom", domain)), veri, { merge: true });
   } catch { /* kurallar yoksa sessiz */ }
 }
+// USOM'A BİLDİRİM KAYDI — operatör "USOM'a Bildir" dediğinde çağrılır. Bildirim zamanını
+// adaya yazar (bildirim.zaman). "Kapatıldı" DERİVE edilir (usomda/dead) — burada iddia edilmez.
+export async function bildirimIsaretle(domain: string, kaynak?: string): Promise<void> {
+  if (!firebaseHazir || !db) return;
+  try {
+    await setDoc(doc(db, "marka_adaylari", belgeId("dom", domain)), { bildirim: { zaman: Date.now(), kaynak: kaynak || "operator" }, sonTarama: Date.now() }, { merge: true });
+  } catch { /* kurallar yoksa sessiz */ }
+}
+
 // Bir markanın son yükselmeleri (eyleme geçen adaylar) — panel alarm akışı, en yeni önce.
 export async function yukselmelerGetir(marka: string, n = 20): Promise<(MarkaAday & { sonYukselme: Yukselme })[]> {
   if (!firebaseHazir || !db || !marka) return [];
