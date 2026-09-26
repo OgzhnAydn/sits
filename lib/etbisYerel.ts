@@ -10,8 +10,9 @@
 
 import data from "./etbisData.json";
 
-const KAYITLI = new Set<string>(data.domainler as string[]);
-const DOGRULANMIS = new Set<string>(data.dogrulanmisDomainler as string[]);
+// NOT: ham listede birkaç kayıtta baştaki/sondaki boşluk var → trim (yoksa o domainler "kayıtsız" görünür).
+const KAYITLI = new Set<string>((data.domainler as string[]).map((s) => s.trim()).filter(Boolean));
+const DOGRULANMIS = new Set<string>((data.dogrulanmisDomainler as string[]).map((s) => s.trim()).filter(Boolean));
 
 export const etbisGuncelleme = data.guncelleme as string;
 export const etbisToplam = data.benzersizDomain as number;
