@@ -356,7 +356,7 @@ async function bahisGonder(domain) {
 function domainIsle(dom) {
   sayac.domain++;
   const marka = eslesenMarka(dom);
-  if (marka) { adayGonder(dom, marka); return; }
+  if (marka) { sseYayin("catch", { domain: kok(dom), marka, t: Date.now() }); adayGonder(dom, marka); return; } // YAKALANDI → canlı akışa anında
   if (bahisEslesen(dom)) { if (BAHIS_AKTIF) bahisGonder(dom); return; } // yasa dışı bahis → kalıcı feed'e (yalnız bahis-worker'ı)
   if (SUPHELI.test(kok(dom))) faviconGonder(dom);
 }
@@ -366,7 +366,19 @@ function entryIsle(e) {
   sayac.entry++;
   const der = entryDER(e.leaf_input, e.extra_data);
   if (!der || der.length < 4) return;
-  if (!onFiltreGecer(der)) return; // çok büyük çoğunluk burada, parse ETMEDEN elenir
+  const gecer = onFiltreGecer(der);
+  // Görsel canlı akış: eşleşmeyen sertifikalardan da (yalnız client bağlıysa + throttle) örnek yayınla.
+  if (!gecer) {
+    if (sseClients.size) {
+      const now = Date.now();
+      if (now - sonOrnekEmit > ORNEK_ARALIK) {
+        sonOrnekEmit = now;
+        const o = derOrnek(der);
+        if (o) sseYayin("cert", { domain: o.domain, ca: o.ca, marka: null, t: now });
+      }
+    }
+    return; // çok büyük çoğunluk burada, (marka için) parse ETMEDEN elenir
+  }
   sayac.parse++;
   for (const dom of derDomainleri(der)) domainIsle(dom);
 }
@@ -538,13 +550,53 @@ async function logTakip(log) {
   }
 }
 
-// ── Sağlık ucu + watchdog ───────────────────────────────────────────────────
+// ── CANLI AKIŞ (SSE) — tarayıcıya sertifika akışı + yakalama olayları ─────────────
+// Worker eşleşmeyen sertifikaları PARSE ETMEZ (CPU tasarrufu, satır ~369). Görsel "akıyor"
+// hissi için throttle'lı bir ÖRNEK (~saniyede 2-3) parse edilip yayınlanır; YAKALAMALAR
+// (marka eşleşmesi) ise ANINDA yayılır. Depolama YOK (efemer) → Firestore kotasına dokunmaz.
+// Örnek yalnız client bağlıysa parse edilir → kimse izlemiyorken sıfır ek maliyet.
+const AKIS_ORIGIN = process.env.AKIS_ORIGIN || "*"; // CORS (herkese açık CT verisi)
+const sseClients = new Set();
+let sonOrnekEmit = 0;
+const ORNEK_ARALIK = 380; // ms — izlenebilir akış temposu
+function sseYayin(olay, veri) {
+  const paket = `event: ${olay}\ndata: ${JSON.stringify(veri)}\n\n`;
+  for (const res of sseClients) { try { res.write(paket); } catch { /* kopmuş bağlantı */ } }
+}
+// Örnek sertifika için domain + CA (yalnız görsel akışta kullanılır).
+function derOrnek(der) {
+  try {
+    const x = new crypto.X509Certificate(der);
+    const san = (x.subjectAltName || "").split(",").map((s) => s.trim()).filter((s) => s.startsWith("DNS:")).map((s) => s.slice(4).toLowerCase());
+    if (!san.length) return null;
+    const im = (x.issuer || "").match(/O=([^\n]+)/);
+    return { domain: san[0], ca: im ? im[1].trim().replace(/^"|"$/g, "") : "" };
+  } catch { return null; }
+}
+
+// ── Sağlık ucu + CANLI AKIŞ ucu + watchdog ───────────────────────────────────
 http.createServer((req, res) => {
+  const yol = (req.url || "").split("?")[0];
+  if (yol === "/stream") {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": AKIS_ORIGIN,
+      "X-Accel-Buffering": "no", // proxy tamponlamasını kapat (anında iletim)
+    });
+    res.write("retry: 3000\n\n");
+    res.write(": baglandi\n\n");
+    sseClients.add(res);
+    const ping = setInterval(() => { try { res.write(": ping\n\n"); } catch { /* */ } }, 25000);
+    req.on("close", () => { clearInterval(ping); sseClients.delete(res); });
+    return;
+  }
   const taze = Date.now() - sonAktivite < STALL_MS;
-  const govde = JSON.stringify({ ok: taze, sonAktiviteSnÖnce: Math.round((Date.now() - sonAktivite) / 1000), ...sayac, dedup: gorulen.size });
-  res.writeHead(taze ? 200 : 503, { "Content-Type": "application/json" });
+  const govde = JSON.stringify({ ok: taze, sonAktiviteSnÖnce: Math.round((Date.now() - sonAktivite) / 1000), ...sayac, dedup: gorulen.size, akisIzleyen: sseClients.size });
+  res.writeHead(taze ? 200 : 503, { "Content-Type": "application/json", "Access-Control-Allow-Origin": AKIS_ORIGIN });
   res.end(govde);
-}).listen(PORT, () => console.log(`[sağlık] http :${PORT}/health`));
+}).listen(PORT, () => console.log(`[sağlık] http :${PORT}/health · [akış] :${PORT}/stream`));
 
 setInterval(() => {
   if (Date.now() - sonAktivite > STALL_MS) {

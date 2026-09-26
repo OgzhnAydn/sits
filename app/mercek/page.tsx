@@ -117,6 +117,9 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
   const [nabiz, setNabiz] = useState<{ son: number; delta: number }>({ son: 0, delta: 0 }); // canlılık nabzı: son başarılı poll + CT artışı
   const ctOnce = useRef(0);
   const [yakalananN, setYakalananN] = useState(0); // oturumda akıştan marka-eşleşmesiyle yakalanan sertifika sayısı
+  const [canliAkis, setCanliAkis] = useState<AkisSatir[]>([]); // worker SSE ile gerçek zamanlı sertifika akışı
+  const [akisBagli, setAkisBagli] = useState(false); // SSE bağlantı durumu (gerçek canlılık sinyali)
+  const akisNo = useRef(0);
   const [adaylar, setAdaylar] = useState<Aday[]>([]);
   const [secili, setSecili] = useState<Aday | null>(null);
   const [rapor, setRapor] = useState<Rapor | null>(null);
@@ -212,13 +215,34 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
         const yeni: AkisSatir[] = [];
         for (const a of j.akis || []) { if (gorulen.current.has(a.i)) continue; gorulen.current.add(a.i); yeni.push(a); }
         if (gorulen.current.size > 3000) gorulen.current = new Set([...gorulen.current].slice(-800));
-        const yakalaSay = yeni.filter((a) => a.marka).length; // kritere uyan (marka eşleşmiş) sertifikalar
-        if (yakalaSay) setYakalananN((n) => n + yakalaSay);
         if (yeni.length) setAkis((p) => [...yeni.reverse(), ...p].slice(0, 30));
       } catch { /* sessiz */ }
     }
     cek(); const t = setInterval(cek, 5000);
     return () => { durdu = true; clearInterval(t); };
+  }, []);
+
+  // CANLI AKIŞ (SSE) — worker'ın /stream ucundan gerçek zamanlı sertifika akışı + yakalama olayları.
+  // Poll DEĞİL: kalıcı bağlantı → tek tek sertifikalar akar, marka eşleşince "catch" anında düşer.
+  // Bağlantı durumu (onopen/onerror) gerçek canlılık sinyalidir. Worker kapalıysa poll'lu feed'e düşer.
+  useEffect(() => {
+    const url = process.env.NEXT_PUBLIC_AKIS_URL || "https://sits-ct-google.fly.dev/stream";
+    let es: EventSource | null = null;
+    try { es = new EventSource(url); } catch { return; }
+    es.onopen = () => setAkisBagli(true);
+    es.onerror = () => setAkisBagli(false);
+    const ekle = (yakala: boolean) => (ev: MessageEvent) => {
+      try {
+        const d = JSON.parse(ev.data) as { domain: string; ca?: string; marka?: string; t?: number };
+        if (!d.domain) return;
+        const satir: AkisSatir = { i: ++akisNo.current, kisa: "", domain: d.domain, ca: d.ca || "", marka: yakala ? (d.marka || "?") : null };
+        setCanliAkis((p) => [satir, ...p].slice(0, 40));
+        if (yakala) setYakalananN((n) => n + 1);
+      } catch { /* bozuk paket */ }
+    };
+    es.addEventListener("cert", ekle(false) as EventListener);
+    es.addEventListener("catch", ekle(true) as EventListener);
+    return () => { try { es && es.close(); } catch { /* */ } setAkisBagli(false); };
   }, []);
 
   useEffect(() => {
@@ -448,7 +472,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                   ? <MarkaRadyal marka={markaAdi} adaylar={grafikAdaylar} secili={secili} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} resmiVarliklar={markaFiltre ? (resmiSaglik?.varliklar || []) : []} onResmiSec={(d) => markaFiltre && analizEt({ domain: d, marka: markaFiltre, skor: 0, durum: "canli" })} />
                   : <ThreatUniverse marka={markaAdi} adaylar={grafikAdaylar} secili={secili} rapor={rapor} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} />}
               </div>
-              <CanliAkisSeridi akis={akis} toplamCT={toplamCT} yakalananN={yakalananN} nabiz={nabiz} onSec={(d, m) => analizEt({ domain: d, marka: m, skor: 0, durum: "canli" })} />
+              <CanliAkisSeridi akis={canliAkis.length ? canliAkis : akis} toplamCT={toplamCT} yakalananN={yakalananN} bagli={akisBagli} onSec={(d, m) => analizEt({ domain: d, marka: m, skor: 0, durum: "canli" })} />
             </Card>
           </Col>
 
@@ -525,10 +549,8 @@ function Clock() {
 // sönük). Worker bir sertifikayı markaya EŞLEŞTİRDİĞİ an (a.marka dolu) o satır kırmızı
 // "YAKALANDI" olur + rozet + tıklanınca İncele açılır. Sayaçlar: taranan (canlı CT toplamı) +
 // yakalanan (oturumda kritere uyan). Uydurma yok — akış da yakalama da gerçek olaylardan.
-function CanliAkisSeridi({ akis, toplamCT, yakalananN, nabiz, onSec }: { akis: AkisSatir[]; toplamCT: number; yakalananN: number; nabiz: { son: number; delta: number }; onSec: (d: string, m: string) => void }) {
-  const [, tik] = useState(0);
-  useEffect(() => { const t = setInterval(() => tik((x) => x + 1), 3000); return () => clearInterval(t); }, []);
-  const aktif = nabiz.son > 0 && Date.now() - nabiz.son < 20000;
+function CanliAkisSeridi({ akis, toplamCT, yakalananN, bagli, onSec }: { akis: AkisSatir[]; toplamCT: number; yakalananN: number; bagli: boolean; onSec: (d: string, m: string) => void }) {
+  const aktif = bagli;
   const dRenk = aktif ? "var(--c-31c8a0)" : "var(--c-faad14)";
   const satirlar = akis.slice(0, 6);
   return (
