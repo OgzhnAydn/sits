@@ -114,6 +114,8 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
   const [loglar, setLoglar] = useState<Record<string, { toplam: number }>>({});
   const [akis, setAkis] = useState<AkisSatir[]>([]);
   const [toplamCT, setToplamCT] = useState(0);
+  const [nabiz, setNabiz] = useState<{ son: number; delta: number }>({ son: 0, delta: 0 }); // canlılık nabzı: son başarılı poll + CT artışı
+  const ctOnce = useRef(0);
   const [adaylar, setAdaylar] = useState<Aday[]>([]);
   const [secili, setSecili] = useState<Aday | null>(null);
   const [rapor, setRapor] = useState<Rapor | null>(null);
@@ -204,7 +206,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
       try {
         const j = await (await fetch("/api/ct-akis", { cache: "no-store" })).json();
         if (durdu) return;
-        if (j.toplam) setToplamCT(j.toplam);
+        if (j.toplam) { setToplamCT(j.toplam); setNabiz({ son: Date.now(), delta: ctOnce.current ? Math.max(0, j.toplam - ctOnce.current) : 0 }); ctOnce.current = j.toplam; }
         setLoglar((p) => { const n = { ...p }; for (const l of j.loglar || []) n[l.kisa] = { toplam: l.toplam || n[l.kisa]?.toplam || 0 }; return n; });
         const yeni: AkisSatir[] = [];
         for (const a of j.akis || []) { if (gorulen.current.has(a.i)) continue; gorulen.current.add(a.i); yeni.push(a); }
@@ -243,6 +245,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
   }, []);
 
   const markaAdaylari = markaFiltre ? adaylar.filter((a) => a.marka === markaFiltre) : adaylar;
+  const sonYakalama = markaAdaylari.reduce((m, a) => (a.zaman && a.zaman > m ? a.zaman : m), 0); // bu markada en yeni tespit anı
   const filtrele = (a: Aday) =>
     filtre === "hepsi" ? true : filtre === "aktif" ? aktifTuzakMi(a) :
     filtre === "park" ? parkPasifMi(a) :
@@ -387,6 +390,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                   {aiSonuc && <div style={{ fontSize: 11, color: "var(--c-8fa6bd)", marginTop: 6 }}>{aiSonuc}</div>}
                   {taraSonuc && <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)", display: "block", marginTop: 4 }}>{taraSonuc}</Text>}
                 </Flex>
+                <IzlemeNabzi toplamCT={toplamCT} nabiz={nabiz} sonYakalama={sonYakalama} markali={!!markaFiltre} />
                 <div style={{ paddingTop: 8 }}>
                   <StatSatir ikon={<EyeOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Toplam Gözlem" n={sayim.toplam} renk="var(--c-4d9fe0)" aktif={filtre === "hepsi"} onClick={() => setFiltre("hepsi")} />
                   <StatSatir ikon={<WarningOutlined style={{ color: "var(--c-ff5468)" }} />} t="Aktif Tuzak" n={sayim.aktif} renk="var(--c-ff5468)" aktif={filtre === "aktif"} onClick={() => setFiltre("aktif")} />
@@ -514,6 +518,50 @@ function Clock() {
 }
 // Stat satırı AYNI ZAMANDA filtre — iki ayrı liste (stat + Hızlı Filtre) yerine tek liste.
 // Tıklanınca o kovaya süzer; seçili satır vurgulanır. renk = grafik durum rengiyle eş.
+// İZLEME NABZI — "sistem şu an canlı mı" sorusunu EKRANDA yanıtlar. Üç dürüst sinyal:
+// (1) MOTOR: son başarılı CT poll'u < 20sn ise "AKTİF" (yeşil nabız), değilse "BAĞLANTI YOK".
+// (2) AKIŞ: canlı sertifika sayacı + son poll'daki artış (+N) — akışın gerçekten aktığının kanıtı.
+// (3) BU MARKA: en yeni tespit ne zaman — sessiz olabilir ama motorun ölü olduğu anlamına GELMEZ.
+function IzlemeNabzi({ toplamCT, nabiz, sonYakalama, markali }: { toplamCT: number; nabiz: { son: number; delta: number }; sonYakalama: number; markali: boolean }) {
+  const [, tik] = useState(0);
+  useEffect(() => { const t = setInterval(() => tik((x) => x + 1), 3000); return () => clearInterval(t); }, []); // poll dursa bile "AKTİF" dürüstçe sönsün
+  const aktif = nabiz.son > 0 && Date.now() - nabiz.son < 20000;
+  const dRenk = aktif ? "var(--c-31c8a0)" : "var(--c-faad14)";
+  const rel = (t: number) => {
+    if (!t) return "kayıt yok";
+    const dk = Math.floor((Date.now() - t) / 60000);
+    if (dk < 1) return "az önce"; if (dk < 60) return dk + " dk önce";
+    const sa = Math.floor(dk / 60); if (sa < 24) return sa + " sa önce";
+    return Math.floor(sa / 24) + " gün önce";
+  };
+  const sonDk = sonYakalama ? Math.floor((Date.now() - sonYakalama) / 60000) : Infinity;
+  const sessiz = sonDk > 720; // >12 saat → "sessiz" (ama canlı)
+  const deltaMetin = nabiz.delta >= 1000 ? "+" + (nabiz.delta / 1000).toFixed(1) + "K" : nabiz.delta > 0 ? "+" + nabiz.delta : "";
+  return (
+    <div style={{ margin: "10px 0 4px", border: `1px solid ${aktif ? "var(--c-31c8a0)" : "var(--c-faad14)"}`, borderRadius: 10, padding: "9px 11px", background: aktif ? "var(--c-0e2f1e)" : "var(--c-1a1206)" }}>
+      <Flex align="center" gap={7}>
+        <Badge status={aktif ? "processing" : "warning"} color={dRenk} />
+        <Text strong style={{ fontSize: 11, letterSpacing: ".06em", color: dRenk }}>{aktif ? "İZLEME AKTİF" : "BAĞLANTI BEKLENİYOR"}</Text>
+        <Text style={{ marginLeft: "auto", fontSize: 9, color: "var(--c-5c748b)" }}>CT firehose</Text>
+      </Flex>
+      <Flex align="center" gap={6} style={{ marginTop: 7 }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-4d9fe0)" }}>graphic_eq</span>
+        <Text style={{ fontSize: 11, color: "var(--c-a7bccf)" }}>Sertifika akışı</Text>
+        <Text strong style={{ marginLeft: "auto", fontFamily: "'IBM Plex Mono',monospace", fontSize: 12.5, color: "var(--c-e9f2fa)" }}>
+          {toplamCT ? (toplamCT / 1e9).toFixed(2) + "B" : "—"}
+          {deltaMetin && <Text style={{ fontSize: 10, color: "var(--c-31c8a0)", marginLeft: 5 }}>{deltaMetin}</Text>}
+        </Text>
+      </Flex>
+      <Flex align="center" gap={6} style={{ marginTop: 5 }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 14, color: sessiz ? "var(--c-faad14)" : "var(--c-31c8a0)" }}>{sessiz ? "schedule" : "bolt"}</span>
+        <Text style={{ fontSize: 11, color: "var(--c-a7bccf)" }}>{markali ? "Bu markada son tespit" : "Son tespit"}</Text>
+        <Text strong style={{ marginLeft: "auto", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, color: sessiz ? "var(--c-f6c877)" : "var(--c-3ee08a)" }}>{rel(sonYakalama)}</Text>
+      </Flex>
+      {sessiz && sonYakalama > 0 && <Text style={{ fontSize: 9, color: "var(--c-5c748b)", display: "block", marginTop: 5, lineHeight: 1.4 }}>Bu markada yeni yakalama yok — motor akışı taramaya devam ediyor, eşleşme çıktığında anında düşer.</Text>}
+    </div>
+  );
+}
+
 function StatSatir({ ikon, t, n, son, renk, aktif, onClick }: { ikon: React.ReactNode; t: string; n?: number; son?: boolean; renk?: string; aktif?: boolean; onClick?: () => void }) {
   return (
     <Flex align="center" gap={10} onClick={onClick} role={onClick ? "button" : undefined}
