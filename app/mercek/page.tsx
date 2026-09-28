@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   ConfigProvider, theme, Row, Col, Card, Statistic, Progress, Tag, Segmented,
-  Button, Descriptions, Avatar, Flex, Badge, Empty, Spin, Typography, Space, Timeline, Alert, Select, Dropdown, Modal,
+  Button, Descriptions, Avatar, Flex, Badge, Empty, Spin, Typography, Space, Timeline, Alert, Select, Dropdown, Modal, Grid,
 } from "antd";
 import {
   EyeOutlined, SafetyCertificateOutlined, SearchOutlined, ClusterOutlined, ThunderboltOutlined,
@@ -128,6 +128,8 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
   const [zaman, setZaman] = useState<"anlik" | "24s" | "7g" | "hepsi">("hepsi"); // grafik zaman penceresi (kalabalık azalt)
   const [grafGorunum, setGrafGorunum] = useState<"radyal" | "evren" | "liste">("radyal"); // radyal kart ↔ canvas evren ↔ zaman-sıralı takip listesi
   const [listeSira, setListeSira] = useState<"yeni" | "eski" | "skor">("yeni"); // liste görünümü sıralaması
+  const screens = Grid.useBreakpoint();
+  const masaustu = !!screens.lg; // lg+ : sütunlar viewport'a sabit + kendi içinde kayar (dashboard); altında doğal akış
   const [markaFiltre, setMarkaFiltre] = useState("");
   const [hesapAdi, setHesapAdi] = useState("");
   const [gorunum, setGorunum] = useState<"evren" | "ortak" | "mobilreklam" | "oncelik">("evren"); // kokpit içi menü: grafik ya da analitik bölüm
@@ -370,12 +372,12 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
       </Flex>
 
       {/* GÖVDE */}
-      <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
-        <Row gutter={[12, 12]}>
+      <div style={{ flex: 1, padding: 12, minHeight: 0, ...(masaustu ? { overflow: "hidden", display: "flex", flexDirection: "column", gap: 12 } : { overflow: "auto" }) }}>
+        <Row gutter={[12, 12]} wrap={!masaustu} style={masaustu ? { flex: 1, minHeight: 0 } : undefined}>
           {/* SOL SÜTUN: 1 marka paneli + 2 filtreler */}
           <Col xs={24} lg={5}>
-            <Flex vertical gap={12}>
-              <Card size="small" title={baslik(1, "MARKA PANELİ")}>
+            <Flex vertical gap={12} style={masaustu ? { height: "100%" } : undefined}>
+              <Card size="small" title={baslik(1, "MARKA PANELİ")} style={masaustu ? { height: "100%" } : undefined} styles={{ body: masaustu ? { overflowY: "auto", height: "calc(100% - 46px)" } : {} }}>
                 <Flex vertical align="center" gap={8} style={{ paddingBottom: 12, borderBottom: "1px solid var(--c-17293c)" }}>
                   {(() => { const logo = markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null; return (
                     <Avatar size={54} shape="square" src={logo || undefined}
@@ -440,7 +442,9 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
           </Col>
 
           {gorunum !== "evren" ? (
-            <Col xs={24} lg={19}><AnalitikPanel marka={markaFiltre} bolum={gorunum} /></Col>
+            <Col xs={24} lg={19} style={masaustu ? { height: "100%" } : undefined}>
+              <div style={masaustu ? { height: "100%", overflowY: "auto" } : undefined}><AnalitikPanel marka={markaFiltre} bolum={gorunum} /></div>
+            </Col>
           ) : (<>
           {/* MERKEZ: 3 grafik */}
           <Col xs={24} lg={13}>
@@ -479,16 +483,18 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
             </Card>
           </Col>
 
-          {/* SAĞ: 4 varlık detayı */}
+          {/* SAĞ: 4 varlık detayı — masaüstünde kendi içinde kayar (satırı uzatmaz → boşluk yok) */}
           <Col xs={24} lg={6}>
-            <Card size="small" style={{ height: "100%" }} title={baslik(4, "SEÇİLEN VARLIK DETAYI")}>
+            <Card size="small" style={{ height: "100%" }} styles={{ body: masaustu ? { overflowY: "auto", height: "calc(100% - 46px)" } : {} }} title={baslik(4, "SEÇİLEN VARLIK DETAYI")}>
               {markaFiltre && <CanliKoruma veri={resmiSaglik} onSec={(d) => analizEt({ domain: d, marka: markaFiltre, skor: 0, durum: "canli" })} />}
               <EntityDetail aday={secili} rapor={rapor} yukleniyor={yukleniyor} markaAdi={markaAdi} resmiDom={secili ? resmiMap[secili.marka] : undefined} resmiSaglik={markaFiltre ? resmiSaglik : null} onYenile={() => secili && analizEt(secili, true)} />
             </Card>
           </Col>
-
-          {/* ALT: özet istatistikler (tam genişlik) — canlı akış artık grafiğin altındaki şeritte */}
-          <Col xs={24}>
+          </>)}
+        </Row>
+        {/* ALT: özet istatistikler (tam genişlik) — satır dışında, sabit yükseklik */}
+        {gorunum === "evren" && (
+          <div style={{ flexShrink: 0 }}>
             <Card size="small" title={baslik(5, "ÖZET İSTATİSTİKLER")}>
               <Row gutter={[10, 10]}>
                 <Col xs={12} lg={6}><MiniStat n={sayim.toplam} t="Toplam Gözlem" renk="var(--c-e9f2fa)" /></Col>
@@ -497,9 +503,8 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                 <Col xs={12} lg={6}><MiniStat n={sayim.yeni} t="Yeni Gözlem" renk="var(--c-31c8b0)" /></Col>
               </Row>
             </Card>
-          </Col>
-          </>)}
-        </Row>
+          </div>
+        )}
       </div>
       {/* FOOTER — seçili markanın resmi logosu + adı (kendi kimliğiyle) + sistem imzası */}
       <Flex align="center" justify="center" gap={10} wrap style={{ padding: "8px 18px", borderTop: "1px solid var(--c-17293c)", background: "var(--c-0a1420)", flexShrink: 0, rowGap: 4 }}>
