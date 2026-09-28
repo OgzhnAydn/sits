@@ -558,7 +558,7 @@ async function logTakip(log) {
 const AKIS_ORIGIN = process.env.AKIS_ORIGIN || "*"; // CORS (herkese açık CT verisi)
 const sseClients = new Set();
 let sonOrnekEmit = 0;
-const ORNEK_ARALIK = 380; // ms — izlenebilir akış temposu
+const ORNEK_ARALIK = Number(process.env.AKIS_ORNEK_MS) || 120; // ms — akış temposu (düşük=hızlı akış); env ile ayarlanır
 function sseYayin(olay, veri) {
   const paket = `event: ${olay}\ndata: ${JSON.stringify(veri)}\n\n`;
   for (const res of sseClients) { try { res.write(paket); } catch { /* kopmuş bağlantı */ } }

@@ -6,7 +6,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
-  ConfigProvider, theme, Row, Col, Card, Statistic, Progress, Table, Tag, Segmented,
+  ConfigProvider, theme, Row, Col, Card, Statistic, Progress, Tag, Segmented,
   Button, Descriptions, Avatar, Flex, Badge, Empty, Spin, Typography, Space, Timeline, Alert, Select, Dropdown, Modal,
 } from "antd";
 import {
@@ -484,32 +484,14 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
             </Card>
           </Col>
 
-          {/* ALT SOL: 5 canlı akış */}
-          <Col xs={24} lg={18}>
-            <Card size="small" title={baslik(5, "CANLI OLAY AKIŞI")}>
-              <Table
-                size="small" pagination={false} rowKey={(r) => `${r.zaman}-${r.tip}-${r.varlik}`} scroll={{ x: "max-content" }}
-                dataSource={olaylar(akis, gosterilen, markaFiltre)}
-                locale={{ emptyText: <Empty description="Canlı olay bekleniyor…" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
-                columns={[
-                  { title: "Zaman", dataIndex: "zaman", width: 90, render: (v) => <Text style={{ fontFamily: "'IBM Plex Mono',monospace", color: "var(--c-8fa6bd)", fontSize: 11 }}>{v}</Text> },
-                  { title: "Olay Tipi", dataIndex: "tip", width: 170, render: (v, r) => <Text style={{ color: r.renk, fontFamily: "'IBM Plex Mono',monospace", fontSize: 10.5, fontWeight: 600 }}>{v}</Text> },
-                  { title: "Açıklama", dataIndex: "aciklama", ellipsis: true, render: (v) => <Text style={{ color: "var(--c-a7bccf)", fontSize: 12 }}>{v}</Text> },
-                  { title: "İlişkili Varlık", dataIndex: "varlik", width: 220, ellipsis: true, render: (v) => <Text style={{ fontFamily: "'IBM Plex Mono',monospace", color: "var(--c-8fa6bd)", fontSize: 11 }}>{v}</Text> },
-                  { title: "Skor", dataIndex: "skor", width: 60, align: "center", render: (v) => v ? <Tag color={v >= 60 ? "error" : "warning"} style={{ margin: 0, fontFamily: "'IBM Plex Mono',monospace" }}>{v}</Tag> : <Text type="secondary">–</Text> },
-                ]}
-              />
-            </Card>
-          </Col>
-
-          {/* ALT SAĞ: 6 küçük istatistikler */}
-          <Col xs={24} lg={6}>
-            <Card size="small" style={{ height: "100%" }} title={baslik(6, "KÜÇÜK İSTATİSTİKLER")}>
+          {/* ALT: özet istatistikler (tam genişlik) — canlı akış artık grafiğin altındaki şeritte */}
+          <Col xs={24}>
+            <Card size="small" title={baslik(5, "ÖZET İSTATİSTİKLER")}>
               <Row gutter={[10, 10]}>
-                <Col span={12}><MiniStat n={sayim.toplam} t="Toplam Gözlem" renk="var(--c-e9f2fa)" /></Col>
-                <Col span={12}><MiniStat n={new Set(markaAdaylari.map((a) => a.marka)).size} t="İzlenen Marka" renk="var(--c-4d9fe0)" /></Col>
-                <Col span={12}><MiniStat n={sayim.aktif} t="Aktif Tuzak" renk="var(--c-f5222d)" /></Col>
-                <Col span={12}><MiniStat n={sayim.yeni} t="Yeni Gözlem" renk="var(--c-31c8b0)" /></Col>
+                <Col xs={12} lg={6}><MiniStat n={sayim.toplam} t="Toplam Gözlem" renk="var(--c-e9f2fa)" /></Col>
+                <Col xs={12} lg={6}><MiniStat n={new Set(markaAdaylari.map((a) => a.marka)).size} t="İzlenen Marka" renk="var(--c-4d9fe0)" /></Col>
+                <Col xs={12} lg={6}><MiniStat n={sayim.aktif} t="Aktif Tuzak" renk="var(--c-f5222d)" /></Col>
+                <Col xs={12} lg={6}><MiniStat n={sayim.yeni} t="Yeni Gözlem" renk="var(--c-31c8b0)" /></Col>
               </Row>
             </Card>
           </Col>
@@ -552,7 +534,7 @@ function Clock() {
 function CanliAkisSeridi({ akis, toplamCT, yakalananN, bagli, onSec }: { akis: AkisSatir[]; toplamCT: number; yakalananN: number; bagli: boolean; onSec: (d: string, m: string) => void }) {
   const aktif = bagli;
   const dRenk = aktif ? "var(--c-31c8a0)" : "var(--c-faad14)";
-  const satirlar = akis.slice(0, 6);
+  const satirlar = akis.slice(0, 8);
   return (
     <div style={{ marginTop: 10, border: "1px solid var(--c-17293c)", borderRadius: 10, overflow: "hidden", background: "var(--c-0a1420)" }}>
       <Flex align="center" gap={9} style={{ padding: "8px 12px", borderBottom: "1px solid var(--c-12202e)", background: "var(--c-0b1726)" }}>
@@ -570,27 +552,26 @@ function CanliAkisSeridi({ akis, toplamCT, yakalananN, bagli, onSec }: { akis: A
           </div>
         </Flex>
       </Flex>
-      <div style={{ padding: "4px 0", minHeight: 132 }}>
-        {satirlar.length === 0 && <Text style={{ display: "block", textAlign: "center", padding: "36px 0", fontSize: 11, color: "var(--c-5c748b)" }}>Akış başlatılıyor…</Text>}
-        {satirlar.map((a) => {
-          const yakala = !!a.marka;
-          return (
-            <div key={a.i} onClick={yakala ? () => onSec(a.domain, a.marka!) : undefined} title={yakala ? "İncele" : undefined}
-              style={{ display: "flex", alignItems: "center", gap: 9, padding: yakala ? "7px 12px" : "5px 12px", fontFamily: "'IBM Plex Mono',monospace",
-                animation: "riseIn .35s ease", cursor: yakala ? "pointer" : "default",
-                borderLeft: yakala ? "3px solid var(--c-ff5468)" : "3px solid transparent",
-                background: yakala ? "var(--c-2a0d13)" : "transparent" }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 14, color: yakala ? "var(--c-ff5468)" : "var(--c-5c748b)" }}>{yakala ? "gpp_maybe" : "verified"}</span>
-              <Text style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: yakala ? "var(--c-ff9aa4)" : "var(--c-8fa6bd)", fontWeight: yakala ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.domain}</Text>
-              {yakala && <span style={{ background: "var(--c-ff5468)", color: "var(--c-160a0e)", fontSize: 9.5, fontWeight: 700, padding: "1px 8px", borderRadius: 20, whiteSpace: "nowrap" }}>{buyukHarf(a.marka!)}</span>}
-              <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)", whiteSpace: "nowrap" }}>{a.ca || "—"}</Text>
-              <Text style={{ fontSize: 9.5, fontWeight: yakala ? 700 : 400, color: yakala ? "var(--c-ff5468)" : "var(--c-495a6e)", minWidth: 62, textAlign: "right" }}>{yakala ? "YAKALANDI" : "geçildi"}</Text>
-            </div>
-          );
-        })}
+      <div style={{ padding: "3px 0", minHeight: 150 }}>
+        {satirlar.length === 0 && <Text style={{ display: "block", textAlign: "center", padding: "46px 0", fontSize: 11, color: "var(--c-5c748b)" }}>Akış başlatılıyor…</Text>}
+        {satirlar.map((a) => a.marka ? (
+          <div key={a.i} onClick={() => onSec(a.domain, a.marka!)} title="İncele"
+            style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 12px", fontFamily: "'IBM Plex Mono',monospace",
+              animation: "riseIn .4s ease", cursor: "pointer", borderLeft: "3px solid var(--c-ff5468)", background: "var(--c-2a0d13)" }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--c-ff5468)" }}>gpp_bad</span>
+            <Text style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--c-ff9aa4)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.domain}</Text>
+            <span style={{ background: "var(--c-ff5468)", color: "var(--c-160a0e)", fontSize: 9.5, fontWeight: 700, padding: "1px 8px", borderRadius: 20, whiteSpace: "nowrap" }}>{buyukHarf(a.marka!)}</span>
+            <Text style={{ fontSize: 9.5, fontWeight: 700, color: "var(--c-ff5468)", letterSpacing: ".04em", whiteSpace: "nowrap" }}>YAKALANDI →</Text>
+          </div>
+        ) : (
+          <div key={a.i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 12px", fontFamily: "'IBM Plex Mono',monospace", animation: "riseIn .4s ease", borderLeft: "3px solid transparent" }}>
+            <span style={{ width: 5, height: 5, borderRadius: 3, background: "var(--c-33506f)", flexShrink: 0, margin: "0 5px" }} />
+            <Text style={{ flex: 1, minWidth: 0, fontSize: 11, color: "var(--c-5f7c9c)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.domain}</Text>
+          </div>
+        ))}
       </div>
       <Text style={{ display: "block", padding: "6px 12px", borderTop: "1px solid var(--c-12202e)", fontSize: 9.5, color: "var(--c-5c748b)", lineHeight: 1.4 }}>
-        Kriter: marka adını <span style={{ color: "var(--c-8fa6bd)" }}>resmî olmayan</span> bağlamda taşıyan domain · riskli TLD / genç yaş sinyali. Kırmızı satır = kritere uydu, kuyruğa alındı.
+        Sertifikalar akarken markanı taklit eden bir domain çıkarsa <span style={{ color: "var(--c-ff9aa4)" }}>kırmızı</span> yanar ve inceleme kuyruğuna alınır.
       </Text>
     </div>
   );
@@ -615,28 +596,6 @@ function MiniStat({ n, t, renk }: { n: number; t: string; renk: string }) {
 }
 function Efsane({ renk, t, halka }: { renk: string; t: string; halka?: boolean }) {
   return <Flex align="center" gap={5}><span style={{ width: 9, height: 9, borderRadius: "50%", background: halka ? "transparent" : renk, border: halka ? `2px solid ${renk}` : "none" }} /><Text style={{ fontSize: 9.5, color: "var(--c-8fa6bd)" }}>{t}</Text></Flex>;
-}
-
-function olaylar(akis: AkisSatir[], adaylar: Aday[], markaFiltre: string) {
-  const saat = (d = new Date()) => d.toTimeString().slice(0, 8);
-  const out: { zaman: string; tip: string; renk: string; aciklama: string; varlik: string; skor?: number }[] = [];
-  // Olay tipi DURUMA göre (ham skora göre değil). Park .ph spam'i "TEHDİT OLUŞTURULDU"
-  // diye kırmızı basmak aşırı-iddiaydı; artık durumun dürüst etiketini gösterir.
-  for (const a of [...adaylar].sort((x, y) => y.skor - x.skor).slice(0, 3)) {
-    const aktif = a.durum === "aktif-tuzak" || a.durum === "canli";
-    const park = a.durum === "park" || a.durum === "yayinda-degil";
-    out.push({
-      zaman: saat(),
-      tip: aktif ? "AKTİF TUZAK" : park ? "PARK · İZLEMEDE" : "İNCELEMEDE",
-      renk: aktif ? "var(--c-ff5468)" : park ? "var(--c-8fb0d4)" : "var(--c-faad14)",
-      aciklama: `${a.domain} · ${buyukHarf(a.marka)} ${aktif ? "taklidi" : "eşleşmesi"}`,
-      varlik: a.domain, skor: a.skor,
-    });
-  }
-  for (const e of akis.filter((x) => !markaFiltre || (x.marka || "").toLowerCase() === markaFiltre).slice(0, 4)) {
-    out.push({ zaman: saat(), tip: e.marka ? "MARKA EŞLEŞMESİ" : "YENİ SERTİFİKA", renk: e.marka ? "var(--c-faad14)" : "var(--c-4d9fe0)", aciklama: e.marka ? `${e.domain} → ${buyukHarf(e.marka)} ilişkili sertifika` : `${e.domain} · CT sertifikası yayınlandı`, varlik: e.domain });
-  }
-  return out.slice(0, 6);
 }
 
 function nedenTehdit(r: Rapor | null) {

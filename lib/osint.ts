@@ -1522,6 +1522,11 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
         // RDAP zaten "Domain yaşı" eklemişse tekrar ekleme (mükerrer önle).
         if (!r.alanlar.some((a) => a.ad === "Domain yaşı")) {
           r.alanlar.push({ ad: "Domain yaşı", deger: gun < 1 ? "bugün" : `${gun} gün` });
+          // RDAP düştüyse kayıt tarihini de yaz — yoksa zaman çizelgesinde "Domain kaydı"
+          // tarihsiz kalır ve yandaki ilk sertifika tarihi kayıt tarihi sanılır.
+          if (!r.alanlar.some((a) => a.ad === "Kayıt tarihi")) {
+            r.alanlar.push({ ad: "Kayıt tarihi", deger: new Date(olusma * 1000).toISOString().slice(0, 10) });
+          }
         }
         if (gun <= 7) {
           r.risk += 45;
