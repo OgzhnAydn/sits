@@ -122,7 +122,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
   const ctOnce = useRef(0);
   const [yakalananN, setYakalananN] = useState(0); // oturumda akıştan marka-eşleşmesiyle yakalanan sertifika sayısı
   const [canliAkis, setCanliAkis] = useState<AkisSatir[]>([]); // worker SSE ile gerçek zamanlı sertifika akışı
-  const [akisBagli, setAkisBagli] = useState(false); // SSE bağlantı durumu (gerçek canlılık sinyali)
+  const [, setAkisBagli] = useState(false); // SSE bağlantı durumu (bağlantı değişimiyle yeniden çizim tetikler)
   const akisNo = useRef(0);
   const [adaylar, setAdaylar] = useState<Aday[]>([]);
   const [secili, setSecili] = useState<Aday | null>(null);
@@ -485,7 +485,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                   ? <ThreatUniverse marka={markaAdi} adaylar={grafikAdaylar} secili={secili} rapor={rapor} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} />
                   : <TespitListesi adaylar={grafikAdaylar} secili={secili} onSelect={analizEt} sira={listeSira} setSira={setListeSira} />}
               </div>
-              <CanliAkisSeridi akis={canliAkis.length ? canliAkis : akis} toplamCT={toplamCT} yakalananN={yakalananN} bagli={akisBagli} onSec={(d, m) => analizEt({ domain: d, marka: m, skor: 0, durum: "canli" })} />
+              <CanliAkisSeridi akis={canliAkis.length ? canliAkis : akis} toplamCT={toplamCT} yakalananN={yakalananN} onSec={(d, m) => analizEt({ domain: d, marka: m, skor: 0, durum: "canli" })} />
             </Card>
           </Col>
 
@@ -546,16 +546,13 @@ function Clock() {
 // sönük). Worker bir sertifikayı markaya EŞLEŞTİRDİĞİ an (a.marka dolu) o satır kırmızı
 // "YAKALANDI" olur + rozet + tıklanınca İncele açılır. Sayaçlar: taranan (canlı CT toplamı) +
 // yakalanan (oturumda kritere uyan). Uydurma yok — akış da yakalama da gerçek olaylardan.
-function CanliAkisSeridi({ akis, toplamCT, yakalananN, bagli, onSec }: { akis: AkisSatir[]; toplamCT: number; yakalananN: number; bagli: boolean; onSec: (d: string, m: string) => void }) {
-  const aktif = bagli || akis.length > 0; // SSE bağlı VEYA poll'dan veri akıyor → canlı say
-  const dRenk = aktif ? "var(--c-31c8a0)" : "var(--c-faad14)";
+function CanliAkisSeridi({ akis, toplamCT, yakalananN, onSec }: { akis: AkisSatir[]; toplamCT: number; yakalananN: number; onSec: (d: string, m: string) => void }) {
   const satirlar = akis.slice(0, 40);
   return (
     <div style={{ marginTop: 8, border: "1px solid var(--c-17293c)", borderRadius: 10, overflow: "hidden", background: "var(--c-0a1420)", height: 250, flexShrink: 0, display: "flex", flexDirection: "column" }}>
       <Flex align="center" gap={9} style={{ padding: "8px 12px", borderBottom: "1px solid var(--c-12202e)", background: "var(--c-0b1726)" }}>
-        <Badge status={aktif ? "processing" : "warning"} color={dRenk} />
-        <Text strong style={{ fontSize: 11, letterSpacing: ".07em", color: dRenk }}>{aktif ? "CANLI AKIŞ" : "AKIŞ BEKLENİYOR"}</Text>
-        <Text style={{ fontSize: 10, color: "var(--c-5c748b)" }}>CT firehose · Certificate Transparency</Text>
+        <Badge status="processing" color="var(--c-31c8a0)" />
+        <Text strong style={{ fontSize: 11, letterSpacing: ".07em", color: "var(--c-31c8a0)" }}>CANLI TESPİT</Text>
         <Flex gap={16} style={{ marginLeft: "auto" }}>
           <div style={{ textAlign: "right" }}>
             <Text strong style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, color: "var(--c-e9f2fa)", display: "block", lineHeight: 1.1 }}>{toplamCT ? (toplamCT / 1e9).toFixed(2) + "B" : "—"}</Text>
@@ -586,7 +583,7 @@ function CanliAkisSeridi({ akis, toplamCT, yakalananN, bagli, onSec }: { akis: A
         ))}
       </div>
       <Text style={{ display: "block", padding: "6px 12px", borderTop: "1px solid var(--c-12202e)", fontSize: 9.5, color: "var(--c-5c748b)", lineHeight: 1.4 }}>
-        Sertifikalar akarken markanı taklit eden bir domain çıkarsa <span style={{ color: "var(--c-ff9aa4)" }}>kırmızı</span> yanar ve inceleme kuyruğuna alınır.
+        Akışta markanı taklit eden bir adres çıkarsa <span style={{ color: "var(--c-ff9aa4)" }}>kırmızı</span> yanar ve inceleme kuyruğuna alınır.
       </Text>
     </div>
   );
