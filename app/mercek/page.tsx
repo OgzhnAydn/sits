@@ -11,7 +11,7 @@ import {
 } from "antd";
 import {
   EyeOutlined, SafetyCertificateOutlined, SearchOutlined, ClusterOutlined, ThunderboltOutlined,
-  ExportOutlined, FileSearchOutlined, LogoutOutlined, BellOutlined, GlobalOutlined,
+  ExportOutlined, LogoutOutlined, BellOutlined, GlobalOutlined,
   WarningOutlined, ClockCircleOutlined, BarChartOutlined, AppstoreOutlined,
 } from "@ant-design/icons";
 import { markaDinle, cikis } from "@/lib/markaAuth";
@@ -1404,12 +1404,7 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, resmiSaglik
           <span style={{ fontSize: 14 }}>{(aday.bildirim?.zaman || bildirimZaman) ? "Yeniden Bildir" : "Bildir"}</span>
         </Button>
         <Text type="secondary" style={{ fontSize: 10, textAlign: "center", marginTop: -2 }}>Rapor panoya kopyalanır · resmî ihbarı siz gönderirsiniz</Text>
-        <Button block icon={<span className="material-symbols-outlined" style={{ fontSize: 17, lineHeight: 1 }}>travel_explore</span>}
-          onClick={() => setInceleAcik(true)} style={{ height: 38, fontWeight: 600, borderColor: "var(--c-4a90d9)", color: "var(--c-4a90d9)" }}>İncele</Button>
-        <Flex gap={8}>
-          <Button block danger icon={<ExportOutlined />} href={`http://${aday.domain}`} target="_blank" rel="noopener noreferrer nofollow">Siteyi Gör</Button>
-          <Button block icon={<FileSearchOutlined />} href={`/sorgula?q=${encodeURIComponent(aday.domain)}`}>Tam Rapor</Button>
-        </Flex>
+        <Button block danger icon={<ExportOutlined />} href={`http://${aday.domain}`} target="_blank" rel="noopener noreferrer nofollow">Siteyi Gör</Button>
         <InceleModal aday={aday} rapor={rapor} canliV={canliV} markaAdi={markaAdi} resmiDom={resmiDom} resmiSaglik={resmiSaglik} open={inceleAcik} onClose={() => setInceleAcik(false)} />
         <Button block icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>picture_as_pdf</span>}
           href={`/api/marka-rapor-pdf?marka=${encodeURIComponent(aday.marka)}&domain=${encodeURIComponent(aday.domain)}`} target="_blank" rel="noopener">
