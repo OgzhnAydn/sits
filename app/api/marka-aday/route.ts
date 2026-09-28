@@ -78,6 +78,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, kaydedildi: false, sebep: `düşük skor (${skor})` });
   }
 
+  // Worker, yakaladığı sertifikanın veriliş anını (notBefore) gönderir → GERÇEK yakalama gecikmesi
+  // ölçülür (zaman − certAni ≈ saatler; CertStream sertifikayı CT'ye düştüğü an görür).
+  const certAniHam = Number((body as { certAni?: number }).certAni) || 0;
+  const now = Date.now();
+  const certAni = certAniHam > 0 && certAniHam <= now + 3 * 86400000 ? certAniHam : undefined; // gelecek-tarihli/absürt değeri ele
   const aday: MarkaAday = {
     domain,
     marka: markaAnahtar,
@@ -87,7 +92,8 @@ export async function POST(req: NextRequest) {
     sinyaller: sinyaller.length ? sinyaller : ["Marka adını içeren, resmî olmayan yeni domain."],
     kaynak: "certstream",
     durum, // AKTİF tuzak mı yoksa PARK/izleme adayı mı — ayrı takip için
-    zaman: Date.now(),
+    zaman: now,
+    ...(certAni ? { certAni } : {}),
   };
   // İki yazma PARALEL (seri değil): kota-dolu/hang'de her biri 8s guard'a takılırsa seri 16s olurdu;
   // paralel tek 8s. Günlük sayaç + aday kaydı birbirinden bağımsız.

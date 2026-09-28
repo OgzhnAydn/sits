@@ -22,7 +22,7 @@ type Panel = {
   yukselmeler: { domain: string; sebep: string[]; t: number; simdikiRisk: number }[];
   saglik: { sonTespit: number; buGun: number; intelKapsam: number };
   erkenlik: { toplam: number; bizOnce: number; usomdaYok: number; usomOnce: number };
-  tespitHizi: { adet: number; enHizli: number; gunIci: number } | null;
+  tespitHizi: { gercekZamanli: number; olculen: number; enHizli: number | null; gunIci: number } | null;
 };
 // ms → insanca süre (dk/saat/gün)
 const sure = (ms: number) => {
@@ -376,18 +376,25 @@ export default function AnalitikPanel({ marka, bolum = "tam" }: { marka: string;
       {/* Tespit hızı — çıkış (ilk sertifika) → bizim tespit gecikmesi */}
       {G("hiz") && veri.tespitHizi && (
         <Card style={{ ...KART, borderColor: "var(--c-123a2a)", background: "var(--c-0a1a14)" }} styles={{ body: { padding: 18 } }}>
-          <Baslik ikon={<ClockCircleOutlined />}>Tespit hızı — sahte adres doğduktan ne kadar sonra yakaladık</Baslik>
+          <Baslik ikon={<ClockCircleOutlined />}>Tespit hızı — gerçek-zamanlı yakalama</Baslik>
           <Flex gap={28} wrap align="flex-end">
             <div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: "var(--c-3ee08a)", lineHeight: 1 }}>{sure(veri.tespitHizi.enHizli)}</div>
-              <div style={{ fontSize: 11, color: "var(--c-8fb0d4)", marginTop: 3 }}>en hızlı yakalama</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: "var(--c-3ee08a)", lineHeight: 1 }}>{veri.tespitHizi.gercekZamanli}</div>
+              <div style={{ fontSize: 11, color: "var(--c-8fb0d4)", marginTop: 3 }}>tespit CertStream ile anlık yakalandı</div>
             </div>
-            <div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: "var(--c-c7d6e6)", lineHeight: 1 }}>{veri.tespitHizi.gunIci}<span style={{ fontSize: 14, color: "var(--c-5b6b7d)" }}>/{veri.tespitHizi.adet}</span></div>
-              <div style={{ fontSize: 11, color: "var(--c-8fb0d4)", marginTop: 3 }}>aynı gün (24 saat içinde) yakalandı</div>
-            </div>
+            {veri.tespitHizi.olculen > 0 && veri.tespitHizi.enHizli != null ? (<>
+              <div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: "var(--c-3ee08a)", lineHeight: 1 }}>{sure(veri.tespitHizi.enHizli)}</div>
+                <div style={{ fontSize: 11, color: "var(--c-8fb0d4)", marginTop: 3 }}>en hızlı yakalama gecikmesi</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: "var(--c-c7d6e6)", lineHeight: 1 }}>{veri.tespitHizi.gunIci}<span style={{ fontSize: 14, color: "var(--c-5b6b7d)" }}>/{veri.tespitHizi.olculen}</span></div>
+                <div style={{ fontSize: 11, color: "var(--c-8fb0d4)", marginTop: 3 }}>aynı gün (24 saat içinde)</div>
+              </div>
+            </>) : null}
             <Text style={{ fontSize: 12, color: "var(--c-7d9cbf)", flex: 1, minWidth: 200 }}>
-              {veri.tespitHizi.adet} gerçek-zamanlı (CertStream) tespitte, sertifikanın alındığı an (çıkış) ile bizim ilk yakaladığımız an arasındaki süre. Sahte adres yayına çıktığı an — çoğu zaman kurbana ulaşmadan — yakalıyoruz.
+              Bu tespitler, sahte adresin sertifikası Sertifika Şeffaflığı (CT) loglarına düştüğü an <b style={{ color: "var(--c-c7d6e6)" }}>gerçek-zamanlı</b> yakalandı — çoğu zaman kurban görmeden.
+              {veri.tespitHizi.olculen === 0 ? " Yakalanan sertifika verilişiyle aramızdaki dakika/saat cinsinden gecikme ölçümü, yeni yakalamalarla birikiyor." : " Gecikme, yakaladığımız sertifikanın veriliş anına göre ölçülür (domainin yaşına göre değil)."}
             </Text>
           </Flex>
         </Card>

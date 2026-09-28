@@ -29,7 +29,7 @@ export type PanelVeri = {
   yukselmeler: { domain: string; sebep: string[]; t: number; simdikiRisk: number }[];
   saglik: { sonTespit: number; buGun: number; intelKapsam: number }; // sistem canlılığı
   erkenlik: MarkaErkenlik;                             // USOM'dan öndelik
-  tespitHizi: { adet: number; enHizli: number; gunIci: number } | null; // çıkış→tespit: en hızlı + aynı-gün sayısı
+  tespitHizi: { gercekZamanli: number; olculen: number; enHizli: number | null; gunIci: number } | null; // CertStream gerçek-zamanlı yakalama sayısı + (yakalanan cert'e göre) gecikme
 };
 
 export async function markaPanel(marka: string): Promise<PanelVeri> {
@@ -124,19 +124,20 @@ export async function markaPanel(marka: string): Promise<PanelVeri> {
   const erkenlik = await markaErkenlik(marka).catch(() => bos.erkenlik);
   const sonTespit = Math.max(0, ...adaylar.map((a) => a.zaman || 0));
 
-  // ── TESPİT HIZI: çıkış (ilk sertifika) → GERÇEK-ZAMANLI tespit gecikmesi ──
-  // Yalnız CertStream (canlı akış) tespitleri: gerçek "yakalama hızı" budur. Scan'le
-  // (sahte-bul/urlscan) sonradan bulunanlar "hız" değil "arama" → medyanı bozmasın.
+  // ── TESPİT HIZI ──
+  // ASIL KANIT = CertStream (canlı akış) ile yakalanan tespit SAYISI: bunlar sertifika CT loglarına
+  // düştüğü an, gerçek-zamanlı yakalandı. Gecikme sayısı ise YALNIZ yakaladığımız sertifikanın veriliş
+  // anı (certAni) ile ölçülür — domainin "en eski sertifikası" (cikisAni) yaş göstergesidir, hız DEĞİL;
+  // eski/yenilenmiş domainde 60 gün gibi yanıltıcı değer verir, bu yüzden hız ölçümünde KULLANILMAZ.
+  const gercekZamanli = adaylar.filter((a) => a.kaynak === "certstream").length;
   const gecikmeler = adaylar
     .filter((a) => a.kaynak === "certstream")
-    .map((a) => (a.cikisAni && a.zaman && a.zaman > a.cikisAni ? a.zaman - a.cikisAni : null))
+    .map((a) => (a.certAni && a.zaman && a.zaman > a.certAni ? a.zaman - a.certAni : null))
     .filter((x): x is number => x !== null && x < 400 * GUN)
     .sort((x, y) => x - y);
-  // "Aynı gün" (24s içinde) yakalananlar = gerçek hız kanıtı. Medyan, biz izlemeye
-  // başlamadan önce doğmuş eski domainlerle bozulduğu için KULLANILMAZ.
   const gunIci = gecikmeler.filter((g) => g < 24 * 3600000).length;
-  const tespitHizi = gecikmeler.length
-    ? { adet: gecikmeler.length, enHizli: gecikmeler[0], gunIci }
+  const tespitHizi = gercekZamanli
+    ? { gercekZamanli, olculen: gecikmeler.length, enHizli: gecikmeler.length ? gecikmeler[0] : null, gunIci }
     : null;
 
   return {

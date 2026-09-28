@@ -158,6 +158,19 @@ function derDomainleri(der) {
   }
 }
 
+// Domainler + YAKALADIĞIMIZ sertifikanın veriliş anı (notBefore, ms) — gerçek yakalama gecikmesi için.
+function derCoz(der) {
+  try {
+    const x = new crypto.X509Certificate(der);
+    const san = x.subjectAltName || "";
+    const domains = san.split(",").map((s) => s.trim()).filter((s) => s.startsWith("DNS:")).map((s) => s.slice(4).toLowerCase());
+    const certAni = Date.parse(x.validFrom) || 0; // notBefore
+    return { domains, certAni };
+  } catch {
+    return { domains: [], certAni: 0 };
+  }
+}
+
 // ── SİTS bildirimleri ───────────────────────────────────────────────────────
 async function markalariYukle() {
   try {
@@ -313,13 +326,13 @@ async function sitsGonder(yol, govde) {
   } finally { _gonderBirak(); }
 }
 
-async function adayGonder(domain, marka) {
+async function adayGonder(domain, marka, certAni) {
   const key = kok(domain);
   const now = Date.now();
   if (gorulen.has(key) && now - gorulen.get(key) < DEDUP_TTL) return;
   gorulen.set(key, now);
   try {
-    const j = await sitsGonder("/api/marka-aday", { domain: key, marka, secret: SECRET });
+    const j = await sitsGonder("/api/marka-aday", { domain: key, marka, secret: SECRET, ...(certAni ? { certAni } : {}) });
     if (j.kaydedildi) { sayac.aday++; console.log(`ADAY: ${key}  (${marka})  skor ${j.skor}`); }
     else if (j.yazDurum === "zamanasimi") { sayac.kotaDolu = (sayac.kotaDolu || 0) + 1; console.log(`[KOTA DOLU] ${key} (${marka}) skor ${j.skor} — Firestore yazılamadı (kota); dedup TTL sonra yeniden denenir`); }
   } catch (e) {
@@ -353,10 +366,10 @@ async function bahisGonder(domain) {
   }
 }
 
-function domainIsle(dom) {
+function domainIsle(dom, certAni) {
   sayac.domain++;
   const marka = eslesenMarka(dom);
-  if (marka) { sseYayin("catch", { domain: kok(dom), marka, t: Date.now() }); adayGonder(dom, marka); return; } // YAKALANDI → canlı akışa anında
+  if (marka) { sseYayin("catch", { domain: kok(dom), marka, t: Date.now() }); adayGonder(dom, marka, certAni); return; } // YAKALANDI → canlı akışa anında
   if (bahisEslesen(dom)) { if (BAHIS_AKTIF) bahisGonder(dom); return; } // yasa dışı bahis → kalıcı feed'e (yalnız bahis-worker'ı)
   if (SUPHELI.test(kok(dom))) faviconGonder(dom);
 }
@@ -380,7 +393,8 @@ function entryIsle(e) {
     return; // çok büyük çoğunluk burada, (marka için) parse ETMEDEN elenir
   }
   sayac.parse++;
-  for (const dom of derDomainleri(der)) domainIsle(dom);
+  const { domains, certAni } = derCoz(der);
+  for (const dom of domains) domainIsle(dom, certAni);
 }
 
 // ── SÜREKLİ AKTİF TARAMA (urlscan) ─────────────────────────────────────────────
