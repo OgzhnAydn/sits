@@ -137,6 +137,18 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // --- Müşteri destek talepleri (AI çözemeyince "Uzmana ilet") ---
+    // GİZLİ: okuma kapalı (uzman panosu Admin SDK/konsol ile okur). Yalnız geçerli şekilde oluşturma.
+    match /destek_talep/{doc} {
+      allow read: if false;
+      allow create: if request.resource.data.talepNo is string
+                    && request.resource.data.ozet is string
+                    && request.resource.data.ozet.size() < 3000
+                    && request.resource.data.marka is string
+                    && request.resource.data.marka.size() < 60;
+      allow update, delete: if false;
+    }
+
     // --- Güvenlik ağı: yukarıda eşleşmeyen her şey REDDEDİLİR ---
     match /{document=**} {
       allow read, write: if false;

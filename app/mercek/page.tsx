@@ -522,6 +522,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
         })()}
         <Text style={{ fontSize: 11, color: "var(--c-5f7c9c)", fontFamily: "'IBM Plex Mono',monospace" }}>Siber Mercek · MirLeon © {new Date().getFullYear()}</Text>
       </Flex>
+      <DestekPanel marka={markaFiltre} markaAdi={markaAdi} />
     </div>
   );
 }
@@ -582,6 +583,106 @@ function CanliAkisSeridi({ akis, toplamCT, yakalananN, bagli, onSec }: { akis: A
         Sertifikalar akarken markanı taklit eden bir domain çıkarsa <span style={{ color: "var(--c-ff9aa4)" }}>kırmızı</span> yanar ve inceleme kuyruğuna alınır.
       </Text>
     </div>
+  );
+}
+
+// 7/24 MÜŞTERİ DESTEK PANELİ — sağdan açılır-kapanır. AI asistan (Mercek Destek) markanın pano
+// verisiyle ANINDA yanıtlar (/api/destek); çözemezse "Uzmana ilet" → insan kuyruğu (/api/destek-talep).
+// Konuşma marka başına localStorage'da saklanır (yenilemede kaybolmaz). WS gerekmez: AI istek-yanıt.
+function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
+  const [acik, setAcik] = useState(false);
+  const [mesajlar, setMesajlar] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [girdi, setGirdi] = useState("");
+  const [yaziyor, setYaziyor] = useState(false);
+  const [iletiliyor, setIletiliyor] = useState(false);
+  const kaydir = useRef<HTMLDivElement>(null);
+  const anahtar = `mercek_destek_${marka || "genel"}`;
+  useEffect(() => {
+    try { const s = localStorage.getItem(anahtar); setMesajlar(s ? JSON.parse(s) : []); } catch { setMesajlar([]); }
+  }, [anahtar]);
+  useEffect(() => {
+    try { if (mesajlar.length) localStorage.setItem(anahtar, JSON.stringify(mesajlar.slice(-40))); } catch { /* */ }
+    const el = kaydir.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [mesajlar, anahtar, yaziyor]);
+
+  const karsilama = `Merhaba 👋 Ben Mercek Destek. ${markaAdi} panonuzla ilgili her şeyi sorabilirsiniz — bir tespitin ne anlama geldiği, USOM'a nasıl bildirileceği, sonraki adımlar. Nasıl yardımcı olayım?`;
+
+  async function gonder() {
+    const t = girdi.trim(); if (!t || yaziyor) return;
+    const yeni = [...mesajlar, { role: "user" as const, content: t }];
+    setMesajlar(yeni); setGirdi(""); setYaziyor(true);
+    try {
+      const r = await fetch("/api/destek", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ marka, markaAdi, mesajlar: yeni }) });
+      const j = await r.json();
+      setMesajlar((p) => [...p, { role: "assistant", content: j.cevap || "Şu an yanıt veremedim, tekrar dener misiniz?" }]);
+    } catch {
+      setMesajlar((p) => [...p, { role: "assistant", content: "Bağlantı sorunu oldu. Lütfen tekrar deneyin ya da uzmana iletin." }]);
+    } finally { setYaziyor(false); }
+  }
+  async function uzmanaIlet() {
+    if (iletiliyor) return; setIletiliyor(true);
+    const ozet = mesajlar.filter((m) => m.role === "user").slice(-3).map((m) => m.content).join(" | ") || "Uzman görüşmesi talebi";
+    try {
+      const r = await fetch("/api/destek-talep", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ marka, markaAdi, ozet, konusma: mesajlar }) });
+      const j = await r.json();
+      setMesajlar((p) => [...p, { role: "assistant", content: j.ok ? `Talebiniz uzman ekibimize iletildi ✓ Takip no: ${j.talepNo}. En kısa sürede dönüş yapacağız.` : "Talep şu an kaydedilemedi; lütfen biraz sonra tekrar deneyin." }]);
+    } catch { setMesajlar((p) => [...p, { role: "assistant", content: "Talep iletilemedi; bağlantıyı kontrol edip tekrar deneyin." }]); }
+    finally { setIletiliyor(false); }
+  }
+
+  const goster = mesajlar.length ? mesajlar : [{ role: "assistant" as const, content: karsilama }];
+  return (
+    <>
+      {!acik && (
+        <button onClick={() => setAcik(true)} title="7/24 Müşteri Desteği"
+          style={{ position: "fixed", right: 0, top: "50%", transform: "translateY(-50%)", zIndex: 71, cursor: "pointer",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "12px 7px",
+            background: "var(--c-1e5285)", color: "#fff", border: "none", borderRadius: "10px 0 0 10px", boxShadow: "-3px 0 14px rgba(0,0,0,.35)",
+            fontFamily: "'IBM Plex Sans',sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: ".02em", writingMode: "vertical-rl" }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 20, writingMode: "horizontal-tb" }}>support_agent</span>
+          7/24 Destek
+        </button>
+      )}
+      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(390px, 94vw)", zIndex: 72,
+        transform: acik ? "translateX(0)" : "translateX(105%)", transition: "transform .28s cubic-bezier(.4,0,.2,1)",
+        display: "flex", flexDirection: "column", background: "var(--c-0a1420)", borderLeft: "1px solid var(--c-17293c)", boxShadow: "-10px 0 40px rgba(0,0,0,.5)" }}>
+        <Flex align="center" gap={10} style={{ padding: "12px 14px", borderBottom: "1px solid var(--c-17293c)", background: "var(--c-0b1726)" }}>
+          <span style={{ position: "relative", width: 34, height: 34, borderRadius: 9, background: "var(--c-1e5285)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#fff" }}>support_agent</span>
+            <span style={{ position: "absolute", right: -1, bottom: -1, width: 10, height: 10, borderRadius: 5, background: "var(--c-31c8a0)", border: "2px solid var(--c-0b1726)" }} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Text strong style={{ fontSize: 13, color: "var(--c-e9f2fa)", display: "block", lineHeight: 1.2 }}>Mercek Destek</Text>
+            <Text style={{ fontSize: 10.5, color: "var(--c-31c8a0)" }}>● çevrimiçi · 7/24 yanıt</Text>
+          </div>
+          <Button type="text" onClick={() => setAcik(false)} icon={<span className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--c-8fa6bd)" }}>close</span>} />
+        </Flex>
+        <div style={{ padding: "6px 14px", borderBottom: "1px solid var(--c-12202e)", background: "var(--c-0e1a2b)" }}>
+          <Text style={{ fontSize: 10.5, color: "var(--c-8fa6bd)" }}>Bağlam: <b style={{ color: "var(--c-cfe0ef)" }}>{markaAdi}</b> marka koruma panosu</Text>
+        </div>
+        <div ref={kaydir} style={{ flex: 1, overflowY: "auto", padding: "14px", display: "flex", flexDirection: "column", gap: 10 }}>
+          {goster.map((m, i) => (
+            <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "86%" }}>
+              <div style={{ padding: "8px 11px", borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
+                background: m.role === "user" ? "var(--c-1e5285)" : "var(--c-152337)", color: m.role === "user" ? "#eaf2fb" : "var(--c-cfe0ef)",
+                fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.content}</div>
+            </div>
+          ))}
+          {yaziyor && <div style={{ alignSelf: "flex-start", padding: "8px 12px", borderRadius: "12px 12px 12px 3px", background: "var(--c-152337)" }}><Spin size="small" /> <Text style={{ fontSize: 11, color: "var(--c-8fa6bd)", marginLeft: 4 }}>yazıyor…</Text></div>}
+        </div>
+        <div style={{ padding: "8px 12px", borderTop: "1px solid var(--c-17293c)", display: "flex", flexDirection: "column", gap: 8 }}>
+          <Button size="small" onClick={uzmanaIlet} loading={iletiliyor} icon={<span className="material-symbols-outlined" style={{ fontSize: 15, lineHeight: 1 }}>headset_mic</span>}
+            style={{ alignSelf: "flex-start", borderColor: "var(--c-4a90d9)", color: "var(--c-4a90d9)" }}>Uzmana ilet</Button>
+          <Flex gap={8} align="flex-end">
+            <textarea value={girdi} onChange={(e) => setGirdi(e.target.value)} rows={1} placeholder="Sorunuzu yazın…"
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); gonder(); } }}
+              style={{ flex: 1, resize: "none", maxHeight: 90, background: "var(--c-0b1726)", color: "var(--c-e9f2fa)", border: "1px solid var(--c-1d3350)", borderRadius: 9, padding: "9px 11px", fontSize: 12.5, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none" }} />
+            <Button type="primary" onClick={gonder} disabled={!girdi.trim() || yaziyor} icon={<span className="material-symbols-outlined" style={{ fontSize: 18, lineHeight: 1 }}>send</span>} style={{ background: "var(--c-1e5285)", height: 38 }} />
+          </Flex>
+          <Text style={{ fontSize: 9, color: "var(--c-5c748b)", textAlign: "center" }}>AI asistan anlık yanıt verir · karmaşık talepler uzmana iletilir</Text>
+        </div>
+      </div>
+    </>
   );
 }
 

@@ -130,6 +130,34 @@ export async function kampanyaSorgula(imza: string): Promise<KampanyaEslesme | n
   }
 }
 
+// DESTEK TALEBİ — AI asistan çözemeyince "uzmana ilet": konuşma + özet insan kuyruğuna yazılır.
+// Düşük hacim (sohbet başına en fazla birkaç) → kota güvenli. Uzman panosu bunu okur (Faz 2).
+export async function destekTalepKaydet(t: {
+  marka: string;
+  markaAdi: string;
+  ozet: string;
+  iletisim?: string;
+  konusma: { role: string; content: string }[];
+}): Promise<string | null> {
+  if (!firebaseHazir || !db) return null;
+  const talepNo = "DST-" + Date.now().toString(36).toUpperCase();
+  try {
+    await addDoc(collection(db, "destek_talep"), {
+      talepNo,
+      marka: t.marka || "",
+      markaAdi: t.markaAdi || "",
+      ozet: (t.ozet || "").slice(0, 2000),
+      iletisim: (t.iletisim || "").slice(0, 200),
+      konusma: (t.konusma || []).slice(-20).map((m) => ({ role: m.role, content: String(m.content).slice(0, 2000) })),
+      durum: "acik",
+      tarih: serverTimestamp(),
+    });
+    return talepNo;
+  } catch {
+    return null;
+  }
+}
+
 export async function bildirimKaydet(
   analiz: Analiz,
   referansNo: string,
