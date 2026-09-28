@@ -708,11 +708,11 @@ function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
     <>
       {!acik && (
         <button onClick={() => setAcik(true)} title="7/24 Müşteri Desteği"
-          style={{ position: "fixed", right: 0, top: "50%", transform: "translateY(-50%)", zIndex: 71, cursor: "pointer",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "12px 7px",
-            background: "var(--c-1e5285)", color: "#fff", border: "none", borderRadius: "10px 0 0 10px", boxShadow: "-3px 0 14px rgba(0,0,0,.35)",
-            fontFamily: "'IBM Plex Sans',sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: ".02em", writingMode: "vertical-rl" }}>
-          <span className="material-symbols-outlined" style={{ fontSize: 20, writingMode: "horizontal-tb" }}>support_agent</span>
+          style={{ position: "fixed", right: 18, bottom: 18, zIndex: 71, cursor: "pointer",
+            display: "inline-flex", alignItems: "center", gap: 9, padding: "11px 16px",
+            background: "var(--c-1e5285)", color: "#fff", border: "none", borderRadius: 999, boxShadow: "0 6px 22px rgba(0,0,0,.45)",
+            fontFamily: "'IBM Plex Sans',sans-serif", fontSize: 13, fontWeight: 600, letterSpacing: ".01em" }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 21 }}>headset_mic</span>
           7/24 Destek
         </button>
       )}
