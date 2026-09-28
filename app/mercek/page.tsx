@@ -126,7 +126,8 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
   const [yukleniyor, setYukleniyor] = useState(false);
   const [filtre, setFiltre] = useState<Filtre>("hepsi");
   const [zaman, setZaman] = useState<"anlik" | "24s" | "7g" | "hepsi">("hepsi"); // grafik zaman penceresi (kalabalık azalt)
-  const [grafGorunum, setGrafGorunum] = useState<"radyal" | "evren">("radyal"); // radyal kart görünümü (varsayılan) ↔ canvas evren
+  const [grafGorunum, setGrafGorunum] = useState<"radyal" | "evren" | "liste">("radyal"); // radyal kart ↔ canvas evren ↔ zaman-sıralı takip listesi
+  const [listeSira, setListeSira] = useState<"yeni" | "eski" | "skor">("yeni"); // liste görünümü sıralaması
   const [markaFiltre, setMarkaFiltre] = useState("");
   const [hesapAdi, setHesapAdi] = useState("");
   const [gorunum, setGorunum] = useState<"evren" | "ortak" | "mobilreklam" | "oncelik">("evren"); // kokpit içi menü: grafik ya da analitik bölüm
@@ -444,7 +445,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
           {/* MERKEZ: 3 grafik */}
           <Col xs={24} lg={13}>
             <Card
-              size="small" style={{ height: "100%" }} styles={{ body: { height: "calc(100% - 46px)", padding: 8 } }}
+              size="small" style={{ height: "100%" }} styles={{ body: { height: "calc(100% - 46px)", padding: 8, display: "flex", flexDirection: "column" } }}
               title={baslik(3, "THREAT UNIVERSE GRAFİĞİ", (
                 <Space size={11} wrap>
                   <Efsane renk="var(--c-ff5468)" t="Aktif tuzak" />
@@ -457,7 +458,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
               ))}
             >
               {/* Grafik her iki temada da koyu "radar ekranı" kalır (canvas renkleri koyu; JS ile CSS-var okunamadığından). */}
-              <div style={{ position: "relative", height: grafGorunum === "radyal" ? 600 : 460, borderRadius: 10, overflow: "hidden",
+              <div style={{ position: "relative", flexShrink: 0, height: grafGorunum === "evren" ? 460 : 600, borderRadius: 10, overflow: "hidden",
                 backgroundColor: grafGorunum === "evren" ? (koyu ? "#0a1420" : "#f4f7fb") : (koyu ? "#0b1524" : "#f5f7fa"),
                 ...(grafGorunum === "radyal" ? { backgroundImage: `radial-gradient(circle, ${koyu ? "#1b2c42" : "#ccd5e2"} 1px, transparent 1.5px)`, backgroundSize: "22px 22px", backgroundPosition: "center" } : {}) }}>
                 <div style={{ position: "absolute", top: 8, left: 8, zIndex: 3 }}>
@@ -465,12 +466,14 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                     options={[{ label: "Anlık", value: "anlik" }, { label: "24s", value: "24s" }, { label: "7 gün", value: "7g" }, { label: "Tümü", value: "hepsi" }]} />
                 </div>
                 <div style={{ position: "absolute", top: 8, right: 8, zIndex: 3 }}>
-                  <Segmented size="small" value={grafGorunum} onChange={(v) => setGrafGorunum(v as "radyal" | "evren")}
-                    options={[{ label: "Radyal", value: "radyal" }, { label: "Evren", value: "evren" }]} />
+                  <Segmented size="small" value={grafGorunum} onChange={(v) => setGrafGorunum(v as "radyal" | "evren" | "liste")}
+                    options={[{ label: "Radyal", value: "radyal" }, { label: "Evren", value: "evren" }, { label: "Liste", value: "liste" }]} />
                 </div>
                 {grafGorunum === "radyal"
                   ? <MarkaRadyal marka={markaAdi} adaylar={grafikAdaylar} secili={secili} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} resmiVarliklar={markaFiltre ? (resmiSaglik?.varliklar || []) : []} onResmiSec={(d) => markaFiltre && analizEt({ domain: d, marka: markaFiltre, skor: 0, durum: "canli" })} />
-                  : <ThreatUniverse marka={markaAdi} adaylar={grafikAdaylar} secili={secili} rapor={rapor} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} />}
+                  : grafGorunum === "evren"
+                  ? <ThreatUniverse marka={markaAdi} adaylar={grafikAdaylar} secili={secili} rapor={rapor} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} />
+                  : <TespitListesi adaylar={grafikAdaylar} secili={secili} onSelect={analizEt} sira={listeSira} setSira={setListeSira} />}
               </div>
               <CanliAkisSeridi akis={canliAkis.length ? canliAkis : akis} toplamCT={toplamCT} yakalananN={yakalananN} bagli={akisBagli} onSec={(d, m) => analizEt({ domain: d, marka: m, skor: 0, durum: "canli" })} />
             </Card>
@@ -534,9 +537,9 @@ function Clock() {
 function CanliAkisSeridi({ akis, toplamCT, yakalananN, bagli, onSec }: { akis: AkisSatir[]; toplamCT: number; yakalananN: number; bagli: boolean; onSec: (d: string, m: string) => void }) {
   const aktif = bagli;
   const dRenk = aktif ? "var(--c-31c8a0)" : "var(--c-faad14)";
-  const satirlar = akis.slice(0, 8);
+  const satirlar = akis.slice(0, 40);
   return (
-    <div style={{ marginTop: 10, border: "1px solid var(--c-17293c)", borderRadius: 10, overflow: "hidden", background: "var(--c-0a1420)" }}>
+    <div style={{ marginTop: 8, border: "1px solid var(--c-17293c)", borderRadius: 10, overflow: "hidden", background: "var(--c-0a1420)", flex: 1, minHeight: 220, maxHeight: "70vh", display: "flex", flexDirection: "column" }}>
       <Flex align="center" gap={9} style={{ padding: "8px 12px", borderBottom: "1px solid var(--c-12202e)", background: "var(--c-0b1726)" }}>
         <Badge status={aktif ? "processing" : "warning"} color={dRenk} />
         <Text strong style={{ fontSize: 11, letterSpacing: ".07em", color: dRenk }}>{aktif ? "CANLI AKIŞ" : "AKIŞ BEKLENİYOR"}</Text>
@@ -552,7 +555,7 @@ function CanliAkisSeridi({ akis, toplamCT, yakalananN, bagli, onSec }: { akis: A
           </div>
         </Flex>
       </Flex>
-      <div style={{ padding: "3px 0", minHeight: 150 }}>
+      <div style={{ padding: "3px 0", flex: 1, minHeight: 0, overflowY: "auto" }}>
         {satirlar.length === 0 && <Text style={{ display: "block", textAlign: "center", padding: "46px 0", fontSize: 11, color: "var(--c-5c748b)" }}>Akış başlatılıyor…</Text>}
         {satirlar.map((a) => a.marka ? (
           <div key={a.i} onClick={() => onSec(a.domain, a.marka!)} title="İncele"
@@ -1137,18 +1140,30 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, resmiSaglik
       <KarsilastirGorsel resmiDom={resmiDom} fakeDom={aday.domain} fakeShot={rapor?.ekranGoruntusu} benzerlik={benzerlik} markaAdi={markaAdi} />
 
       {(() => {
-        // BİLDİRİM / KAPATMA DURUMU — "kapatıldı" iddia edilmez, DOĞRULANIR (USOM engel / erişilemez).
+        // BİLDİRİM / DURUM — MÜŞTERİYİ YANILTMAMAK için üç DOĞRULANMIŞ hâl ayrıştırılır; asla
+        // blanket "Kapatıldı" denmez. (1) ERİŞİLEMEZ: canlı probe (dead/yayında-değil) DOĞRULADI →
+        // gerçekten yayında değil. (2) USOM LİSTESİNDE: USOM resmî API'de BİREBİR eşleşme (gerçek,
+        // doğrulanabilir) — ama "kapatıldı" DEĞİL: liste TR ISP'lerini engeller, sunucu ayrı kapanır.
+        // (3) BİLDİRİLDİ: operatör USOM'a iletti. USOM-listede ama canlıysa → yeşil "çözüldü" GÖSTERİLMEZ.
         const reported = aday.bildirim?.zaman || bildirimZaman;
-        const engelAlan = rapor?.alanlar?.find((a) => a.ad === "Engelleme durumu")?.deger || "";
-        const usomEngel = /Zaten biliniyor|engelli/i.test(engelAlan);
-        const olu = canliV?.durum === "dead" || aday.durum === "yayinda-degil";
-        const kapatildi = usomEngel || olu;
-        if (!reported && !kapatildi) return null;
+        const kara = rapor?.alanlar?.find((a) => a.ad === "Kara liste")?.deger || "";
+        const usomListe = /USOM/i.test(kara); // osint tarafında birebir-host eşleşmesiyle doğrulanır
+        const erisilemez = canliV?.durum === "dead" || aday.durum === "yayinda-degil"; // canlı kontrol doğruladı
+        const halaYayinda = canliV?.durum === "live" || canliV?.durum === "redirect" || canliV?.durum === "erisim_kisitli" || canliV?.durum === "parked";
+        if (!reported && !usomListe && !erisilemez) return null;
+        const cozuldu = erisilemez; // yalnız gerçekten erişilemez ise "çözüldü" (yeşil)
         return (
-          <div style={{ borderRadius: 8, padding: "7px 10px", background: kapatildi ? "var(--c-0e2f1e)" : "var(--c-0e1a2e)", border: `1px solid ${kapatildi ? "var(--c-31c8a0)" : "var(--c-1d3350)"}` }}>
+          <div style={{ borderRadius: 8, padding: "7px 10px", background: cozuldu ? "var(--c-0e2f1e)" : usomListe ? "var(--c-1a1206)" : "var(--c-0e1a2e)", border: `1px solid ${cozuldu ? "var(--c-31c8a0)" : usomListe ? "var(--c-faad14)" : "var(--c-1d3350)"}` }}>
             {reported ? <Flex align="center" gap={6}><span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-4a90d9)" }}>flag</span><Text style={{ fontSize: 11, color: "var(--c-8fb0d4)" }}>USOM&apos;a bildirildi · {new Date(reported).toLocaleDateString("tr-TR")}</Text></Flex> : null}
-            {kapatildi ? <Flex align="center" gap={6} style={{ marginTop: reported ? 4 : 0 }}><span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-31c8a0)" }}>check_circle</span><Text style={{ fontSize: 11, color: "var(--c-3ee08a)" }}>Kapatıldı — {usomEngel ? "USOM/BTK engelli" : "adres artık erişilemez"}</Text></Flex> : null}
-            {reported && !kapatildi ? <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)", display: "block", marginTop: 3 }}>Takipte — kapanış USOM listesi/erişilemezlikle otomatik doğrulanır.</Text> : null}
+            {erisilemez ? (
+              <Flex align="center" gap={6} style={{ marginTop: reported ? 4 : 0 }}><span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-31c8a0)" }}>check_circle</span><Text style={{ fontSize: 11, color: "var(--c-3ee08a)" }}>Erişilemez — adres artık yayında değil (canlı kontrol doğruladı)</Text></Flex>
+            ) : usomListe ? (
+              <div style={{ marginTop: reported ? 4 : 0 }}>
+                <Flex align="center" gap={6}><span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-faad14)" }}>gpp_bad</span><Text style={{ fontSize: 11, color: "var(--c-f6c877)" }}>USOM&apos;un resmî zararlı listesinde (doğrulandı)</Text></Flex>
+                <Text style={{ fontSize: 9.5, color: "var(--c-8fa6bd)", display: "block", marginTop: 3, lineHeight: 1.4 }}>USOM listesindeki adresler Türkiye&apos;de ISP&apos;lerce engellenir.{halaYayinda ? " Ancak sunucu barındırma HÂLÂ ayakta — &quot;kapatıldı&quot; demiyoruz; teknik kapanış ayrıca sürebilir." : ""}</Text>
+              </div>
+            ) : null}
+            {reported && !usomListe && !erisilemez ? <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)", display: "block", marginTop: 3 }}>Takipte — kapanış, canlı erişilemezlik veya USOM listesiyle otomatik doğrulanır.</Text> : null}
           </div>
         );
       })()}
@@ -1507,6 +1522,65 @@ function KarsilastirGorsel({ resmiDom, fakeDom, fakeShot, benzerlik, markaAdi }:
           <Progress percent={benzerlik} size="small" strokeColor={seviye(benzerlik).renk} style={{ flex: 1, margin: 0 }} format={(p) => <span style={{ color: "var(--c-e9f2fa)", fontFamily: "'IBM Plex Mono',monospace" }}>%{p}</span>} />
         </Flex>
       )}
+    </div>
+  );
+}
+
+// TESPİT DEFTERİ (Liste görünümü) — TAKİP için: her tespiti zaman sırasıyla (Yeni→Eski / Eski→Yeni
+// / Skor) listeler; her satırda İLK GÖRÜLME zamanı + USOM BİLDİRİM DURUMU (Bildirildi · tarih /
+// Bildirilmedi). Sol paneldeki "Bildirilenler/Kapatılanlar" süzgeçleriyle birlikte çalışır (süzülmüş
+// liste gelir). Kullanıcı "en yeni/en eski hangisi, hangisini bildirdim" sorusunu burada yanıtlar.
+function TespitListesi({ adaylar, secili, onSelect, sira, setSira }: { adaylar: Aday[]; secili: Aday | null; onSelect: (a: Aday) => void; sira: "yeni" | "eski" | "skor"; setSira: (s: "yeni" | "eski" | "skor") => void }) {
+  const rel = (t?: number) => {
+    if (!t) return "—";
+    const dk = Math.floor((Date.now() - t) / 60000);
+    if (dk < 1) return "az önce"; if (dk < 60) return dk + " dk";
+    const sa = Math.floor(dk / 60); if (sa < 24) return sa + " sa";
+    return Math.floor(sa / 24) + " gün";
+  };
+  const sirali = useMemo(() => {
+    const a = [...adaylar];
+    if (sira === "skor") a.sort((x, y) => (y.skor || 0) - (x.skor || 0));
+    else a.sort((x, y) => sira === "yeni" ? (y.zaman || 0) - (x.zaman || 0) : (x.zaman || 0) - (y.zaman || 0));
+    return a;
+  }, [adaylar, sira]);
+  const bildirilen = adaylar.filter((a) => a.bildirim?.zaman).length;
+  return (
+    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+      <Flex align="center" gap={10} wrap style={{ padding: "9px 12px", borderBottom: "1px solid var(--c-17293c)", rowGap: 6 }}>
+        <Text strong style={{ fontSize: 11, letterSpacing: ".06em", color: "var(--c-cfe0ef)" }}>TESPİT DEFTERİ</Text>
+        <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)" }}>{adaylar.length} tespit · <span style={{ color: "var(--c-3ee08a)" }}>{bildirilen} bildirildi</span> · {adaylar.length - bildirilen} bekliyor</Text>
+        <Segmented size="small" value={sira} onChange={(v) => setSira(v as "yeni" | "eski" | "skor")} style={{ marginLeft: "auto" }}
+          options={[{ label: "Yeni→Eski", value: "yeni" }, { label: "Eski→Yeni", value: "eski" }, { label: "Skor", value: "skor" }]} />
+      </Flex>
+      <Flex align="center" gap={10} style={{ padding: "5px 12px", borderBottom: "1px solid var(--c-12202e)" }}>
+        <span style={{ width: 8, flexShrink: 0 }} />
+        <Text style={{ flex: 1, fontSize: 9, color: "var(--c-5c748b)", textTransform: "uppercase", letterSpacing: ".05em" }}>Adres</Text>
+        <Text style={{ width: 40, fontSize: 9, color: "var(--c-5c748b)", textTransform: "uppercase", textAlign: "center", flexShrink: 0 }}>Skor</Text>
+        <Text style={{ width: 62, fontSize: 9, color: "var(--c-5c748b)", textTransform: "uppercase", textAlign: "right", flexShrink: 0 }}>İlk görülme</Text>
+        <Text style={{ width: 118, fontSize: 9, color: "var(--c-5c748b)", textTransform: "uppercase", textAlign: "right", flexShrink: 0 }}>USOM durumu</Text>
+      </Flex>
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {sirali.length === 0 && <Empty description={<Text style={{ color: "var(--c-8fa6bd)" }}>Bu süzgeçte tespit yok</Text>} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 40 }} />}
+        {sirali.map((a) => {
+          const sv = seviye(a.skor); const sel = secili?.domain === a.domain;
+          const rep = a.bildirim?.zaman;
+          return (
+            <Flex key={a.domain} align="center" gap={10} onClick={() => onSelect(a)} title="Analiz için seç"
+              style={{ padding: "7px 12px", cursor: "pointer", borderBottom: "1px solid var(--c-0f1b2e)", background: sel ? "var(--c-152337)" : "transparent", boxShadow: sel ? "inset 2px 0 0 var(--c-4a90d9)" : "none" }}>
+              <span style={{ width: 8, height: 8, borderRadius: 4, background: sv.renk, flexShrink: 0 }} />
+              <Text style={{ flex: 1, minWidth: 0, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, color: "var(--c-cfe0ef)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.domain}</Text>
+              <span style={{ width: 40, textAlign: "center", flexShrink: 0 }}><Tag color={a.skor >= 60 ? "error" : a.skor >= 30 ? "warning" : "default"} style={{ margin: 0, fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, padding: "0 5px" }}>{a.skor}</Tag></span>
+              <Text style={{ width: 62, fontSize: 10.5, color: "var(--c-8fa6bd)", textAlign: "right", fontFamily: "'IBM Plex Mono',monospace", flexShrink: 0 }}>{rel(a.zaman)}</Text>
+              <div style={{ width: 118, textAlign: "right", flexShrink: 0 }}>
+                {rep
+                  ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--c-3ee08a)", fontSize: 10, justifyContent: "flex-end" }}><span className="material-symbols-outlined" style={{ fontSize: 13 }}>flag</span>{new Date(rep).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "2-digit" })}</span>
+                  : <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--c-5f7c9c)", fontSize: 10, justifyContent: "flex-end" }}><span className="material-symbols-outlined" style={{ fontSize: 13 }}>radio_button_unchecked</span>Bildirilmedi</span>}
+              </div>
+            </Flex>
+          );
+        })}
+      </div>
     </div>
   );
 }
