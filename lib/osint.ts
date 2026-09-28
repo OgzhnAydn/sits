@@ -117,6 +117,37 @@ async function json(url: string, ms = 6000): Promise<Record<string, unknown> | n
   }
 }
 
+// ── RDAP: IANA bootstrap ile YETKİLİ registry sunucusuna doğrudan sor ────────────────
+// rdap.org ücretsiz ARACIdır; ağır rate-limit + ekstra yönlendirme = "yanıt vermedi". IANA
+// bootstrap'ından (data.iana.org/rdap/dns.json) TLD→yetkili RDAP sunucusunu alıp DOĞRUDAN
+// sorarız (daha güvenilir). TLD bootstrap'ta yoksa (ör. .tr — nic.tr RDAP sunmaz) → {yok}.
+let RDAP_HARITA: Record<string, string> | null = null;
+let RDAP_HARITA_T = 0;
+async function rdapHarita(): Promise<Record<string, string>> {
+  if (RDAP_HARITA && Date.now() - RDAP_HARITA_T < 24 * 3600e3) return RDAP_HARITA;
+  const m: Record<string, string> = {};
+  try {
+    const j = await json("https://data.iana.org/rdap/dns.json", 8000);
+    for (const svc of (j?.services as [string[], string[]][]) || []) {
+      const tlds = svc[0] || [], urls = svc[1] || [];
+      const base = urls.find((u) => u.startsWith("https")) || urls[0];
+      if (base) for (const t of tlds) m[t.toLowerCase()] = base.replace(/\/$/, "");
+    }
+    if (Object.keys(m).length) { RDAP_HARITA = m; RDAP_HARITA_T = Date.now(); }
+  } catch { /* bootstrap alınamadı → rdap.org'a düşülür */ }
+  return RDAP_HARITA || m;
+}
+async function rdapCek(domain: string): Promise<{ rd?: Record<string, unknown>; yok?: boolean }> {
+  const tld = domain.split(".").pop()?.toLowerCase() || "";
+  const harita = await rdapHarita();
+  const base = harita[tld];
+  if (Object.keys(harita).length > 0 && !base) return { yok: true }; // bu uzantı RDAP sunmuyor (ör. .tr)
+  const dene = async (url: string) => (await json(url, 9000)) || (await json(url, 9000)); // 9sn + 1 tekrar
+  let rd = base ? await dene(`${base}/domain/${encodeURIComponent(domain)}`) : null;
+  if (!rd) rd = await dene(`https://rdap.org/domain/${encodeURIComponent(domain)}`); // yedek: aracı
+  return { rd: rd || undefined };
+}
+
 // Bir domainin ilk A kaydını (IP) DoH ile çöz.
 async function ilkA(domain: string): Promise<string | null> {
   const j = await json(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`, 4000);
@@ -979,9 +1010,10 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
     // Liste alınamazsa diğer sinyallerle devam
   }
 
-  // RDAP — kayıt tarihi, yaş, registrar. rdap.org kararsız olabildiği için 1 kez tekrar dene.
-  let rd = await json(`https://rdap.org/domain/${encodeURIComponent(domain)}`);
-  if (!rd) rd = await json(`https://rdap.org/domain/${encodeURIComponent(domain)}`);
+  // RDAP — kayıt tarihi, yaş, registrar. IANA bootstrap ile YETKİLİ sunucuya doğrudan sorar
+  // (rdap.org aracısının rate-limit'ini atlar); TLD RDAP sunmuyorsa (ör. .tr) net mesaj verir.
+  const rdapSonuc = await rdapCek(domain);
+  const rd = rdapSonuc.rd;
   if (rd) {
     const events = (rd.events as { eventAction: string; eventDate: string }[]) || [];
     const kayit = events.find((e) => e.eventAction === "registration")?.eventDate;
@@ -1008,10 +1040,14 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
       r.bulgular.push("Domain, kayıt kuruluşu tarafından ASKIYA ALINMIŞ / kaldırılma sürecinde (hold) — kötüye kullanım nedeniyle dondurulmuş olabilir.");
       r.alanlar.push({ ad: "Registrar durumu", deger: `${askida.join(", ")} (askıda/kaldırılıyor)` });
     }
+  } else if (rdapSonuc.yok) {
+    // Bu uzantı RDAP kayıt sorgusu SUNMUYOR (ör. .tr — nic.tr RDAP yok). Kalıcı, arıza değil.
+    const tld = domain.split(".").pop()?.toLowerCase() || "";
+    r.alanlar.push({ ad: "Kayıt bilgisi", deger: `Bu uzantı (.${tld}) RDAP kayıt sorgusu desteklemiyor` });
   } else {
-    // RDAP yanıt vermedi — RDAP servisleri kararsızdır; bu TEK BAŞINA risk DEĞİL,
+    // RDAP yanıt vermedi (yetkili sunucu + rdap.org denendi; timeout/rate-limit). TEK BAŞINA risk DEĞİL,
     // "çok yeni" de DEMEK değil. Sadece bilgi olarak not düş (gerekçe/risk üretme).
-    r.alanlar.push({ ad: "Kayıt bilgisi", deger: "Şu an alınamadı (RDAP yanıt vermedi)" });
+    r.alanlar.push({ ad: "Kayıt bilgisi", deger: "Şu an alınamadı (RDAP sunucusu geçici yanıt vermedi)" });
   }
 
   // DNS -> IP -> barındırma
