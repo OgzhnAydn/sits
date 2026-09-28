@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import type Anthropic from "@anthropic-ai/sdk";
+import { aiClient, AI_MODELI } from "@/lib/ai";
 import { geminiMetin, geminiVarMi } from "@/lib/gemini";
 import { limitAsildi } from "@/lib/rateLimit";
 import { markaAdaylariMarka } from "@/lib/store";
@@ -8,6 +10,29 @@ export const runtime = "nodejs";
 export const maxDuration = 45;
 
 type Mesaj = { role: "user" | "assistant"; content: string };
+
+// Sağlayıcı-bağımsız yanıt: önce Claude (varsa — güvenilir, 7/24), yoksa Gemini (503'e karşı 3 deneme).
+async function yanitUret(system: string, mesajlar: Mesaj[]): Promise<string | null> {
+  const claude = aiClient();
+  if (claude) {
+    try {
+      const konusma: Anthropic.MessageParam[] = mesajlar.slice(-12).map((m) => ({ role: m.role, content: m.content }));
+      const resp = await claude.messages.create({ model: AI_MODELI, max_tokens: 800, system, messages: konusma });
+      const t = resp.content.filter((c) => c.type === "text").map((c) => (c as { text: string }).text).join("\n").trim();
+      if (t) return t;
+    } catch { /* Claude başarısız → Gemini'ye düş */ }
+  }
+  if (geminiVarMi) {
+    const konusma = mesajlar.slice(-12).map((m) => `${m.role === "user" ? "Müşteri" : "Destek"}: ${m.content}`).join("\n");
+    const user = `Konuşma:\n${konusma}\n\nDestek olarak, son müşteri mesajına kısa ve net Türkçe yanıt ver:`;
+    for (let i = 0; i < 3; i++) {
+      if (i) await new Promise((r) => setTimeout(r, 1200));
+      const t = (await geminiMetin(system, user))?.trim();
+      if (t) return t;
+    }
+  }
+  return null;
+}
 
 // MÜŞTERİ DESTEK ASİSTANI (B2B) — markanın koruma panosunu KULLANAN müşteriye 7/24 yardım.
 // Vatandaş sohbetinden (Nazar) AYRIdır: burada muhatap, markası korunan kurum/operatör.
@@ -53,19 +78,12 @@ export async function POST(req: NextRequest) {
   const mesajlar = Array.isArray(body.mesajlar) ? body.mesajlar : [];
   if (!mesajlar.length) return NextResponse.json({ hata: "Mesaj gerekli." }, { status: 400 });
 
-  if (!geminiVarMi) return NextResponse.json({ cevap: yedekCevap(), ai: false });
+  if (!aiClient() && !geminiVarMi) return NextResponse.json({ cevap: yedekCevap(), ai: false });
 
   try {
     const ozet = await markaOzeti((body.marka || "").toLowerCase(), body.markaAdi || body.marka || "Marka");
     const system = `${SISTEM}\n\n--- GERÇEK PANO VERİSİ ---\n${ozet}`;
-    const konusma = mesajlar.slice(-12).map((m) => `${m.role === "user" ? "Müşteri" : "Destek"}: ${m.content}`).join("\n");
-    const user = `Konuşma:\n${konusma}\n\nDestek olarak, son müşteri mesajına kısa ve net Türkçe yanıt ver:`;
-    // Etkileşimli sohbet → kısa Gemini 503 "yüksek talep" dalgalarını atlatmak için 3 deneme.
-    let cevap: string | undefined;
-    for (let i = 0; i < 3 && !cevap; i++) {
-      if (i) await new Promise((r) => setTimeout(r, 1200));
-      cevap = (await geminiMetin(system, user))?.trim();
-    }
+    const cevap = await yanitUret(system, mesajlar);
     return NextResponse.json({ cevap: cevap || yedekCevap(), ai: !!cevap });
   } catch {
     return NextResponse.json({ cevap: yedekCevap(), ai: false });
