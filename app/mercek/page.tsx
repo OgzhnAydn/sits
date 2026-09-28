@@ -293,7 +293,9 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
 
   useEffect(() => {
     if (secili && markaAdaylari.some((a) => a.domain === secili.domain)) return;
-    if (markaAdaylari[0]) analizEt(markaAdaylari[0]); else { setSecili(null); setRapor(null); }
+    // Açılışta EN TEHLİKELİ tespiti seç (ilk/en zayıf değil) — güçlü ilk izlenim + doğru öncelik.
+    const enTehlikeli = markaAdaylari.reduce<Aday | null>((m, a) => (!m || (a.skor || 0) > (m.skor || 0) ? a : m), null);
+    if (enTehlikeli) analizEt(enTehlikeli); else { setSecili(null); setRapor(null); }
   }, [markaFiltre, adaylar]); // eslint-disable-line
 
   // Sayaçlar DURUMA göre (grafikle tutarlı). toplam = aktif + park + inceleme (MECE);
@@ -368,8 +370,8 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
         <Clock />
         <Button size="small" type="text" onClick={degistir} title={koyu ? "Açık temaya geç" : "Koyu temaya geç"} style={{ color: "var(--c-8fa6bd)" }}
           icon={<span className="material-symbols-outlined" style={{ fontSize: 17, lineHeight: 1 }}>{koyu ? "light_mode" : "dark_mode"}</span>} />
-        <Badge count={sayim.aktif} size="small" color="var(--c-f5222d)"><BellOutlined style={{ color: "var(--c-8fa6bd)", fontSize: 17 }} /></Badge>
-        <Button size="small" icon={gorunum !== "evren" ? <GlobalOutlined /> : <BarChartOutlined />} onClick={() => setGorunum(gorunum !== "evren" ? "evren" : "ortak")} style={{ color: gorunum !== "evren" ? "var(--c-4d9fe0)" : "var(--c-8fa6bd)" }}>{gorunum !== "evren" ? "Tehdit Evreni" : "Analitik Panel"}</Button>
+        <Badge count={sayim.yeni} size="small" color="var(--c-4d9fe0)" title={`${sayim.yeni} yeni gözlem`}><BellOutlined style={{ color: "var(--c-8fa6bd)", fontSize: 17 }} /></Badge>
+        <Button size="small" icon={gorunum !== "evren" ? <GlobalOutlined /> : <BarChartOutlined />} onClick={() => setGorunum(gorunum !== "evren" ? "evren" : "ortak")} style={{ color: gorunum !== "evren" ? "var(--c-4d9fe0)" : "var(--c-8fa6bd)" }}>{gorunum !== "evren" ? "Tehdit Haritası" : "Analitik Panel"}</Button>
         <Button size="small" icon={<LogoutOutlined />} onClick={() => { cikis(); router.replace("/marka-giris"); }} style={{ color: "var(--c-8fa6bd)" }}>
           <Avatar size={20} style={{ background: "var(--c-1f4b78)", fontSize: 10 }}>{(hesapAdi || "A").charAt(0)}</Avatar> {hesapAdi}
         </Button>
@@ -425,7 +427,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                 </Flex>
                 <div style={{ paddingTop: 8 }}>
                   <StatSatir ikon={<EyeOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Toplam Gözlem" n={sayim.toplam} renk="var(--c-4d9fe0)" aktif={filtre === "hepsi"} onClick={() => setFiltre("hepsi")} />
-                  <StatSatir ikon={<WarningOutlined style={{ color: "var(--c-ff5468)" }} />} t="Aktif Tuzak" n={sayim.aktif} renk="var(--c-ff5468)" aktif={filtre === "aktif"} onClick={() => setFiltre("aktif")} />
+                  <StatSatir ikon={<WarningOutlined style={{ color: "var(--c-ff5468)" }} />} t="Canlı Tehdit" n={sayim.aktif} renk="var(--c-ff5468)" aktif={filtre === "aktif"} onClick={() => setFiltre("aktif")} />
                   <StatSatir ikon={<ClusterOutlined style={{ color: "var(--c-8fb0d4)" }} />} t="Park · İzlemede" n={sayim.park} renk="var(--c-8fb0d4)" aktif={filtre === "park"} onClick={() => setFiltre("park")} />
                   <StatSatir ikon={<SearchOutlined style={{ color: "var(--c-faad14)" }} />} t="İnceleniyor" n={sayim.inceleme} renk="var(--c-faad14)" aktif={filtre === "inceleme"} onClick={() => setFiltre("inceleme")} />
                   <StatSatir ikon={<ThunderboltOutlined style={{ color: "var(--c-31c8b0)" }} />} t="Yeni Gözlem" n={sayim.yeni} renk="var(--c-31c8b0)" aktif={filtre === "yeni"} onClick={() => setFiltre("yeni")} />
@@ -436,10 +438,10 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                 {/* GÖRÜNÜM MENÜSÜ — üstteki filtre satırlarıyla aynı düz menü. Tıklayınca sağdaki
                     alan (grafik) AYNI YERDE değişir; yeni sayfa/yönlendirme yok. */}
                 <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)", letterSpacing: ".08em", textTransform: "uppercase", display: "block", marginTop: 14, marginBottom: 2 }}>Görünüm</Text>
-                <StatSatir ikon={<GlobalOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Tehdit Evreni" renk="var(--c-4d9fe0)" aktif={gorunum === "evren"} onClick={() => setGorunum("evren")} />
-                <StatSatir ikon={<ClusterOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Ortak Nokta & Atıf" renk="var(--c-4d9fe0)" aktif={gorunum === "ortak"} onClick={() => setGorunum("ortak")} />
+                <StatSatir ikon={<GlobalOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Tehdit Haritası" renk="var(--c-4d9fe0)" aktif={gorunum === "evren"} onClick={() => setGorunum("evren")} />
+                <StatSatir ikon={<ClusterOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Ortak İzler" renk="var(--c-4d9fe0)" aktif={gorunum === "ortak"} onClick={() => setGorunum("ortak")} />
                 <StatSatir ikon={<AppstoreOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Mobil & Reklam" renk="var(--c-4d9fe0)" aktif={gorunum === "mobilreklam"} onClick={() => setGorunum("mobilreklam")} />
-                <StatSatir ikon={<ThunderboltOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Öncelik & USOM" renk="var(--c-4d9fe0)" aktif={gorunum === "oncelik"} onClick={() => setGorunum("oncelik")} son />
+                <StatSatir ikon={<ThunderboltOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Öncelik Sırası" renk="var(--c-4d9fe0)" aktif={gorunum === "oncelik"} onClick={() => setGorunum("oncelik")} son />
                 {markaFiltre && <ResmiVarliklar veri={resmiSaglik} yuk={resmiYuk} onSec={(d) => analizEt({ domain: d, marka: markaFiltre, skor: 0, durum: "canli" })} />}
               </Card>
             </Flex>
@@ -454,7 +456,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
           <Col xs={24} lg={13}>
             <Card
               size="small" style={{ height: "100%" }} styles={{ body: { height: "calc(100% - 46px)", padding: 8, display: "flex", flexDirection: "column" } }}
-              title={baslik(3, "THREAT UNIVERSE GRAFİĞİ", (
+              title={baslik(3, "TEHDİT HARİTASI", (
                 <Space size={11} wrap>
                   <Efsane renk="var(--c-ff5468)" t="Aktif tuzak" />
                   <Efsane renk="var(--c-e5772f)" t="Canlı" />
@@ -504,8 +506,10 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
             <Card size="small" title={baslik(5, "ÖZET İSTATİSTİKLER")}>
               <Row gutter={[10, 10]}>
                 <Col xs={12} lg={6}><MiniStat n={sayim.toplam} t="Toplam Gözlem" renk="var(--c-e9f2fa)" /></Col>
-                <Col xs={12} lg={6}><MiniStat n={new Set(markaAdaylari.map((a) => a.marka)).size} t="İzlenen Marka" renk="var(--c-4d9fe0)" /></Col>
-                <Col xs={12} lg={6}><MiniStat n={sayim.aktif} t="Aktif Tuzak" renk="var(--c-f5222d)" /></Col>
+                {markaFiltre
+                  ? <Col xs={12} lg={6}><MiniStat n={markaAdaylari.filter((a) => a.skor >= 60).length} t="Yüksek Risk" renk="var(--c-4d9fe0)" /></Col>
+                  : <Col xs={12} lg={6}><MiniStat n={new Set(markaAdaylari.map((a) => a.marka)).size} t="İzlenen Marka" renk="var(--c-4d9fe0)" /></Col>}
+                <Col xs={12} lg={6}><MiniStat n={sayim.aktif} t="Canlı Tehdit" renk="var(--c-f5222d)" /></Col>
                 <Col xs={12} lg={6}><MiniStat n={sayim.yeni} t="Yeni Gözlem" renk="var(--c-31c8b0)" /></Col>
               </Row>
             </Card>
@@ -553,6 +557,7 @@ function CanliAkisSeridi({ akis, toplamCT, yakalananN, onSec }: { akis: AkisSati
       <Flex align="center" gap={9} style={{ padding: "8px 12px", borderBottom: "1px solid var(--c-12202e)", background: "var(--c-0b1726)" }}>
         <Badge status="processing" color="var(--c-31c8a0)" />
         <Text strong style={{ fontSize: 11, letterSpacing: ".07em", color: "var(--c-31c8a0)" }}>CANLI TESPİT</Text>
+        <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)" }}>tüm markalar için 7/24 tarama · markanız çıkarsa kırmızı</Text>
         <Flex gap={16} style={{ marginLeft: "auto" }}>
           <div style={{ textAlign: "right" }}>
             <Text strong style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, color: "var(--c-e9f2fa)", display: "block", lineHeight: 1.1 }}>{toplamCT ? (toplamCT / 1e9).toFixed(2) + "B" : "—"}</Text>
@@ -836,7 +841,7 @@ function CanlilikRozet({ v, yuk }: { v: { durum: string; kokNeden: string; redir
   );
 }
 
-// Altyapı İzi (Passive DNS): domainin geçmiş IP'leri + aynı ADANMIŞ IP'yi paylaşan kardeş
+// Altyapı Bağlantıları: domainin geçmiş IP'leri + aynı ADANMIŞ IP'yi paylaşan kardeş
 // domainler. Paylaşımlı/CDN altyapı kapısı /api/pasif-dns'te → burada yalnız gerçek bağ gösterilir.
 function PasifDnsBolum({ domain }: { domain: string }) {
   const [veri, setVeri] = useState<null | { gecmisIpler: { ip: string; sonGorulen?: number }[]; kardesDomainler: { domain: string; pivot: string }[]; paylasimliAltyapi: boolean; pivotSayisi: number; not?: string }>(null);
@@ -851,7 +856,7 @@ function PasifDnsBolum({ domain }: { domain: string }) {
   if (!yuk && !gecmis.length && !kardes.length && !veri?.paylasimliAltyapi) return null; // gösterecek gerçek bir şey yoksa hiç çizme
   return (
     <div>
-      <Text strong style={{ fontSize: 11, letterSpacing: ".05em" }}>Altyapı İzi (Passive DNS) {yuk && <Spin size="small" />}</Text>
+      <Text strong style={{ fontSize: 11, letterSpacing: ".05em" }}>Altyapı Bağlantıları {yuk && <Spin size="small" />}</Text>
       <Flex vertical gap={5} style={{ marginTop: 8 }}>
         {gecmis.length > 0 && (
           <Flex align="center" gap={8}>
@@ -925,6 +930,15 @@ function ihbarMetni(domain: string, markaAdi: string, risk: number): string {
     `Tespit kaynağı: Siber Mercek otomatik marka-taklit izleme.`;
 }
 const IHBAR_URL = "https://www.usom.gov.tr/ihbar"; // Siber Güvenlik Başkanlığı / USOM resmî Siber Olay Bildirimi formu
+// DÜŞÜK GÜVEN KAPISI — %40 altı taklit güveninde bildirmeden önce operatörü uyar. Meşru bir siteyi
+// resmî kuruma bildirmek (yanlış-ihbar) en pahalı hatadır; buton düşük güvende otomatik göndermesin.
+function bildirimOnay(risk: number): boolean {
+  if (risk > 40) return true;
+  return typeof window === "undefined" || window.confirm(
+    `Bu adresin marka-taklidi güveni DÜŞÜK (%${risk}). Meşru/alakasız bir site olabilir; ` +
+    `resmî kuruma bildirmek yanlış-ihbara yol açabilir. Önce içeriği İncele ile doğrulamanız önerilir.\n\nYine de bildirmek istiyor musunuz?`
+  );
+}
 
 // Doğrulama izi — belgeye deterministik "resmî görünüm" kimliği (uydurma imza değil; içerikten türer).
 function dogrulamaHash(s: string): string {
@@ -1029,7 +1043,7 @@ function InceleModal({ aday, rapor, canliV, markaAdi, resmiDom, resmiSaglik, ope
   };
   const dm = canliV ? (durumM[canliV.durum] || durumM.bilinmiyor) : null;
   const raporUrl = `/api/marka-rapor-pdf?marka=${encodeURIComponent(aday.marka)}&domain=${encodeURIComponent(aday.domain)}`;
-  const bildir = () => { try { navigator.clipboard?.writeText(ihbarMetni(aday.domain, markaAdi, risk)); } catch { /* */ } window.open(IHBAR_URL, "_blank", "noopener,noreferrer"); fetch("/api/bildirim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domain: aday.domain }) }).catch(() => {}); setBildirimZaman(Date.now()); };
+  const bildir = () => { if (!bildirimOnay(risk)) return; try { navigator.clipboard?.writeText(ihbarMetni(aday.domain, markaAdi, risk)); } catch { /* */ } window.open(IHBAR_URL, "_blank", "noopener,noreferrer"); fetch("/api/bildirim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domain: aday.domain }) }).catch(() => {}); setBildirimZaman(Date.now()); };
   const bildirildi = aday.bildirim?.zaman || bildirimZaman;
 
   const kunyeSatir = (label: string, deger: React.ReactNode, i: number) => (
@@ -1230,7 +1244,7 @@ function InceleModal({ aday, rapor, canliV, markaAdi, resmiDom, resmiSaglik, ope
               <span className="material-symbols-outlined" style={{ fontSize: 14, color: D_SOLUK }}>fingerprint</span>
               <Text style={{ fontSize: 10, color: D_SOLUK }}>Siber Mercek otonom analiz · yalnız açık kaynak kanıtına dayalı · doğrulama izi:</Text>
               <Text style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, color: D_MUREKKEP, fontWeight: 600 }}>{hash}</Text>
-              {bildirildi && <Text style={{ fontSize: 10, color: D_YESIL, marginLeft: "auto" }}>● USOM&apos;a bildirildi · {new Date(bildirildi).toLocaleDateString("tr-TR")}</Text>}
+              {bildirildi && <Text style={{ fontSize: 10, color: D_YESIL, marginLeft: "auto" }}>● Başkanlığa bildirildi · {new Date(bildirildi).toLocaleDateString("tr-TR")}</Text>}
             </Flex>
             <Flex gap={9} wrap>
               <Button onClick={bildir} title="Siber Güvenlik Başkanlığı — Siber Olay Bildirimi"
@@ -1336,7 +1350,7 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, resmiSaglik
         const cozuldu = erisilemez; // yalnız gerçekten erişilemez ise "çözüldü" (yeşil)
         return (
           <div style={{ borderRadius: 8, padding: "7px 10px", background: cozuldu ? "var(--c-0e2f1e)" : usomListe ? "var(--c-1a1206)" : "var(--c-0e1a2e)", border: `1px solid ${cozuldu ? "var(--c-31c8a0)" : usomListe ? "var(--c-faad14)" : "var(--c-1d3350)"}` }}>
-            {reported ? <Flex align="center" gap={6}><span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-4a90d9)" }}>flag</span><Text style={{ fontSize: 11, color: "var(--c-8fb0d4)" }}>USOM&apos;a bildirildi · {new Date(reported).toLocaleDateString("tr-TR")}</Text></Flex> : null}
+            {reported ? <Flex align="center" gap={6}><span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-4a90d9)" }}>flag</span><Text style={{ fontSize: 11, color: "var(--c-8fb0d4)" }}>Başkanlığa bildirildi · {new Date(reported).toLocaleDateString("tr-TR")}</Text></Flex> : null}
             {erisilemez ? (
               <Flex align="center" gap={6} style={{ marginTop: reported ? 4 : 0 }}><span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-31c8a0)" }}>check_circle</span><Text style={{ fontSize: 11, color: "var(--c-3ee08a)" }}>Erişilemez — adres artık yayında değil (canlı kontrol doğruladı)</Text></Flex>
             ) : usomListe ? (
@@ -1353,7 +1367,7 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, resmiSaglik
         {/* BİRİNCİL AKSİYON: "izle" değil "yap". USOM resmî ihbar formunu açar (ihbarı
             kullanıcı gönderir — otomatik göndermeyiz; dürüst). Alanı panoya kopyalar + bildirim işaretler. */}
         <Button block title="Siber Güvenlik Başkanlığı — Siber Olay Bildirimi"
-          onClick={() => { try { navigator.clipboard?.writeText(ihbarMetni(aday.domain, markaAdi, risk)); } catch { /* pano yoksa geç */ } window.open(IHBAR_URL, "_blank", "noopener,noreferrer"); fetch("/api/bildirim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domain: aday.domain }) }).catch(() => {}); setBildirimZaman(Date.now()); }}
+          onClick={() => { if (!bildirimOnay(risk)) return; try { navigator.clipboard?.writeText(ihbarMetni(aday.domain, markaAdi, risk)); } catch { /* pano yoksa geç */ } window.open(IHBAR_URL, "_blank", "noopener,noreferrer"); fetch("/api/bildirim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domain: aday.domain }) }).catch(() => {}); setBildirimZaman(Date.now()); }}
           style={{ height: "auto", minHeight: 46, background: "#fff", borderColor: "#cdd5df", color: "#0c3557", fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/siber-guvenlik-baskanligi.png" alt="Siber Güvenlik Başkanlığı" style={{ height: 24, width: "auto" }} />
@@ -1682,14 +1696,17 @@ function KarsilastirGorsel({ resmiDom, fakeDom, fakeShot, benzerlik, markaAdi }:
     return () => { iptal = true; };
   }, [fakeDom, fakeShot]);
 
-  const kutu = (baslik: string, alt: string, src: string | null, yuk: boolean, kenar: string) => (
+  const kutu = (baslik: string, alt: string, src: string | null, yuk: boolean, kenar: string, resmi?: boolean) => (
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: 9, letterSpacing: ".06em", color: "var(--c-8fa6bd)", marginBottom: 4, textTransform: "uppercase" }}>{baslik}</div>
-      <div style={{ aspectRatio: "16/10", borderRadius: 8, border: `1px solid ${kenar}`, overflow: "hidden", background: "var(--c-0a1420)", display: "grid", placeItems: "center" }}>
+      <div style={{ aspectRatio: "16/10", borderRadius: 8, border: `1px solid ${kenar}`, overflow: "hidden", background: "var(--c-0a1420)", display: "grid", placeItems: "center", padding: resmi && !src && !yuk ? 8 : 0 }}>
         {yuk ? <Spin size="small" /> : src
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={src} alt={alt} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-          : <span style={{ fontSize: 10, color: "var(--c-5c748b)" }}>görüntü yok</span>}
+          : resmi
+            // Resmî site datacenter'dan önizleme engelli olabilir → "görüntü yok" değil, DÜRÜST açıklama.
+            ? <div style={{ textAlign: "center", color: "var(--c-8fa6bd)" }}><span className="material-symbols-outlined" style={{ fontSize: 22, color: "var(--c-31c8a0)" }}>verified_user</span><div style={{ fontSize: 9.5, marginTop: 4, lineHeight: 1.3 }}>Resmî site — önizleme<br />bu sunucudan engelli</div></div>
+            : <span style={{ fontSize: 10, color: "var(--c-5c748b)" }}>görüntü yok</span>}
       </div>
       <div style={{ fontSize: 9.5, color: "var(--c-8fa6bd)", marginTop: 3, fontFamily: "'IBM Plex Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{alt}</div>
     </div>
@@ -1699,7 +1716,7 @@ function KarsilastirGorsel({ resmiDom, fakeDom, fakeShot, benzerlik, markaAdi }:
     <div style={{ borderTop: "1px solid var(--c-17293c)", paddingTop: 12 }}>
       <Text strong style={{ fontSize: 11, letterSpacing: ".05em" }}>Gerçek vs Sahte</Text>
       <Flex gap={10} style={{ marginTop: 8 }}>
-        {kutu("GERÇEK MARKA", resmiDom || markaAdi, gercek, gYuk, "var(--c-1f4b78)")}
+        {kutu("GERÇEK MARKA", resmiDom || markaAdi, gercek, gYuk, "var(--c-1f4b78)", true)}
         {kutu("ŞÜPHELİ SİTE", fakeDom, sahte, sYuk, "var(--c-5a2226)")}
       </Flex>
       {typeof benzerlik === "number" && (
