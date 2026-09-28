@@ -465,8 +465,10 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                 </Space>
               ))}
             >
-              {/* Grafik her iki temada da koyu "radar ekranı" kalır (canvas renkleri koyu; JS ile CSS-var okunamadığından). */}
-              <div style={{ position: "relative", flexShrink: 0, height: grafGorunum === "evren" ? 460 : 600, borderRadius: 10, overflow: "hidden",
+              {/* Grafik her iki temada da koyu "radar ekranı" kalır (canvas renkleri koyu; JS ile CSS-var okunamadığından).
+                  Masaüstünde ESNEK yükseklik (kalan alanı alır, şerit hep görünür); mobilde sabit yükseklik. */}
+              <div style={{ position: "relative", borderRadius: 10, overflow: "hidden",
+                ...(masaustu ? { flex: 1, minHeight: 300 } : { height: grafGorunum === "evren" ? 460 : 600, flexShrink: 0 }),
                 backgroundColor: grafGorunum === "evren" ? (koyu ? "#0a1420" : "#f4f7fb") : (koyu ? "#0b1524" : "#f5f7fa"),
                 ...(grafGorunum === "radyal" ? { backgroundImage: `radial-gradient(circle, ${koyu ? "#1b2c42" : "#ccd5e2"} 1px, transparent 1.5px)`, backgroundSize: "22px 22px", backgroundPosition: "center" } : {}) }}>
                 <div style={{ position: "absolute", top: 8, left: 8, zIndex: 3 }}>
@@ -545,11 +547,11 @@ function Clock() {
 // "YAKALANDI" olur + rozet + tıklanınca İncele açılır. Sayaçlar: taranan (canlı CT toplamı) +
 // yakalanan (oturumda kritere uyan). Uydurma yok — akış da yakalama da gerçek olaylardan.
 function CanliAkisSeridi({ akis, toplamCT, yakalananN, bagli, onSec }: { akis: AkisSatir[]; toplamCT: number; yakalananN: number; bagli: boolean; onSec: (d: string, m: string) => void }) {
-  const aktif = bagli;
+  const aktif = bagli || akis.length > 0; // SSE bağlı VEYA poll'dan veri akıyor → canlı say
   const dRenk = aktif ? "var(--c-31c8a0)" : "var(--c-faad14)";
   const satirlar = akis.slice(0, 40);
   return (
-    <div style={{ marginTop: 8, border: "1px solid var(--c-17293c)", borderRadius: 10, overflow: "hidden", background: "var(--c-0a1420)", flex: 1, minHeight: 220, maxHeight: "70vh", display: "flex", flexDirection: "column" }}>
+    <div style={{ marginTop: 8, border: "1px solid var(--c-17293c)", borderRadius: 10, overflow: "hidden", background: "var(--c-0a1420)", height: 250, flexShrink: 0, display: "flex", flexDirection: "column" }}>
       <Flex align="center" gap={9} style={{ padding: "8px 12px", borderBottom: "1px solid var(--c-12202e)", background: "var(--c-0b1726)" }}>
         <Badge status={aktif ? "processing" : "warning"} color={dRenk} />
         <Text strong style={{ fontSize: 11, letterSpacing: ".07em", color: dRenk }}>{aktif ? "CANLI AKIŞ" : "AKIŞ BEKLENİYOR"}</Text>
