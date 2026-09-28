@@ -487,7 +487,6 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                   ? <ThreatUniverse marka={markaAdi} adaylar={grafikAdaylar} secili={secili} rapor={rapor} onSelect={analizEt} logo={markaFiltre ? markaLogo(resmiMap[markaFiltre]) : null} koyu={koyu} />
                   : <TespitListesi adaylar={grafikAdaylar} secili={secili} onSelect={analizEt} sira={listeSira} setSira={setListeSira} />}
               </div>
-              <CanliAkisSeridi akis={canliAkis.length ? canliAkis : akis} toplamCT={toplamCT} yakalananN={yakalananN} onSec={(d, m) => analizEt({ domain: d, marka: m, skor: 0, durum: "canli" })} />
             </Card>
           </Col>
 
@@ -500,19 +499,11 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
           </Col>
           </>)}
         </Row>
-        {/* ALT: özet istatistikler (tam genişlik) — satır dışında, sabit yükseklik */}
+        {/* ALT: CANLI TESPİT (tam genişlik) — satır dışında, sabit yükseklik. Özet istatistikler
+            kaldırıldı (sol paneldeki filtre listesiyle mükerrerdi). */}
         {gorunum === "evren" && (
           <div style={{ flexShrink: 0 }}>
-            <Card size="small" title={baslik(5, "ÖZET İSTATİSTİKLER")}>
-              <Row gutter={[10, 10]}>
-                <Col xs={12} lg={6}><MiniStat n={sayim.toplam} t="Toplam Gözlem" renk="var(--c-e9f2fa)" /></Col>
-                {markaFiltre
-                  ? <Col xs={12} lg={6}><MiniStat n={markaAdaylari.filter((a) => a.skor >= 60).length} t="Yüksek Risk" renk="var(--c-4d9fe0)" /></Col>
-                  : <Col xs={12} lg={6}><MiniStat n={new Set(markaAdaylari.map((a) => a.marka)).size} t="İzlenen Marka" renk="var(--c-4d9fe0)" /></Col>}
-                <Col xs={12} lg={6}><MiniStat n={sayim.aktif} t="Canlı Tehdit" renk="var(--c-f5222d)" /></Col>
-                <Col xs={12} lg={6}><MiniStat n={sayim.yeni} t="Yeni Gözlem" renk="var(--c-31c8b0)" /></Col>
-              </Row>
-            </Card>
+            <CanliAkisSeridi akis={canliAkis.length ? canliAkis : akis} toplamCT={toplamCT} yakalananN={yakalananN} onSec={(d, m) => analizEt({ domain: d, marka: m, skor: 0, durum: "canli" })} />
           </div>
         )}
       </div>
@@ -794,9 +785,6 @@ function StatSatir({ ikon, t, n, son, renk, aktif, onClick }: { ikon: React.Reac
         : <Text strong style={{ marginLeft: "auto", fontFamily: "'IBM Plex Mono',monospace", fontSize: 15, color: aktif && renk ? renk : undefined }}>{fmt(n)}</Text>}
     </Flex>
   );
-}
-function MiniStat({ n, t, renk }: { n: number; t: string; renk: string }) {
-  return <div style={{ background: "rgba(47,111,176,.06)", border: "1px solid var(--c-17293c)", borderRadius: 10, padding: 12 }}><div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 26, fontWeight: 600, color: renk, lineHeight: 1 }}>{fmt(n)}</div><Text type="secondary" style={{ fontSize: 10.5, marginTop: 5, display: "block" }}>{t}</Text></div>;
 }
 function Efsane({ renk, t, halka }: { renk: string; t: string; halka?: boolean }) {
   return <Flex align="center" gap={5}><span style={{ width: 9, height: 9, borderRadius: "50%", background: halka ? "transparent" : renk, border: halka ? `2px solid ${renk}` : "none" }} /><Text style={{ fontSize: 9.5, color: "var(--c-8fa6bd)" }}>{t}</Text></Flex>;
