@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ConfigProvider, theme, Flex, Typography, Button, Badge, Empty } from "antd";
 import { db, auth } from "@/lib/firebase";
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore";
+import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc, setDoc, arrayUnion, serverTimestamp } from "firebase/firestore";
 
 const { Text, Title } = Typography;
 
@@ -37,6 +37,18 @@ export default function DestekPanosu() {
     if (!auth) { setUser(null); return; }
     return onAuthStateChanged(auth, (u) => setUser(u));
   }, []);
+
+  // UZMAN ÇEVRİMİÇİ NABZI — pano açıkken her 20sn 'lastSeen' yazar; müşteri paneli bunu okuyup
+  // GERÇEK durumu gösterir (böylece "canlı bağlısınız" yalnız gerçekten çevrimiçiyken doğru).
+  useEffect(() => {
+    if (!user || !db) return;
+    const yaz = () => setDoc(doc(db!, "destek_durum", "uzman"), { lastSeen: Date.now(), ad: user.email || "Uzman" }, { merge: true }).catch(() => {});
+    yaz();
+    const t = setInterval(yaz, 20000);
+    const gizli = () => { if (!document.hidden) yaz(); };
+    document.addEventListener("visibilitychange", gizli);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", gizli); };
+  }, [user]);
 
   useEffect(() => {
     if (!user || !db) return;

@@ -149,6 +149,14 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // --- Uzman çevrimiçi nabzı (destek panosu açıkken yazar; müşteri paneli okur) ---
+    // read: herkes (müşteri "uzman çevrimiçi mi" görür). write: yalnız giriş yapmış operatör.
+    match /destek_durum/{id} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.resource.data.lastSeen is number;
+    }
+
     // --- Canlı destek konuşmaları (müşteri ↔ uzman, gerçek zamanlı) ---
     // get: konuşmayı YALNIZ tahmin edilemez kimliğini bilen (müşteri) okur (yetenek belirteci).
     // list: yalnız GİRİŞ YAPMIŞ operatör (uzman gelen kutusu) — anonim tüm konuşmaları listeleyemez.

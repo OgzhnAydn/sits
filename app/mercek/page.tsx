@@ -605,7 +605,11 @@ function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
   const [iletiliyor, setIletiliyor] = useState(false);
   const [kid, setKid] = useState<string | null>(null);       // canlı konuşma kimliği (uzman hattı)
   const [canli, setCanli] = useState<CanliMesaj[]>([]);       // Firestore realtime thread
+  const [uzmanSonGoruldu, setUzmanSonGoruldu] = useState(0);  // uzman nabzı (lastSeen ms) — GERÇEK çevrimiçi durumu
+  const [, setTik] = useState(0);                              // çevrimiçi tazeliğini periyodik yeniden değerlendir
   const uzmanModu = !!kid;
+  const uzmanCevrimici = uzmanSonGoruldu > 0 && Date.now() - uzmanSonGoruldu < 70000; // 70sn tazelik
+  const oncekiUzmanSay = useRef(0);
   const kaydir = useRef<HTMLDivElement>(null);
   const anahtar = `mercek_destek_${marka || "genel"}`;
   const kidAnahtar = `mercek_destek_kid_${marka || "genel"}`;
@@ -617,14 +621,34 @@ function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
   }, [anahtar, kidAnahtar]);
 
   // Canlı uzman hattı — Firestore realtime (onSnapshot). Uzman yazınca müşteri ANINDA görür.
+  // Yeni UZMAN mesajı gelince ve panel görünmüyorsa → tarayıcı bildirimi (müşteri kaçırmasın).
   useEffect(() => {
     if (!kid || !db) return;
     const unsub = onSnapshot(doc(db, "destek_konusma", kid), (snap) => {
       const d = snap.data() as { mesajlar?: CanliMesaj[]; durum?: string } | undefined;
-      if (d?.mesajlar) setCanli(d.mesajlar);
+      if (!d?.mesajlar) return;
+      const uzmanSay = d.mesajlar.filter((m) => m.rol === "uzman").length;
+      const son = d.mesajlar[d.mesajlar.length - 1];
+      if (uzmanSay > oncekiUzmanSay.current && oncekiUzmanSay.current > 0 && son?.rol === "uzman") {
+        try { if ((document.hidden || !acik) && typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Uzmanınız yanıtladı", { body: son.metin.slice(0, 90) }); } catch { /* */ }
+      }
+      oncekiUzmanSay.current = uzmanSay;
+      setCanli(d.mesajlar);
     }, () => { /* erişim/kural hatası → sessiz */ });
     return () => unsub();
-  }, [kid]);
+  }, [kid, acik]);
+
+  // UZMAN ÇEVRİMİÇİ NABZI — destek panosu açıksa lastSeen tazedir → "canlı" DÜRÜST. Kimse yoksa söner.
+  useEffect(() => {
+    if (!db) return;
+    const unsub = onSnapshot(doc(db, "destek_durum", "uzman"), (snap) => {
+      const d = snap.data() as { lastSeen?: number } | undefined;
+      setUzmanSonGoruldu(typeof d?.lastSeen === "number" ? d.lastSeen : 0);
+    }, () => { /* */ });
+    return () => unsub();
+  }, []);
+  // Nabız yazması dursa "çevrimiçi" dürüstçe sönsün diye periyodik yeniden çiz.
+  useEffect(() => { const t = setInterval(() => setTik((x) => x + 1), 15000); return () => clearInterval(t); }, []);
 
   useEffect(() => {
     try { if (mesajlar.length) localStorage.setItem(anahtar, JSON.stringify(mesajlar.slice(-40))); } catch { /* */ }
@@ -667,6 +691,8 @@ function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
         olusturma: serverTimestamp(), guncelleme: serverTimestamp(), mesajlar: seed,
       });
       try { localStorage.setItem(kidAnahtar, ref.id); } catch { /* */ }
+      // Uzman yanıtını kaçırmasın: panel kapalı/arka plandayken tarayıcı bildirimi için izin iste.
+      try { if (typeof Notification !== "undefined" && Notification.permission === "default") Notification.requestPermission(); } catch { /* */ }
       // Kalıcı ticket kaydı da tutulur (pano dışı takip için).
       fetch("/api/destek-talep", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ marka, markaAdi, ozet: sonSorular.map((m) => m.content).join(" | ") || "Canlı uzman talebi", konusma: mesajlar, kid: ref.id }) }).catch(() => {});
       setKid(ref.id);
@@ -699,7 +725,11 @@ function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <Text strong style={{ fontSize: 13, color: "var(--c-e9f2fa)", display: "block", lineHeight: 1.2 }}>{uzmanModu ? "Uzman Hattı" : "Mercek Destek"}</Text>
-            <Text style={{ fontSize: 10.5, color: "var(--c-31c8a0)" }}>{uzmanModu ? "● canlı · uzmana bağlısınız" : "● AI 7/24 · uzman iş saatlerinde"}</Text>
+            <Text style={{ fontSize: 10.5, color: (uzmanModu && !uzmanCevrimici) ? "var(--c-faad14)" : "var(--c-31c8a0)" }}>
+              {uzmanModu
+                ? (uzmanCevrimici ? "● Uzman çevrimiçi · canlı" : "● Talebiniz alındı · uzman en kısa sürede yanıtlar")
+                : (uzmanCevrimici ? "● AI 7/24 · uzman çevrimiçi" : "● AI 7/24 · uzmana bağlanabilirsiniz")}
+            </Text>
           </div>
           <Button type="text" onClick={() => setAcik(false)} icon={<span className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--c-8fa6bd)" }}>close</span>} />
         </Flex>
@@ -719,7 +749,7 @@ function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
               </div>
             ))}
             {canli.filter((m) => m.rol === "uzman").length === 0 && (
-              <div style={{ alignSelf: "center", textAlign: "center", marginTop: 8 }}><Spin size="small" /><Text style={{ fontSize: 11, color: "var(--c-8fa6bd)", display: "block", marginTop: 6 }}>Uzmana iletildi — yanıt bekleniyor.<br />Bu pencereyi açık tutmanıza gerek yok; döndüğünüzde yanıt burada olur.</Text></div>
+              <div style={{ alignSelf: "center", textAlign: "center", marginTop: 8 }}><Spin size="small" /><Text style={{ fontSize: 11, color: "var(--c-8fa6bd)", display: "block", marginTop: 6 }}>{uzmanCevrimici ? "Uzmanımız çevrimiçi — birkaç dakika içinde yanıtlar." : "Talebiniz alındı — uzmanımız en kısa sürede yanıtlayacak."}<br />Pencereyi açık tutmanıza gerek yok; yanıt gelince bildirim alırsınız.</Text></div>
             )}
           </>) : aiGoster.map((m, i) => (
             <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "86%" }}>
