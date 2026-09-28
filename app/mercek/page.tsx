@@ -1233,8 +1233,12 @@ function InceleModal({ aday, rapor, canliV, markaAdi, resmiDom, resmiSaglik, ope
               {bildirildi && <Text style={{ fontSize: 10, color: D_YESIL, marginLeft: "auto" }}>● USOM&apos;a bildirildi · {new Date(bildirildi).toLocaleDateString("tr-TR")}</Text>}
             </Flex>
             <Flex gap={9} wrap>
-              <Button type="primary" onClick={bildir} icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>flag</span>}
-                style={{ height: "auto", minHeight: 38, fontWeight: 600, background: D_MUREKKEP, borderColor: D_MUREKKEP, flex: "1 1 180px", whiteSpace: "normal", padding: "4px 10px" }}>{bildirildi ? "Başkanlığa Yeniden Bildir" : "Siber Güvenlik Başkanlığına Bildir"}</Button>
+              <Button onClick={bildir} title="Siber Güvenlik Başkanlığı — Siber Olay Bildirimi"
+                style={{ height: "auto", minHeight: 42, background: "#fff", borderColor: "#cdd5df", color: D_MUREKKEP, fontWeight: 700, flex: "1 1 200px", padding: "5px 12px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 9 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/siber-guvenlik-baskanligi.png" alt="Siber Güvenlik Başkanlığı" style={{ height: 22, width: "auto" }} />
+                <span style={{ fontSize: 13.5 }}>{bildirildi ? "Yeniden Bildir" : "Bildir"}</span>
+              </Button>
               <Button danger href={`http://${aday.domain}`} target="_blank" rel="noopener noreferrer nofollow" icon={<ExportOutlined />} style={{ height: 38, flex: "1 1 130px" }}>Siteyi Gör</Button>
               <Button href={raporUrl} target="_blank" rel="noopener" icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>picture_as_pdf</span>} style={{ height: 38, flex: "1 1 130px", borderColor: D_MUREKKEP, color: D_MUREKKEP }}>PDF Dosya</Button>
             </Flex>
@@ -1348,9 +1352,13 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, resmiSaglik
       <Flex vertical gap={8}>
         {/* BİRİNCİL AKSİYON: "izle" değil "yap". USOM resmî ihbar formunu açar (ihbarı
             kullanıcı gönderir — otomatik göndermeyiz; dürüst). Alanı panoya kopyalar + bildirim işaretler. */}
-        <Button type="primary" icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>flag</span>}
+        <Button block title="Siber Güvenlik Başkanlığı — Siber Olay Bildirimi"
           onClick={() => { try { navigator.clipboard?.writeText(ihbarMetni(aday.domain, markaAdi, risk)); } catch { /* pano yoksa geç */ } window.open(IHBAR_URL, "_blank", "noopener,noreferrer"); fetch("/api/bildirim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domain: aday.domain }) }).catch(() => {}); setBildirimZaman(Date.now()); }}
-          style={{ height: "auto", minHeight: 40, fontWeight: 600, whiteSpace: "normal" }}>{(aday.bildirim?.zaman || bildirimZaman) ? "Başkanlığa Yeniden Bildir" : "Siber Güvenlik Başkanlığına Bildir"}</Button>
+          style={{ height: "auto", minHeight: 46, background: "#fff", borderColor: "#cdd5df", color: "#0c3557", fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/siber-guvenlik-baskanligi.png" alt="Siber Güvenlik Başkanlığı" style={{ height: 24, width: "auto" }} />
+          <span style={{ fontSize: 14 }}>{(aday.bildirim?.zaman || bildirimZaman) ? "Yeniden Bildir" : "Bildir"}</span>
+        </Button>
         <Text type="secondary" style={{ fontSize: 10, textAlign: "center", marginTop: -2 }}>Rapor panoya kopyalanır · resmî ihbarı siz gönderirsiniz</Text>
         <Button block icon={<span className="material-symbols-outlined" style={{ fontSize: 17, lineHeight: 1 }}>travel_explore</span>}
           onClick={() => setInceleAcik(true)} style={{ height: 38, fontWeight: 600, borderColor: "var(--c-4a90d9)", color: "var(--c-4a90d9)" }}>İncele</Button>
