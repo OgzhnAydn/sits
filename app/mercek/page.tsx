@@ -137,28 +137,6 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
   const [markaFiltre, setMarkaFiltre] = useState("");
   const [hesapAdi, setHesapAdi] = useState("");
   const [gorunum, setGorunum] = useState<"evren" | "ortak" | "mobilreklam" | "oncelik">("evren"); // kokpit içi menü: grafik ya da analitik bölüm
-  const [taraniyor, setTaraniyor] = useState(false);
-  const [taraSonuc, setTaraSonuc] = useState<string | null>(null);
-  async function markaTara() {
-    if (!markaFiltre || taraniyor) return;
-    setTaraniyor(true); setTaraSonuc(null);
-    try {
-      const j = await (await fetch(`/api/marka-tara-tekil?marka=${encodeURIComponent(markaFiltre)}`)).json();
-      setTaraSonuc(j.ok ? `${j.yeni || 0} yeni · ${j.taranan || 0} tarandı` : (j.hata || "tarama başarısız"));
-    } catch { setTaraSonuc("tarama başarısız"); }
-    finally { setTaraniyor(false); }
-  }
-  const [aiTaraniyor, setAiTaraniyor] = useState(false);
-  const [aiSonuc, setAiSonuc] = useState<string | null>(null);
-  async function topluAiAnaliz() {
-    if (!markaFiltre || aiTaraniyor) return;
-    setAiTaraniyor(true); setAiSonuc(null);
-    try {
-      const j = await (await fetch(`/api/marka-analiz?marka=${encodeURIComponent(markaFiltre)}&adet=8`)).json();
-      setAiSonuc(j.ok ? `${j.analizEdilen || 0} adres AI ile analiz edildi · ${j.kimlikAviSayisi || 0} kimlik-avı` : (j.hata || "analiz başarısız"));
-    } catch { setAiSonuc("analiz başarısız"); }
-    finally { setAiTaraniyor(false); }
-  }
   const [oturum, setOturum] = useState<boolean | null>(null);
   const [operator, setOperator] = useState(false); // marka="*" → tüm markalara dalabilir
   const [resmiMap, setResmiMap] = useState<Record<string, string>>({});
@@ -412,18 +390,6 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
                       </Button>
                     </Dropdown>
                   )}
-                  {markaFiltre && (
-                    <Button size="small" loading={taraniyor} onClick={markaTara} icon={<span className="material-symbols-outlined" style={{ fontSize: 15, lineHeight: 1 }}>refresh</span>} style={{ marginTop: 8 }}>
-                      Şimdi Tara
-                    </Button>
-                  )}
-                  {markaFiltre && (
-                    <Button size="small" loading={aiTaraniyor} onClick={topluAiAnaliz} icon={<span className="material-symbols-outlined" style={{ fontSize: 15, lineHeight: 1 }}>smart_toy</span>} style={{ marginTop: 8, marginLeft: 6 }} title="Tespitleri içerik + Gemini görsel analizi ile toplu incele">
-                      Tümünü AI Analiz Et
-                    </Button>
-                  )}
-                  {aiSonuc && <div style={{ fontSize: 11, color: "var(--c-8fa6bd)", marginTop: 6 }}>{aiSonuc}</div>}
-                  {taraSonuc && <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)", display: "block", marginTop: 4 }}>{taraSonuc}</Text>}
                 </Flex>
                 <div style={{ paddingTop: 8 }}>
                   <StatSatir ikon={<EyeOutlined style={{ color: "var(--c-4d9fe0)" }} />} t="Toplam Gözlem" n={sayim.toplam} renk="var(--c-4d9fe0)" aktif={filtre === "hepsi"} onClick={() => setFiltre("hepsi")} />
