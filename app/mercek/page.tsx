@@ -19,8 +19,12 @@ import { usePanoTema } from "@/lib/panoTema";
 import { markaLogo } from "@/lib/korunanMarkalar";
 import { etkinYasam, yasamEtiket, type YasamDurumu } from "@/lib/yasamDongusu";
 import AnalitikPanel from "./AnalitikPanel";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, doc, onSnapshot, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore";
 
 const { Text, Title } = Typography;
+
+type CanliMesaj = { rol: "musteri" | "uzman" | "sistem"; metin: string; zaman: number };
 
 type AkisSatir = { i: number; kisa: string; domain: string; ca: string; marka: string | null };
 type Aday = { domain: string; marka: string; skor: number; durum?: string; zaman?: number; aiTur?: string; aiKimlikAvi?: boolean; aiNot?: string; analizZaman?: number; yasamDurumu?: import("@/lib/yasamDongusu").YasamDurumu; bildirim?: { zaman: number; kaynak?: string } };
@@ -595,20 +599,45 @@ function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
   const [girdi, setGirdi] = useState("");
   const [yaziyor, setYaziyor] = useState(false);
   const [iletiliyor, setIletiliyor] = useState(false);
+  const [kid, setKid] = useState<string | null>(null);       // canlı konuşma kimliği (uzman hattı)
+  const [canli, setCanli] = useState<CanliMesaj[]>([]);       // Firestore realtime thread
+  const uzmanModu = !!kid;
   const kaydir = useRef<HTMLDivElement>(null);
   const anahtar = `mercek_destek_${marka || "genel"}`;
+  const kidAnahtar = `mercek_destek_kid_${marka || "genel"}`;
+
   useEffect(() => {
     try { const s = localStorage.getItem(anahtar); setMesajlar(s ? JSON.parse(s) : []); } catch { setMesajlar([]); }
-  }, [anahtar]);
+    try { setKid(localStorage.getItem(kidAnahtar)); } catch { setKid(null); }
+    setCanli([]);
+  }, [anahtar, kidAnahtar]);
+
+  // Canlı uzman hattı — Firestore realtime (onSnapshot). Uzman yazınca müşteri ANINDA görür.
+  useEffect(() => {
+    if (!kid || !db) return;
+    const unsub = onSnapshot(doc(db, "destek_konusma", kid), (snap) => {
+      const d = snap.data() as { mesajlar?: CanliMesaj[]; durum?: string } | undefined;
+      if (d?.mesajlar) setCanli(d.mesajlar);
+    }, () => { /* erişim/kural hatası → sessiz */ });
+    return () => unsub();
+  }, [kid]);
+
   useEffect(() => {
     try { if (mesajlar.length) localStorage.setItem(anahtar, JSON.stringify(mesajlar.slice(-40))); } catch { /* */ }
     const el = kaydir.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [mesajlar, anahtar, yaziyor]);
+  }, [mesajlar, canli, anahtar, yaziyor]);
 
   const karsilama = `Merhaba 👋 Ben Mercek Destek. ${markaAdi} panonuzla ilgili her şeyi sorabilirsiniz — bir tespitin ne anlama geldiği, USOM'a nasıl bildirileceği, sonraki adımlar. Nasıl yardımcı olayım?`;
 
   async function gonder() {
-    const t = girdi.trim(); if (!t || yaziyor) return;
+    const t = girdi.trim(); if (!t) return;
+    if (uzmanModu) { // canlı hatta müşteri mesajı → Firestore
+      if (!kid || !db) return;
+      setGirdi("");
+      try { await updateDoc(doc(db, "destek_konusma", kid), { mesajlar: arrayUnion({ rol: "musteri", metin: t, zaman: Date.now() }), guncelleme: serverTimestamp(), bekliyor: true }); } catch { /* */ }
+      return;
+    }
+    if (yaziyor) return;
     const yeni = [...mesajlar, { role: "user" as const, content: t }];
     setMesajlar(yeni); setGirdi(""); setYaziyor(true);
     try {
@@ -619,18 +648,32 @@ function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
       setMesajlar((p) => [...p, { role: "assistant", content: "Bağlantı sorunu oldu. Lütfen tekrar deneyin ya da uzmana iletin." }]);
     } finally { setYaziyor(false); }
   }
+
   async function uzmanaIlet() {
-    if (iletiliyor) return; setIletiliyor(true);
-    const ozet = mesajlar.filter((m) => m.role === "user").slice(-3).map((m) => m.content).join(" | ") || "Uzman görüşmesi talebi";
+    if (iletiliyor || uzmanModu) return; setIletiliyor(true);
+    const sonSorular = mesajlar.filter((m) => m.role === "user").slice(-3);
     try {
-      const r = await fetch("/api/destek-talep", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ marka, markaAdi, ozet, konusma: mesajlar }) });
-      const j = await r.json();
-      setMesajlar((p) => [...p, { role: "assistant", content: j.ok ? `Talebiniz uzman ekibimize iletildi ✓ Takip no: ${j.talepNo}. En kısa sürede dönüş yapacağız.` : "Talep şu an kaydedilemedi; lütfen biraz sonra tekrar deneyin." }]);
-    } catch { setMesajlar((p) => [...p, { role: "assistant", content: "Talep iletilemedi; bağlantıyı kontrol edip tekrar deneyin." }]); }
-    finally { setIletiliyor(false); }
+      if (!db) throw new Error("depo yok");
+      const seed: CanliMesaj[] = [
+        { rol: "sistem", metin: `Yeni canlı destek talebi · ${markaAdi}`, zaman: Date.now() },
+        ...sonSorular.map((m) => ({ rol: "musteri" as const, metin: m.content, zaman: Date.now() })),
+      ];
+      const ref = await addDoc(collection(db, "destek_konusma"), {
+        marka: marka || "genel", markaAdi, durum: "acik", bekliyor: true,
+        olusturma: serverTimestamp(), guncelleme: serverTimestamp(), mesajlar: seed,
+      });
+      try { localStorage.setItem(kidAnahtar, ref.id); } catch { /* */ }
+      // Kalıcı ticket kaydı da tutulur (pano dışı takip için).
+      fetch("/api/destek-talep", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ marka, markaAdi, ozet: sonSorular.map((m) => m.content).join(" | ") || "Canlı uzman talebi", konusma: mesajlar, kid: ref.id }) }).catch(() => {});
+      setKid(ref.id);
+    } catch {
+      setMesajlar((p) => [...p, { role: "assistant", content: "Uzman hattı şu an açılamadı; lütfen biraz sonra tekrar deneyin." }]);
+    } finally { setIletiliyor(false); }
   }
 
-  const goster = mesajlar.length ? mesajlar : [{ role: "assistant" as const, content: karsilama }];
+  function aiyaDon() { try { localStorage.removeItem(kidAnahtar); } catch { /* */ } setKid(null); setCanli([]); }
+
+  const aiGoster = mesajlar.length ? mesajlar : [{ role: "assistant" as const, content: karsilama }];
   return (
     <>
       {!acik && (
@@ -647,13 +690,12 @@ function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
         transform: acik ? "translateX(0)" : "translateX(105%)", transition: "transform .28s cubic-bezier(.4,0,.2,1)",
         display: "flex", flexDirection: "column", background: "var(--c-0a1420)", borderLeft: "1px solid var(--c-17293c)", boxShadow: "-10px 0 40px rgba(0,0,0,.5)" }}>
         <Flex align="center" gap={10} style={{ padding: "12px 14px", borderBottom: "1px solid var(--c-17293c)", background: "var(--c-0b1726)" }}>
-          <span style={{ position: "relative", width: 34, height: 34, borderRadius: 9, background: "var(--c-1e5285)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#fff" }}>support_agent</span>
-            <span style={{ position: "absolute", right: -1, bottom: -1, width: 10, height: 10, borderRadius: 5, background: "var(--c-31c8a0)", border: "2px solid var(--c-0b1726)" }} />
+          <span style={{ position: "relative", width: 34, height: 34, borderRadius: 9, background: uzmanModu ? "var(--c-31c8a0)" : "var(--c-1e5285)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#fff" }}>{uzmanModu ? "headset_mic" : "support_agent"}</span>
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <Text strong style={{ fontSize: 13, color: "var(--c-e9f2fa)", display: "block", lineHeight: 1.2 }}>Mercek Destek</Text>
-            <Text style={{ fontSize: 10.5, color: "var(--c-31c8a0)" }}>● çevrimiçi · 7/24 yanıt</Text>
+            <Text strong style={{ fontSize: 13, color: "var(--c-e9f2fa)", display: "block", lineHeight: 1.2 }}>{uzmanModu ? "Uzman Hattı" : "Mercek Destek"}</Text>
+            <Text style={{ fontSize: 10.5, color: "var(--c-31c8a0)" }}>{uzmanModu ? "● canlı · uzmana bağlısınız" : "● AI 7/24 · uzman iş saatlerinde"}</Text>
           </div>
           <Button type="text" onClick={() => setAcik(false)} icon={<span className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--c-8fa6bd)" }}>close</span>} />
         </Flex>
@@ -661,25 +703,44 @@ function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
           <Text style={{ fontSize: 10.5, color: "var(--c-8fa6bd)" }}>Bağlam: <b style={{ color: "var(--c-cfe0ef)" }}>{markaAdi}</b> marka koruma panosu</Text>
         </div>
         <div ref={kaydir} style={{ flex: 1, overflowY: "auto", padding: "14px", display: "flex", flexDirection: "column", gap: 10 }}>
-          {goster.map((m, i) => (
+          {uzmanModu ? (<>
+            {canli.map((m, i) => m.rol === "sistem" ? (
+              <div key={i} style={{ alignSelf: "center", maxWidth: "92%" }}><Text style={{ fontSize: 10, color: "var(--c-5c748b)" }}>{m.metin}</Text></div>
+            ) : (
+              <div key={i} style={{ alignSelf: m.rol === "musteri" ? "flex-end" : "flex-start", maxWidth: "86%" }}>
+                {m.rol === "uzman" && <Text style={{ fontSize: 9, color: "var(--c-31c8a0)", marginLeft: 4, display: "block", marginBottom: 2 }}>Uzman</Text>}
+                <div style={{ padding: "8px 11px", borderRadius: m.rol === "musteri" ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
+                  background: m.rol === "musteri" ? "var(--c-1e5285)" : "var(--c-0e2f1e)", color: m.rol === "musteri" ? "#eaf2fb" : "var(--c-cfe0ef)",
+                  fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.metin}</div>
+              </div>
+            ))}
+            {canli.filter((m) => m.rol === "uzman").length === 0 && (
+              <div style={{ alignSelf: "center", textAlign: "center", marginTop: 8 }}><Spin size="small" /><Text style={{ fontSize: 11, color: "var(--c-8fa6bd)", display: "block", marginTop: 6 }}>Uzmana iletildi — yanıt bekleniyor.<br />Bu pencereyi açık tutmanıza gerek yok; döndüğünüzde yanıt burada olur.</Text></div>
+            )}
+          </>) : aiGoster.map((m, i) => (
             <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "86%" }}>
               <div style={{ padding: "8px 11px", borderRadius: m.role === "user" ? "12px 12px 3px 12px" : "12px 12px 12px 3px",
                 background: m.role === "user" ? "var(--c-1e5285)" : "var(--c-152337)", color: m.role === "user" ? "#eaf2fb" : "var(--c-cfe0ef)",
                 fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.content}</div>
             </div>
           ))}
-          {yaziyor && <div style={{ alignSelf: "flex-start", padding: "8px 12px", borderRadius: "12px 12px 12px 3px", background: "var(--c-152337)" }}><Spin size="small" /> <Text style={{ fontSize: 11, color: "var(--c-8fa6bd)", marginLeft: 4 }}>yazıyor…</Text></div>}
+          {yaziyor && !uzmanModu && <div style={{ alignSelf: "flex-start", padding: "8px 12px", borderRadius: "12px 12px 12px 3px", background: "var(--c-152337)" }}><Spin size="small" /> <Text style={{ fontSize: 11, color: "var(--c-8fa6bd)", marginLeft: 4 }}>yazıyor…</Text></div>}
         </div>
         <div style={{ padding: "8px 12px", borderTop: "1px solid var(--c-17293c)", display: "flex", flexDirection: "column", gap: 8 }}>
-          <Button size="small" onClick={uzmanaIlet} loading={iletiliyor} icon={<span className="material-symbols-outlined" style={{ fontSize: 15, lineHeight: 1 }}>headset_mic</span>}
-            style={{ alignSelf: "flex-start", borderColor: "var(--c-4a90d9)", color: "var(--c-4a90d9)" }}>Uzmana ilet</Button>
+          {uzmanModu ? (
+            <Button size="small" type="text" onClick={aiyaDon} icon={<span className="material-symbols-outlined" style={{ fontSize: 15, lineHeight: 1 }}>smart_toy</span>}
+              style={{ alignSelf: "flex-start", color: "var(--c-8fa6bd)" }}>AI asistana dön</Button>
+          ) : (
+            <Button size="small" onClick={uzmanaIlet} loading={iletiliyor} icon={<span className="material-symbols-outlined" style={{ fontSize: 15, lineHeight: 1 }}>headset_mic</span>}
+              style={{ alignSelf: "flex-start", borderColor: "var(--c-4a90d9)", color: "var(--c-4a90d9)" }}>Uzmana bağlan (canlı)</Button>
+          )}
           <Flex gap={8} align="flex-end">
-            <textarea value={girdi} onChange={(e) => setGirdi(e.target.value)} rows={1} placeholder="Sorunuzu yazın…"
+            <textarea value={girdi} onChange={(e) => setGirdi(e.target.value)} rows={1} placeholder={uzmanModu ? "Uzmana yazın…" : "Sorunuzu yazın…"}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); gonder(); } }}
               style={{ flex: 1, resize: "none", maxHeight: 90, background: "var(--c-0b1726)", color: "var(--c-e9f2fa)", border: "1px solid var(--c-1d3350)", borderRadius: 9, padding: "9px 11px", fontSize: 12.5, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none" }} />
-            <Button type="primary" onClick={gonder} disabled={!girdi.trim() || yaziyor} icon={<span className="material-symbols-outlined" style={{ fontSize: 18, lineHeight: 1 }}>send</span>} style={{ background: "var(--c-1e5285)", height: 38 }} />
+            <Button type="primary" onClick={gonder} disabled={!girdi.trim() || (yaziyor && !uzmanModu)} icon={<span className="material-symbols-outlined" style={{ fontSize: 18, lineHeight: 1 }}>send</span>} style={{ background: "var(--c-1e5285)", height: 38 }} />
           </Flex>
-          <Text style={{ fontSize: 9, color: "var(--c-5c748b)", textAlign: "center" }}>AI asistan anlık yanıt verir · karmaşık talepler uzmana iletilir</Text>
+          <Text style={{ fontSize: 9, color: "var(--c-5c748b)", textAlign: "center" }}>{uzmanModu ? "Canlı uzman hattı · yanıtlar gerçek zamanlı görünür" : "AI asistan anlık yanıt verir · dilerseniz canlı uzmana bağlanın"}</Text>
         </div>
       </div>
     </>
