@@ -914,6 +914,18 @@ function AiIcerikBlok({ rapor, aday }: { rapor: Rapor | null; aday: { aiTur?: st
 const D_KAGIT = "#fbfaf6", D_MUREKKEP = "#0c3557", D_MUREKKEP2 = "#1c4a72", D_SOLUK = "#5b6b7a";
 const D_CIZGI = "#ded7c7", D_CIZGI2 = "#e7e1d3", D_KIRMIZI = "#a5232f", D_ALTIN = "#0c3557", D_YESIL = "#1f7a52", D_TURUNCU = "#b8791b";
 
+// Resmî ihbar metni — Siber Güvenlik Başkanlığı (USOM) Siber Olay Bildirimi formuna yapıştırılmak üzere
+// panoya kopyalanır. Otomatik gönderim YOK (resmî gönderim API'si yok; bildirim insan onayıyla yapılır).
+function ihbarMetni(domain: string, markaAdi: string, risk: number): string {
+  return `Şüpheli/sahte adres: ${domain}\n` +
+    `Taklit edilen kurum/marka: ${markaAdi}\n` +
+    `Risk değerlendirmesi: ${risk}/100\n` +
+    `Olay türü: Marka/kurum taklidi · oltalama (phishing) şüphesi\n` +
+    `Açıklama: ${markaAdi} adını izinsiz kullanan, resmî olmayan adres; vatandaşları yanıltarak dolandırıcılık amaçlı kullanılıyor olabilir. İncelenip erişim engeli değerlendirilmesi için bildirilmektedir.\n` +
+    `Tespit kaynağı: Siber Mercek otomatik marka-taklit izleme.`;
+}
+const IHBAR_URL = "https://www.usom.gov.tr/ihbar"; // Siber Güvenlik Başkanlığı / USOM resmî Siber Olay Bildirimi formu
+
 // Doğrulama izi — belgeye deterministik "resmî görünüm" kimliği (uydurma imza değil; içerikten türer).
 function dogrulamaHash(s: string): string {
   let h = 0x811c9dc5;
@@ -1017,7 +1029,7 @@ function InceleModal({ aday, rapor, canliV, markaAdi, resmiDom, resmiSaglik, ope
   };
   const dm = canliV ? (durumM[canliV.durum] || durumM.bilinmiyor) : null;
   const raporUrl = `/api/marka-rapor-pdf?marka=${encodeURIComponent(aday.marka)}&domain=${encodeURIComponent(aday.domain)}`;
-  const bildir = () => { try { navigator.clipboard?.writeText(aday.domain); } catch { /* */ } window.open("https://www.usom.gov.tr/ihbar", "_blank", "noopener,noreferrer"); fetch("/api/bildirim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domain: aday.domain }) }).catch(() => {}); setBildirimZaman(Date.now()); };
+  const bildir = () => { try { navigator.clipboard?.writeText(ihbarMetni(aday.domain, markaAdi, risk)); } catch { /* */ } window.open(IHBAR_URL, "_blank", "noopener,noreferrer"); fetch("/api/bildirim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domain: aday.domain }) }).catch(() => {}); setBildirimZaman(Date.now()); };
   const bildirildi = aday.bildirim?.zaman || bildirimZaman;
 
   const kunyeSatir = (label: string, deger: React.ReactNode, i: number) => (
@@ -1222,11 +1234,11 @@ function InceleModal({ aday, rapor, canliV, markaAdi, resmiDom, resmiSaglik, ope
             </Flex>
             <Flex gap={9} wrap>
               <Button type="primary" onClick={bildir} icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>flag</span>}
-                style={{ height: 38, fontWeight: 600, background: D_MUREKKEP, borderColor: D_MUREKKEP, flex: "1 1 180px" }}>{bildirildi ? "USOM'a Yeniden Bildir" : "USOM'a Bildir"}</Button>
+                style={{ height: "auto", minHeight: 38, fontWeight: 600, background: D_MUREKKEP, borderColor: D_MUREKKEP, flex: "1 1 180px", whiteSpace: "normal", padding: "4px 10px" }}>{bildirildi ? "Başkanlığa Yeniden Bildir" : "Siber Güvenlik Başkanlığına Bildir"}</Button>
               <Button danger href={`http://${aday.domain}`} target="_blank" rel="noopener noreferrer nofollow" icon={<ExportOutlined />} style={{ height: 38, flex: "1 1 130px" }}>Siteyi Gör</Button>
               <Button href={raporUrl} target="_blank" rel="noopener" icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>picture_as_pdf</span>} style={{ height: 38, flex: "1 1 130px", borderColor: D_MUREKKEP, color: D_MUREKKEP }}>PDF Dosya</Button>
             </Flex>
-            <Text style={{ fontSize: 9, color: D_SOLUK, textAlign: "center", display: "block", marginTop: 9 }}>Alan adı panoya kopyalanır · resmî ihbarı operatör gönderir · MirLeon © {now.getFullYear()}</Text>
+            <Text style={{ fontSize: 9, color: D_SOLUK, textAlign: "center", display: "block", marginTop: 9 }}>Rapor panoya kopyalanır · resmî formu doldurup siz gönderirsiniz · MirLeon © {now.getFullYear()}</Text>
           </div>
         </div>
       </div>
@@ -1337,9 +1349,9 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, resmiSaglik
         {/* BİRİNCİL AKSİYON: "izle" değil "yap". USOM resmî ihbar formunu açar (ihbarı
             kullanıcı gönderir — otomatik göndermeyiz; dürüst). Alanı panoya kopyalar + bildirim işaretler. */}
         <Button type="primary" icon={<span className="material-symbols-outlined" style={{ fontSize: 16, lineHeight: 1 }}>flag</span>}
-          onClick={() => { try { navigator.clipboard?.writeText(aday.domain); } catch { /* pano yoksa geç */ } window.open("https://www.usom.gov.tr/ihbar", "_blank", "noopener,noreferrer"); fetch("/api/bildirim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domain: aday.domain }) }).catch(() => {}); setBildirimZaman(Date.now()); }}
-          style={{ height: 40, fontWeight: 600 }}>{(aday.bildirim?.zaman || bildirimZaman) ? "USOM'a Yeniden Bildir" : "USOM'a Bildir"}</Button>
-        <Text type="secondary" style={{ fontSize: 10, textAlign: "center", marginTop: -2 }}>Alan adı panoya kopyalanır · ihbarı sen gönderirsin</Text>
+          onClick={() => { try { navigator.clipboard?.writeText(ihbarMetni(aday.domain, markaAdi, risk)); } catch { /* pano yoksa geç */ } window.open(IHBAR_URL, "_blank", "noopener,noreferrer"); fetch("/api/bildirim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domain: aday.domain }) }).catch(() => {}); setBildirimZaman(Date.now()); }}
+          style={{ height: "auto", minHeight: 40, fontWeight: 600, whiteSpace: "normal" }}>{(aday.bildirim?.zaman || bildirimZaman) ? "Başkanlığa Yeniden Bildir" : "Siber Güvenlik Başkanlığına Bildir"}</Button>
+        <Text type="secondary" style={{ fontSize: 10, textAlign: "center", marginTop: -2 }}>Rapor panoya kopyalanır · resmî ihbarı siz gönderirsiniz</Text>
         <Button block icon={<span className="material-symbols-outlined" style={{ fontSize: 17, lineHeight: 1 }}>travel_explore</span>}
           onClick={() => setInceleAcik(true)} style={{ height: 38, fontWeight: 600, borderColor: "var(--c-4a90d9)", color: "var(--c-4a90d9)" }}>İncele</Button>
         <Flex gap={8}>
