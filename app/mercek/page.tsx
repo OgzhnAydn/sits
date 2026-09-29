@@ -593,10 +593,14 @@ function CanliAkisSeridi({ akis, yakala, toplamCT, benMarka, onSec }: { akis: Ak
             </div>
           );
         })() : (
-          // TARAMA satırı: yumuşak belirir (zıplama yok); "»" işareti CSS ile yeşil→mavi kendiliğinden oturur.
+          // TARAMA satırı (deploy-logu gibi): "» yüklendi" (yeşil) → "» kontrol edildi" (mavi) çapraz-geçiş,
+          // saf CSS; iki söz üst üste, yalnız opaklık değişir → sarsıntı/yeniden-çizim yok.
           <div key={s.k} style={{ display: "flex", alignItems: "center", gap: 9, padding: "2px 12px", fontFamily: "'IBM Plex Mono',monospace", animation: "ctGir .5s ease both", borderLeft: "3px solid transparent" }}>
-            <span style={{ color: RENK_KONTROL, animation: "ctFaz 1.8s ease forwards", fontSize: 12, fontWeight: 700, flexShrink: 0, width: 12, textAlign: "center" }}>»</span>
-            <Text style={{ flex: 1, minWidth: 0, fontSize: 11, color: "var(--c-5f7c9c)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.domain}</Text>
+            <span style={{ position: "relative", display: "inline-block", width: 104, height: 15, flexShrink: 0, fontSize: 10, fontWeight: 600 }}>
+              <span style={{ position: "absolute", inset: 0, color: RENK_YUKLE, animation: "ctYukle 1.9s ease forwards", whiteSpace: "nowrap" }}>» yüklendi</span>
+              <span style={{ position: "absolute", inset: 0, color: RENK_KONTROL, animation: "ctKontrol 1.9s ease forwards", whiteSpace: "nowrap" }}>» kontrol edildi</span>
+            </span>
+            <Text style={{ flex: 1, minWidth: 0, fontSize: 11, color: "var(--c-8fa6bd)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.domain}</Text>
           </div>
         ))}
       </div>
