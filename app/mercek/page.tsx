@@ -524,21 +524,16 @@ function oncePrint(t: number): string {
 // tarama satırları markasızdır (motorun tüm dünyayı taradığını gösterir). Yakalama tıklanınca
 // İncele açılır, en altta otomatik kayar. Uydurma yok — akış da yakalama da gerçek olaylardan.
 type FeedSatir = { k: string; kind: "tara" | "yakala"; domain: string; marka?: string; skor?: number; aday?: Aday; t: number };
-const TAZE_MS = 1600; // "yüklendi" (yeşil) fazının süresi; sonra "kontrol edildi" (mavi) olur
 const RENK_YUKLE = "#2fd6a6";   // yeşil — yeni YÜKLENEN sertifika (build logundaki tamamlandı yeşili gibi)
 const RENK_KONTROL = "#5b93f3"; // mavi — KONTROL EDİLMİŞ (temiz) sertifika (build logundaki adım mavisi gibi)
 function CanliAkisSeridi({ akis, yakala, toplamCT, benMarka, onSec }: { akis: AkisSatir[]; yakala: Aday[]; toplamCT: number; benMarka: string; onSec: (a: Aday) => void }) {
   const [feed, setFeed] = useState<FeedSatir[]>([]);
-  const [, setTik] = useState(0); // faz geçişini (yüklendi→kontrol edildi) periyodik yeniden değerlendir
   const gorCert = useRef<Set<number>>(new Set());
   const gorYak = useRef<Set<string>>(new Set());
   const no = useRef(0);
   const ilk = useRef(true);
   const kaydir = useRef<HTMLDivElement>(null);
   const son24 = yakala.filter((a) => a.zaman && Date.now() - a.zaman < 86_400_000).length;
-
-  // Faz saati: yeni "yüklendi" satırları TAZE_MS sonra "kontrol edildi"ye dönsün diye yeniden çiz.
-  useEffect(() => { const id = setInterval(() => setTik((t) => t + 1), 400); return () => clearInterval(id); }, []);
 
   // YAKALAMALAR: ilk yüklemede son ~8'ini tohumla (sel olmasın, hepsini görüldü işaretle);
   // sonraki güncellemelerde yalnız YENİ yakalamayı vurgulu satır olarak ekle.
@@ -591,7 +586,7 @@ function CanliAkisSeridi({ akis, yakala, toplamCT, benMarka, onSec }: { akis: Ak
           return (
             <div key={s.k} onClick={() => s.aday && onSec(s.aday)} title="İncele"
               style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 12px", fontFamily: "'IBM Plex Mono',monospace",
-                animation: "riseIn .4s ease", cursor: "pointer", borderLeft: `3px solid ${sv.renk}`, background: hexRgba("#ff5468", 0.06) }}>
+                animation: "ctGir .5s ease both", cursor: "pointer", borderLeft: `3px solid ${sv.renk}`, background: hexRgba("#ff5468", 0.06) }}>
               <span className="material-symbols-outlined" style={{ fontSize: 15, color: sv.renk, flexShrink: 0 }}>gpp_bad</span>
               <Text style={{ fontSize: 9.5, fontWeight: 700, color: sv.renk, letterSpacing: ".05em", flexShrink: 0 }}>YAKALANDI</Text>
               <Text style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--c-e9f2fa)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.domain}</Text>
@@ -599,17 +594,13 @@ function CanliAkisSeridi({ akis, yakala, toplamCT, benMarka, onSec }: { akis: Ak
               <Text style={{ fontSize: 12, fontWeight: 700, color: sv.renk, width: 24, textAlign: "right", flexShrink: 0 }}>{Math.round(s.skor || 0)}</Text>
             </div>
           );
-        })() : (() => {
-          const taze = Date.now() - s.t < TAZE_MS;         // yeni yüklenen mi (yeşil) yoksa kontrol edilmiş mi (mavi)
-          const renk = taze ? RENK_YUKLE : RENK_KONTROL;
-          return (
-            <div key={s.k} style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 12px", fontFamily: "'IBM Plex Mono',monospace", animation: "riseIn .35s ease", borderLeft: `3px solid ${taze ? renk : "transparent"}` }}>
-              <span style={{ width: 6, height: 6, borderRadius: 3, background: renk, flexShrink: 0, opacity: taze ? 1 : 0.65 }} />
-              <Text style={{ fontSize: 9, color: renk, flexShrink: 0, width: 80, opacity: taze ? 1 : 0.9 }}>{taze ? "yüklendi" : "kontrol edildi"}</Text>
-              <Text style={{ flex: 1, minWidth: 0, fontSize: 11, color: taze ? "var(--c-e9f2fa)" : "var(--c-5f7c9c)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.domain}</Text>
-            </div>
-          );
-        })())}
+        })() : (
+          // TARAMA satırı: yumuşak belirir (zıplama yok); "»" işareti CSS ile yeşil→mavi kendiliğinden oturur.
+          <div key={s.k} style={{ display: "flex", alignItems: "center", gap: 9, padding: "2px 12px", fontFamily: "'IBM Plex Mono',monospace", animation: "ctGir .5s ease both", borderLeft: "3px solid transparent" }}>
+            <span style={{ color: RENK_KONTROL, animation: "ctFaz 1.8s ease forwards", fontSize: 12, fontWeight: 700, flexShrink: 0, width: 12, textAlign: "center" }}>»</span>
+            <Text style={{ flex: 1, minWidth: 0, fontSize: 11, color: "var(--c-5f7c9c)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.domain}</Text>
+          </div>
+        ))}
       </div>
       <Text style={{ display: "block", padding: "6px 12px", borderTop: "1px solid var(--c-12202e)", fontSize: 9.5, color: "var(--c-5c748b)", lineHeight: 1.4 }}>
         <span style={{ color: RENK_YUKLE }}>Yeşil</span> yeni yüklenen sertifika, <span style={{ color: RENK_KONTROL }}>mavi</span> kontrol edilip temiz çıkan; motor sürekli çalışıyor. {benMarka ? <><span style={{ color: "var(--c-ff9aa4)" }}>Kırmızı satır</span> markanızı taklit eden gerçek bir adresin yakalandığı andır — inceleme kuyruğuna alınır.</> : <><span style={{ color: "var(--c-ff9aa4)" }}>Kırmızı satır</span> kritere uyan gerçek yakalamadır.</>}
