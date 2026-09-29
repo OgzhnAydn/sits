@@ -1,7 +1,7 @@
 // YENİDEN TARAMA — aktif adayları periyodik yeniden analiz eder ve risk YÖRÜNGESİNE
 // yeni nokta ekler. Böylece bir domainin park→web→logo→login→kimlik-toplama
 // olgunlaşmasını ZAMAN İÇİNDE yakalarız (kokpitteki "risk gelişimi" gerçek olur).
-import { markaAdaylariGetir, riskGecmisiEkle, adayDurumGuncelle, yasamGecisUygula, type Yukselme } from "./store";
+import { markaAdaylariGetir, markaAdaylariMarka, riskGecmisiEkle, adayDurumGuncelle, yasamGecisUygula, type Yukselme } from "./store";
 import { domainOsint, saldiriAsamasi, altyapiDna, domainDurumu, takipIdBirincil } from "./osint";
 import { gercekTaklit } from "./korunanMarkalar";
 import { canliliktanSinyal } from "./yasamDongusu";
@@ -20,14 +20,21 @@ function yukselmeCikar(a: { skor?: number; durum?: string }, yeniRisk: number, y
   return { t: Date.now(), sebep, oncekiRisk, simdikiRisk: Math.round(yeniRisk), oncekiDurum: a.durum, simdikiDurum: yeniDurum };
 }
 
-export async function yenidenTaraBatch(n = 8, offset?: number): Promise<{ taranan: number; kaydedilen: number; aktif: number; yukselen: number }> {
-  const ham = await markaAdaylariGetir(200);
+export async function yenidenTaraBatch(n = 8, offset?: number, marka?: string): Promise<{ taranan: number; kaydedilen: number; aktif: number; yukselen: number }> {
+  const ham = marka ? await markaAdaylariMarka(marka.toLowerCase(), 300) : await markaAdaylariGetir(200);
   const aktif = ham.filter((a) => gercekTaklit(a.domain, a.marka));
   if (!aktif.length) return { taranan: 0, kaydedilen: 0, aktif: 0, yukselen: 0 };
-  // gün-bazlı rotasyon: her gün farklı batch → tüm adaylar sırayla yeniden taranır
-  const off = offset ?? Math.floor(Date.now() / 86_400_000);
-  const start = ((off * n) % aktif.length + aktif.length) % aktif.length;
-  const batch = aktif.slice(start, start + n);
+  let batch;
+  if (marka) {
+    // Marka-özel: rotasyon değil, offset ile SIRAYLA sayfala (tüm marka adaylarını kapsa).
+    const start = (((offset ?? 0) * n) % aktif.length + aktif.length) % aktif.length;
+    batch = aktif.slice(start, start + n);
+  } else {
+    // gün-bazlı rotasyon: her gün farklı batch → tüm adaylar sırayla yeniden taranır
+    const off = offset ?? Math.floor(Date.now() / 86_400_000);
+    const start = ((off * n) % aktif.length + aktif.length) % aktif.length;
+    batch = aktif.slice(start, start + n);
+  }
   let kaydedilen = 0, taranan = 0, yukselen = 0;
   const bitis = Date.now() + 45_000; // Vercel 60s limitinden önce güvenle dur
   for (const a of batch) {

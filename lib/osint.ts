@@ -1908,6 +1908,26 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
     if (durumMetni) r.alanlar.push({ ad: "Engelleme durumu", deger: durumMetni });
   }
 
+  // ── YABANCI-İÇERİK FP (isim çakışması) ──────────────────────────────────────────
+  // Sayfa içeriği/başlığı ağırlıkla CJK (Japonca/Çince/Korece) ve Türkçe/kurum bağlamı YOKSA:
+  // bu bir Türk kurumu taklidi DEĞİLDİR, yalnız "toki" gibi kısa anahtarın yabancı bir siteyle
+  // çakışmasıdır (udon-toki.shop = Japon el-yapımı udon dükkânı). Skoru düşür + FP damgası.
+  {
+    const bslk = r.alanlar.find((a) => /sayfa başlığı/i.test(a.ad))?.deger || "";
+    const govde = (bslk + " " + r.alanlar.map((a) => a.deger).join(" ")).slice(0, 6000);
+    const cjk = (govde.match(/[぀-ヿ㐀-鿿가-힯]/g) || []).length;
+    const trBaglam = /toki|konut|ba[şs]vur|t[üu]rk|gov\.tr|giri[şs]|vatanda[şs]|daire|kredi|[şğıçöü]/i.test(bslk);
+    if (cjk >= 3 && !trBaglam) {
+      r.risk = Math.min(r.risk, 8);
+      r.bulgular = r.bulgular.filter((b) => !/taklit|logo|kimlik av|amblem|marka/i.test(b));
+      // Taklit-KANIT alanlarını da kaldır — yoksa /api/osint bunları görüp riski 60'a tabanlıyor.
+      const taklitAlan = new Set(["İçerikte kurum taklidi", "Logo taklidi (görsel)", "Taklit uyarısı", "Marka taklidi güveni", "Görsel analiz (AI)", "Görsel notu", "Klon kaynağı"]);
+      r.alanlar = r.alanlar.filter((a) => !taklitAlan.has(a.ad));
+      r.bulgular.unshift("Sayfa içeriği yabancı dilde (Japonca/Çince/Korece) ve Türkçe/kurum bağlamı yok — Türk kurumu taklidi DEĞİL, yalnız isim çakışması.");
+      r.alanlar.push({ ad: "Yabancı içerik", deger: "Türk kurumu taklidi değil; içerik yabancı dilde (isim çakışması)." });
+    }
+  }
+
   return r;
 }
 

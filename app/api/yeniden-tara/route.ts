@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   const u = new URL(req.url);
   const n = Math.min(15, Math.max(1, Number(u.searchParams.get("n")) || 8));
   const offParam = u.searchParams.get("offset");
-  const sonuc = await yenidenTaraBatch(n, offParam !== null ? Number(offParam) : undefined);
+  const marka = (u.searchParams.get("marka") || "").trim().toLowerCase() || undefined;
+  const sonuc = await yenidenTaraBatch(n, offParam !== null ? Number(offParam) : undefined, marka);
   return NextResponse.json({ ok: true, ...sonuc });
 }
