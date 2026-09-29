@@ -48,7 +48,7 @@ export default function MarkaGiris() {
             <circle cx="15" cy="15" r="7" stroke="#4d9fe0" strokeWidth="1.1" />
             <circle cx="15" cy="15" r="2.4" fill="#39bdf8" />
           </svg>
-          <div><b>Siber Mercek</b><i>Marka Tehdit Panosu</i></div>
+          <div><b>MirLeon</b><i>Marka Tehdit Panosu</i></div>
         </div>
         <p className="mg-alt">{mod === "giris" ? "Markanın panosuna giriş yap — yalnız sana yönelik tehditleri görürsün." : "Marka hesabı oluştur — sadece kendi markanın verisine erişir."}</p>
 

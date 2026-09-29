@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ConfigProvider, theme, Flex, Typography, Button, Badge, Empty } from "antd";
 import { db, auth } from "@/lib/firebase";
-import { onAuthStateChanged, type User } from "firebase/auth";
+import { onAuthStateChanged, signInAnonymously, type User } from "firebase/auth";
 import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc, setDoc, arrayUnion, serverTimestamp } from "firebase/firestore";
+import { operatorMu } from "@/lib/markaAuth";
 
 const { Text, Title } = Typography;
 
@@ -30,12 +31,20 @@ export default function DestekPanosu() {
   const [seciliId, setSeciliId] = useState<string | null>(null);
   const [girdi, setGirdi] = useState("");
   const [gonderiliyor, setGonderiliyor] = useState(false);
+  const [anonHata, setAnonHata] = useState(false); // operatör oturumu var ama Firebase anonim giriş kapalı
   const kaydir = useRef<HTMLDivElement>(null);
   const oncekiSon = useRef<Record<string, number>>({}); // konusma → son müşteri mesaj zamanı (bildirim tespiti)
 
+  // OPERATÖR KİMLİĞİ: admin girişi Firebase'siz (localStorage). Ama bu pano + Firestore kuralları
+  // gerçek bir Firebase kimliği ister. Operatör oturumu varken ANONİM giriş yaparız → hem UI hem
+  // kurallar tatmin olur. (Firebase Console'da Anonim sağlayıcı kapalıysa net yönerge gösteririz.)
   useEffect(() => {
     if (!auth) { setUser(null); return; }
-    return onAuthStateChanged(auth, (u) => setUser(u));
+    return onAuthStateChanged(auth, (u) => {
+      if (u) { setUser(u); return; }
+      if (operatorMu()) { signInAnonymously(auth!).catch(() => setAnonHata(true)); return; }
+      setUser(null);
+    });
   }, []);
 
   // UZMAN ÇEVRİMİÇİ NABZI — pano açıkken her 20sn 'lastSeen' yazar; müşteri paneli bunu okuyup
@@ -111,9 +120,22 @@ export default function DestekPanosu() {
         {user === undefined ? (
           <Flex flex={1} align="center" justify="center"><Text style={{ color: "#8fa6bd" }}>Yükleniyor…</Text></Flex>
         ) : !user ? (
-          <Flex flex={1} vertical align="center" justify="center" gap={10}>
-            <Text style={{ color: "#8fa6bd" }}>Bu pano operatör girişi gerektirir.</Text>
-            <Button type="primary" href="/marka-giris">Operatör girişi</Button>
+          <Flex flex={1} vertical align="center" justify="center" gap={10} style={{ padding: 24, textAlign: "center" }}>
+            {anonHata ? (
+              <>
+                <Text strong style={{ color: "#ff9aa4" }}>Canlı destek kimliği açılamadı</Text>
+                <Text style={{ color: "#8fa6bd", maxWidth: 440, lineHeight: 1.6 }}>
+                  Operatör oturumun var, ama canlı destek için Firebase <b>Anonim Giriş</b> etkin olmalı.
+                  Firebase Console → <b>Authentication → Sign-in method → Anonymous → Etkinleştir</b>, sonra bu sayfayı yenile.
+                </Text>
+                <Button onClick={() => location.reload()}>Yeniden dene</Button>
+              </>
+            ) : (
+              <>
+                <Text style={{ color: "#8fa6bd" }}>Bu pano operatör girişi gerektirir.</Text>
+                <Button type="primary" href="/marka-giris">Operatör girişi</Button>
+              </>
+            )}
           </Flex>
         ) : (
           <Flex flex={1} style={{ minHeight: 0 }}>

@@ -1,6 +1,6 @@
 "use client";
 
-// SİBER MERCEK — marka tehdit istihbarat kokpiti (Ant Design + GERÇEK veri).
+// MİRLEON — marka tehdit istihbarat kokpiti (Ant Design + GERÇEK veri).
 // Giriş kapılı + marka kilidi. Sensör/akış ← /api/ct-akis, adaylar ← /api/marka-adaylari,
 // seçilen varlık ← /api/osint. antd: Card/Statistic/Progress/Table/Tag/Descriptions/Segmented.
 import { useRouter } from "next/navigation";
@@ -319,8 +319,6 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
         <Flex align="center" gap={10}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={koyu ? "/mirleon-white.svg" : "/mirleon.svg"} alt="MirLeon" style={{ height: 20, width: "auto" }} />
-          <span style={{ width: 1, height: 18, background: "var(--c-1f3652)" }} />
-          <Text style={{ fontSize: 12, letterSpacing: ".08em", color: "var(--c-5f7c9c)", textTransform: "uppercase" }}>Siber Mercek</Text>
         </Flex>
         {/* SEÇİLİ MARKA KİMLİĞİ — markanın resmi logosu + tam adı (kendi kimliğiyle) */}
         {markaFiltre && (() => {
@@ -495,7 +493,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
             </Flex>
           );
         })()}
-        <Text style={{ fontSize: 11, color: "var(--c-5f7c9c)", fontFamily: "'IBM Plex Mono',monospace" }}>Siber Mercek · MirLeon © {new Date().getFullYear()}</Text>
+        <Text style={{ fontSize: 11, color: "var(--c-5f7c9c)", fontFamily: "'IBM Plex Mono',monospace" }}>MirLeon © {new Date().getFullYear()}</Text>
       </Flex>
       <DestekPanel marka={markaFiltre} markaAdi={markaAdi} />
     </div>
@@ -969,7 +967,7 @@ function ihbarMetni(domain: string, markaAdi: string, risk: number): string {
     `Risk değerlendirmesi: ${risk}/100\n` +
     `Olay türü: Marka/kurum taklidi · oltalama (phishing) şüphesi\n` +
     `Açıklama: ${markaAdi} adını izinsiz kullanan, resmî olmayan adres; vatandaşları yanıltarak dolandırıcılık amaçlı kullanılıyor olabilir. İncelenip erişim engeli değerlendirilmesi için bildirilmektedir.\n` +
-    `Tespit kaynağı: Siber Mercek otomatik marka-taklit izleme.`;
+    `Tespit kaynağı: MirLeon otomatik marka-taklit izleme.`;
 }
 const IHBAR_URL = "https://www.usom.gov.tr/ihbar"; // Siber Güvenlik Başkanlığı / USOM resmî Siber Olay Bildirimi formu
 // DÜŞÜK GÜVEN KAPISI — %40 altı taklit güveninde bildirmeden önce operatörü uyar. Meşru bir siteyi
@@ -1116,7 +1114,7 @@ function InceleModal({ aday, rapor, canliV, markaAdi, resmiDom, resmiSaglik, ope
           <Flex align="flex-start" gap={14} style={{ borderBottom: `2px solid ${D_MUREKKEP}`, paddingBottom: 14 }}>
             <DosyaMuhur />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ fontFamily: "'IBM Plex Serif',Georgia,serif", fontSize: 19, fontWeight: 700, color: D_MUREKKEP, display: "block", lineHeight: 1.15 }}>SİBER MERCEK</Text>
+              <Text style={{ fontFamily: "'IBM Plex Serif',Georgia,serif", fontSize: 19, fontWeight: 700, color: D_MUREKKEP, display: "block", lineHeight: 1.15 }}>MİRLEON</Text>
               <Text style={{ fontSize: 11.5, color: D_SOLUK, letterSpacing: ".04em" }}>Marka Tehdit İstihbaratı · Tespit İnceleme Dosyası</Text>
               <Text style={{ fontSize: 11, color: D_MUREKKEP2, display: "block", marginTop: 3 }}>Konu: <b>{markaAdi}</b> markası adına düzenlenmiş şüpheli varlık</Text>
             </div>
@@ -1284,7 +1282,7 @@ function InceleModal({ aday, rapor, canliV, markaAdi, resmiDom, resmiSaglik, ope
           <div style={{ borderTop: `2px solid ${D_MUREKKEP}`, paddingTop: 12, marginTop: 4 }}>
             <Flex align="center" gap={8} wrap style={{ marginBottom: 12 }}>
               <span className="material-symbols-outlined" style={{ fontSize: 14, color: D_SOLUK }}>fingerprint</span>
-              <Text style={{ fontSize: 10, color: D_SOLUK }}>Siber Mercek otonom analiz · yalnız açık kaynak kanıtına dayalı · doğrulama izi:</Text>
+              <Text style={{ fontSize: 10, color: D_SOLUK }}>MirLeon otonom analiz · yalnız açık kaynak kanıtına dayalı · doğrulama izi:</Text>
               <Text style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, color: D_MUREKKEP, fontWeight: 600 }}>{hash}</Text>
               {bildirildi && <Text style={{ fontSize: 10, color: D_YESIL, marginLeft: "auto" }}>● Başkanlığa bildirildi · {new Date(bildirildi).toLocaleDateString("tr-TR")}</Text>}
             </Flex>
