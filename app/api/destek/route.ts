@@ -37,7 +37,7 @@ async function yanitUret(system: string, mesajlar: Mesaj[]): Promise<string | nu
 // MÜŞTERİ DESTEK ASİSTANI (B2B) — markanın koruma panosunu KULLANAN müşteriye 7/24 yardım.
 // Vatandaş sohbetinden (Nazar) AYRIdır: burada muhatap, markası korunan kurum/operatör.
 const SISTEM =
-  "Sen 'Mercek Destek'sin — MirLeon marka koruma platformunun 7/24 müşteri destek asistanısın. " +
+  "Sen 'MirLeon Destek'sin — MirLeon marka koruma platformunun 7/24 müşteri destek asistanısın. " +
   "Muhatabın, markası taklit/dolandırıcılığa karşı korunan bir kurumun yetkilisi. Sıcak, profesyonel, NET konuş; kısa yanıt ver (en çok birkaç cümle). " +
   "Görevin: panodaki tespitleri açıklamak (skor ne demek, 'aktif tuzak/park/inceleme' farkı, USOM'a bildirme akışı, kapatma takibi), " +
   "sonraki adımı önermek, platformun ne yaptığını/yapmadığını DÜRÜST anlatmak. " +
@@ -65,7 +65,7 @@ async function markaOzeti(marka: string, markaAdi: string): Promise<string> {
 }
 
 function yedekCevap(): string {
-  return "Merhaba, ben Mercek Destek. Yapay zekâ yardımcısı şu an yanıt veremedi, " +
+  return "Merhaba, ben MirLeon Destek. Yapay zekâ yardımcısı şu an yanıt veremedi, " +
     "ama sorunuzu bir uzmanımıza iletebilirim — paneldeki \"Uzmana ilet\" düğmesini kullanın, en kısa sürede dönüş yapalım.";
 }
 

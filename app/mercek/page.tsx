@@ -609,7 +609,7 @@ function CanliAkisSeridi({ akis, yakala, toplamCT, benMarka, onSec }: { akis: Ak
   );
 }
 
-// 7/24 MÜŞTERİ DESTEK PANELİ — sağdan açılır-kapanır. AI asistan (Mercek Destek) markanın pano
+// 7/24 MÜŞTERİ DESTEK PANELİ — sağdan açılır-kapanır. AI asistan (MirLeon Destek) markanın pano
 // verisiyle ANINDA yanıtlar (/api/destek); çözemezse "Uzmana ilet" → insan kuyruğu (/api/destek-talep).
 // Konuşma marka başına localStorage'da saklanır (yenilemede kaybolmaz). WS gerekmez: AI istek-yanıt.
 function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
@@ -670,7 +670,7 @@ function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
     const el = kaydir.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [mesajlar, canli, anahtar, yaziyor]);
 
-  const karsilama = `Merhaba 👋 Ben Mercek Destek. ${markaAdi} panonuzla ilgili her şeyi sorabilirsiniz — bir tespitin ne anlama geldiği, USOM'a nasıl bildirileceği, sonraki adımlar. Nasıl yardımcı olayım?`;
+  const karsilama = `Merhaba 👋 Ben MirLeon Destek. ${markaAdi} panonuzla ilgili her şeyi sorabilirsiniz — bir tespitin ne anlama geldiği, USOM'a nasıl bildirileceği, sonraki adımlar. Nasıl yardımcı olayım?`;
 
   async function gonder() {
     const t = girdi.trim(); if (!t) return;
@@ -739,7 +739,7 @@ function DestekPanel({ marka, markaAdi }: { marka: string; markaAdi: string }) {
             <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#fff" }}>{uzmanModu ? "headset_mic" : "support_agent"}</span>
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <Text strong style={{ fontSize: 13, color: "var(--c-e9f2fa)", display: "block", lineHeight: 1.2 }}>{uzmanModu ? "Uzman Hattı" : "Mercek Destek"}</Text>
+            <Text strong style={{ fontSize: 13, color: "var(--c-e9f2fa)", display: "block", lineHeight: 1.2 }}>{uzmanModu ? "Uzman Hattı" : "MirLeon Destek"}</Text>
             <Text style={{ fontSize: 10.5, color: (uzmanModu && !uzmanCevrimici) ? "var(--c-faad14)" : "var(--c-31c8a0)" }}>
               {uzmanModu
                 ? (uzmanCevrimici ? "● Uzman çevrimiçi · canlı" : "● Talebiniz alındı · uzman en kısa sürede yanıtlar")
