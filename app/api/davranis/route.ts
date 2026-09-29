@@ -80,9 +80,47 @@ function analizEt(j: UrlscanResult, sorgulanan: string): Record<string, unknown>
     dikkat,
     disAdresler,
     zararli: !!j.verdicts?.overall?.malicious,
-    // Faz 2: TR çıkış noktası tanımlıysa "kullanıcı gibi TR'den görünüm" burada eklenecek.
-    trGorunum: process.env.TR_PROXY ? "hazır (TR çıkışı tanımlı)" : null,
+    baslikYS: (j.page?.title || "").slice(0, 140), // yurtdışı (urlscan) başlığı — TR ile karşılaştırma için
   };
+}
+
+// ── FAZ 2: TR ÇIKIŞ NOKTASI (proxy) ile "kullanıcı gibi Türkiye'den görünüm" ─────────
+// TR_PROXY tanımlıysa domaini o proxy üzerinden çeker: TR'den HTTP durumu, yönlendirme,
+// sayfa başlığı. Başlık yurtdışı (urlscan) görünümünden belirgin farklıysa → CLOAKING ipucu
+// (site Türk'e sahte, yabancıya masum gösteriyor). Proxy yoksa null döner (Faz 1 aynı çalışır).
+function esBenzer(a: string, b: string): boolean {
+  const n = (s: string) => s.toLowerCase().replace(/[^a-z0-9ğüşıöç]/gi, "").slice(0, 40);
+  const x = n(a), y = n(b);
+  if (!x || !y) return true;
+  return x.includes(y.slice(0, 14)) || y.includes(x.slice(0, 14));
+}
+async function trGorunumAl(domain: string, urlscanBaslik: string): Promise<Record<string, unknown> | null> {
+  const proxy = process.env.TR_PROXY;
+  if (!proxy) return null;
+  try {
+    const { ProxyAgent } = await import("undici");
+    const dispatcher = new ProxyAgent(proxy);
+    const opts = {
+      dispatcher, redirect: "follow" as const,
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36", "Accept-Language": "tr-TR,tr;q=0.9" },
+      signal: AbortSignal.timeout(15000),
+    };
+    const r = await fetch(`http://${domain}/`, opts as RequestInit);
+    const html = (await r.text()).slice(0, 40000);
+    const baslik = (html.match(/<title[^>]*>([^<]{0,140})/i)?.[1] || "").trim();
+    let sonHost = ""; try { sonHost = new URL(r.url).hostname.replace(/^www\./, ""); } catch { /* */ }
+    const yonlendirdi = !!sonHost && sonHost !== domain && !sonHost.endsWith("." + domain) && !domain.endsWith("." + sonHost);
+    const farkliIcerik = !!(urlscanBaslik && baslik && !esBenzer(baslik, urlscanBaslik));
+    return { status: r.status, aciklama: kodAciklama(r.status), sonUrl: r.url.slice(0, 120), yonlendirdi, baslik: baslik.slice(0, 120), boyut: html.length, farkliIcerik };
+  } catch {
+    return { hata: "TR çıkışından erişilemedi (proxy hatası/timeout)" };
+  }
+}
+async function cevap(j: UrlscanResult, domain: string): Promise<Record<string, unknown>> {
+  const base = analizEt(j, domain);
+  const tr = await trGorunumAl(domain, String(base.baslikYS || ""));
+  base.trGorunum = tr;
+  return base;
 }
 
 async function sonucAl(uuid: string, key?: string): Promise<UrlscanResult | null> {
@@ -102,7 +140,7 @@ export async function GET(req: NextRequest) {
   // Poll modu
   if (uuid) {
     const j = await sonucAl(uuid, key);
-    if (j && j.page) return NextResponse.json(analizEt(j, domain || (j.page.domain || "").toLowerCase()));
+    if (j && j.page) return NextResponse.json(await cevap(j, domain || (j.page.domain || "").toLowerCase()));
     return NextResponse.json({ durum: "taraniyor", uuid });
   }
 
@@ -114,7 +152,7 @@ export async function GET(req: NextRequest) {
     const id = s.results?.[0]?._id;
     if (id) {
       const j = await sonucAl(id, key);
-      if (j && j.page) return NextResponse.json(analizEt(j, domain));
+      if (j && j.page) return NextResponse.json(await cevap(j, domain));
     }
   } catch { /* aramada hata → tarama tetikle */ }
 

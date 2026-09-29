@@ -1665,7 +1665,8 @@ type DavranisVeri = {
   durum?: string; uuid?: string; sonAdres?: string; yonlendirdi?: boolean; yonlendirmeHedef?: string | null;
   anaDurum?: number | null; anaDurumAciklama?: string | null; baslik?: string;
   kaynaklar?: { toplam: number; calisan: number; yonlendirme: number; hata4xx: number; hata5xx: number };
-  dikkat?: { yol: string; kod: number; aciklama: string }[]; disAdresler?: string[]; zararli?: boolean; trGorunum?: string | null;
+  dikkat?: { yol: string; kod: number; aciklama: string }[]; disAdresler?: string[]; zararli?: boolean;
+  trGorunum?: { status?: number; aciklama?: string; sonUrl?: string; yonlendirdi?: boolean; baslik?: string; boyut?: number; farkliIcerik?: boolean; hata?: string } | null;
 };
 function DavranisBlok({ domain }: { domain: string }) {
   const [v, setV] = useState<DavranisVeri | null>(null);
@@ -1728,7 +1729,28 @@ function DavranisBlok({ domain }: { domain: string }) {
             <Text style={{ fontSize: 10.5, color: "var(--c-a7bccf)", fontFamily: "'IBM Plex Mono',monospace", wordBreak: "break-all" }}>{v.disAdresler.join(" · ")}</Text>
           </div>
         )}
-        <Text style={{ fontSize: 9, color: "var(--c-5c748b)", marginTop: 2 }}>{v.trGorunum ? "TR çıkış noktasından da doğrulandı." : "Not: bu görünüm sunucumuzdan; Türkiye&apos;den kullanıcı görünümü (TR çıkışı) eklendiğinde ayrıca gösterilir."}</Text>
+        {/* TÜRKİYE'DEN GÖRÜNÜM (Faz 2 — TR proxy) */}
+        {v.trGorunum ? (
+          <div style={{ marginTop: 4, borderTop: "1px dashed var(--c-17293c)", paddingTop: 7 }}>
+            <Flex align="center" gap={6}><span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-31c8a0)" }}>public</span><Text strong style={{ fontSize: 10.5, color: "var(--c-cfe0ef)" }}>Türkiye&apos;den kullanıcı görünümü</Text></Flex>
+            {v.trGorunum.hata ? (
+              <Text style={{ fontSize: 10.5, color: "var(--c-faad14)", display: "block", marginTop: 3, paddingLeft: 20 }}>{v.trGorunum.hata}</Text>
+            ) : (
+              <Flex vertical gap={2} style={{ marginTop: 3, paddingLeft: 20 }}>
+                <Text style={{ fontSize: 10.5, color: "var(--c-a7bccf)" }}>TR&apos;den açıldığında: <Text style={{ color: (v.trGorunum.status || 0) < 300 ? "var(--c-3ee08a)" : "var(--c-faad14)" }}>{v.trGorunum.aciklama}</Text> <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)" }}>(HTTP {v.trGorunum.status})</Text></Text>
+                {v.trGorunum.baslik ? <Text style={{ fontSize: 10, color: "var(--c-8fa6bd)" }}>Sayfa: <Text style={{ color: "var(--c-cfe0ef)" }}>{v.trGorunum.baslik}</Text></Text> : null}
+                {v.trGorunum.farkliIcerik ? (
+                  <Flex align="flex-start" gap={5} style={{ background: "rgba(255,84,104,.12)", border: "1px solid rgba(255,84,104,.35)", borderRadius: 5, padding: "4px 7px", marginTop: 2 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--c-ff5468)" }}>visibility_off</span>
+                    <Text style={{ fontSize: 10, color: "var(--c-ff9aa4)", lineHeight: 1.4 }}>Türkiye&apos;den ve yurtdışından FARKLI içerik görünüyor — coğrafi gizleme (cloaking) şüphesi: site Türk kullanıcıya farklı sayfa gösteriyor olabilir.</Text>
+                  </Flex>
+                ) : null}
+              </Flex>
+            )}
+          </div>
+        ) : (
+          <Text style={{ fontSize: 9, color: "var(--c-5c748b)", marginTop: 2 }}>Not: bu görünüm sunucumuzdan; Türkiye&apos;den kullanıcı görünümü (TR çıkışı) eklendiğinde ayrıca gösterilir.</Text>
+        )}
       </Flex>
     </div>
   );
