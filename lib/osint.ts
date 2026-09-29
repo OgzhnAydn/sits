@@ -1928,6 +1928,10 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
     }
   }
 
+  // RİSK SINIRI: 0–100. Sinyaller toplamı 100'ü aşabilir (USOM+yaş+TLD+içerik…); DEPOLANAN skorun
+  // 100'ü geçmemesi için burada sınırla (yeniden-tarama domainOsint'i doğrudan çağırıyor).
+  r.risk = Math.max(0, Math.min(100, Math.round(r.risk)));
+
   return r;
 }
 
