@@ -1318,6 +1318,7 @@ function EntityDetail({ aday, rapor, yukleniyor, markaAdi, resmiDom, resmiSaglik
       <TeknikKunye rapor={rapor} ilk={ilk} son={son} />
       <PasifDnsBolum domain={aday.domain} />
       <KarsilastirGorsel resmiDom={resmiDom} fakeDom={aday.domain} fakeShot={rapor?.ekranGoruntusu} benzerlik={benzerlik} markaAdi={markaAdi} />
+      <DavranisBlok domain={aday.domain} />
 
       {(() => {
         // BİLDİRİM / DURUM — MÜŞTERİYİ YANILTMAMAK için üç DOĞRULANMIŞ hâl ayrıştırılır; asla
@@ -1657,6 +1658,82 @@ function RiskCizgi({ gecmis }: { gecmis: Gecmis[] }) {
 }
 
 // GERÇEK vs SAHTE — resmî markanın ekran görüntüsü yanında sahtenin görüntüsü + benzerlik.
+// DAVRANIŞ ANALİZİ — siteyi urlscan'in GERÇEK-TARAYICI sandbox'ında çalıştırıp: nereye
+// yönlendiriyor, yüklenirken hangi yanıtları alıyor (200/403/404/525…), hangi dış adreslere
+// bağlanıyor. Hepsi MÜŞTERİ DİLİYLE. (Faz 2: TR çıkış noktası → "kullanıcı gibi TR'den görünüm".)
+type DavranisVeri = {
+  durum?: string; uuid?: string; sonAdres?: string; yonlendirdi?: boolean; yonlendirmeHedef?: string | null;
+  anaDurum?: number | null; anaDurumAciklama?: string | null; baslik?: string;
+  kaynaklar?: { toplam: number; calisan: number; yonlendirme: number; hata4xx: number; hata5xx: number };
+  dikkat?: { yol: string; kod: number; aciklama: string }[]; disAdresler?: string[]; zararli?: boolean; trGorunum?: string | null;
+};
+function DavranisBlok({ domain }: { domain: string }) {
+  const [v, setV] = useState<DavranisVeri | null>(null);
+  const [yuk, setYuk] = useState(false);
+  useEffect(() => {
+    let iptal = false; setV(null); setYuk(true);
+    (async () => {
+      try {
+        let j = (await (await fetch(`/api/davranis?domain=${encodeURIComponent(domain)}`)).json()) as DavranisVeri;
+        for (let i = 0; i < 7 && j.durum === "taraniyor" && j.uuid && !iptal; i++) {
+          await new Promise((r) => setTimeout(r, 4000));
+          j = (await (await fetch(`/api/davranis?uuid=${j.uuid}&domain=${encodeURIComponent(domain)}`)).json()) as DavranisVeri;
+        }
+        if (!iptal) setV(j);
+      } catch { if (!iptal) setV({ durum: "yok" }); }
+      finally { if (!iptal) setYuk(false); }
+    })();
+    return () => { iptal = true; };
+  }, [domain]);
+
+  const baslikSatiri = <Text strong style={{ fontSize: 11, letterSpacing: ".05em", color: "var(--c-cfe0ef)" }}>Davranış Analizi <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)" }}>· güvenli sandbox</Text></Text>;
+  if (yuk && !v) return <div><div style={{ borderTop: "1px solid var(--c-17293c)", paddingTop: 12 }}>{baslikSatiri}</div><Flex align="center" gap={8} style={{ marginTop: 8 }}><Spin size="small" /><Text style={{ fontSize: 11, color: "var(--c-8fa6bd)" }}>Site güvenli bir sandbox&apos;ta çalıştırılıyor…</Text></Flex></div>;
+  if (!v || v.durum !== "hazir") return null;
+  const k = v.kaynaklar;
+  const hata = (k?.hata4xx || 0) + (k?.hata5xx || 0);
+  const durumRenk = (kod: number) => kod < 300 ? "var(--c-3ee08a)" : kod < 400 ? "var(--c-8fb0d4)" : kod < 500 ? "var(--c-faad14)" : "var(--c-ff5468)";
+  return (
+    <div style={{ borderTop: "1px solid var(--c-17293c)", paddingTop: 12 }}>
+      {baslikSatiri}
+      <Flex vertical gap={7} style={{ marginTop: 8 }}>
+        {/* Yönlendirme */}
+        {v.yonlendirdi && v.yonlendirmeHedef ? (
+          <Flex align="flex-start" gap={7}>
+            <span className="material-symbols-outlined" style={{ fontSize: 15, color: "var(--c-e5772f)" }}>subdirectory_arrow_right</span>
+            <Text style={{ fontSize: 11.5, color: "var(--c-a7bccf)" }}>Sizi başka bir adrese götürüyor: <Text style={{ color: "var(--c-cfe0ef)", fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, wordBreak: "break-all" }}>{v.yonlendirmeHedef.replace(/^https?:\/\//, "").slice(0, 60)}</Text></Text>
+          </Flex>
+        ) : (
+          <Flex align="center" gap={7}><span className="material-symbols-outlined" style={{ fontSize: 15, color: "var(--c-5c748b)" }}>link</span><Text style={{ fontSize: 11.5, color: "var(--c-8fa6bd)" }}>Başka adrese yönlendirmiyor.</Text></Flex>
+        )}
+        {/* Ana sayfa yanıtı */}
+        {v.anaDurum ? (
+          <Flex align="center" gap={7}><span className="material-symbols-outlined" style={{ fontSize: 15, color: durumRenk(v.anaDurum) }}>dns</span><Text style={{ fontSize: 11.5, color: "var(--c-a7bccf)" }}>Sayfayı açtığımızda: <Text style={{ color: durumRenk(v.anaDurum) }}>{v.anaDurumAciklama}</Text> <Text style={{ fontSize: 10, color: "var(--c-5c748b)" }}>(HTTP {v.anaDurum})</Text></Text></Flex>
+        ) : null}
+        {/* Kaynak özeti */}
+        {k && k.toplam > 0 && (
+          <Text style={{ fontSize: 10.5, color: "var(--c-8fa6bd)", paddingLeft: 22 }}>Sayfa yüklenirken <b style={{ color: "var(--c-cfe0ef)" }}>{k.toplam}</b> istek yaptı · <span style={{ color: "var(--c-3ee08a)" }}>{k.calisan} çalıştı</span>{hata > 0 && <> · <span style={{ color: "var(--c-faad14)" }}>{hata} hata/eksik</span></>}</Text>
+        )}
+        {/* Dikkat çeken yanıtlar */}
+        {v.dikkat && v.dikkat.length > 0 && (
+          <Flex vertical gap={3} style={{ paddingLeft: 22 }}>
+            {v.dikkat.map((d, i) => (
+              <Text key={i} style={{ fontSize: 10.5, color: durumRenk(d.kod) }}>· <Text style={{ fontFamily: "'IBM Plex Mono',monospace", color: "var(--c-8fb0d4)" }}>{d.yol}</Text> → {d.aciklama} ({d.kod})</Text>
+            ))}
+          </Flex>
+        )}
+        {/* Dış adresler */}
+        {v.disAdresler && v.disAdresler.length > 0 && (
+          <div style={{ paddingLeft: 22 }}>
+            <Text style={{ fontSize: 10, color: "var(--c-5c748b)", display: "block" }}>Bağlandığı dış adresler (veri gidebilecek yerler):</Text>
+            <Text style={{ fontSize: 10.5, color: "var(--c-a7bccf)", fontFamily: "'IBM Plex Mono',monospace", wordBreak: "break-all" }}>{v.disAdresler.join(" · ")}</Text>
+          </div>
+        )}
+        <Text style={{ fontSize: 9, color: "var(--c-5c748b)", marginTop: 2 }}>{v.trGorunum ? "TR çıkış noktasından da doğrulandı." : "Not: bu görünüm sunucumuzdan; Türkiye&apos;den kullanıcı görünümü (TR çıkışı) eklendiğinde ayrıca gösterilir."}</Text>
+      </Flex>
+    </div>
+  );
+}
+
 function KarsilastirGorsel({ resmiDom, fakeDom, fakeShot, benzerlik, markaAdi }: { resmiDom?: string; fakeDom: string; fakeShot?: string; benzerlik?: number; markaAdi: string }) {
   const [gercek, setGercek] = useState<string | null>(null);
   const [sahte, setSahte] = useState<string | null>(fakeShot || null);
