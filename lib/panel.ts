@@ -87,9 +87,13 @@ export async function markaPanel(marka: string): Promise<PanelVeri> {
   const kume = enKalabalik && enKalabalik[1] >= 5 && enKalabalik[1] / adaylar.length > 0.4 ? { tld: enKalabalik[0], adet: enKalabalik[1] } : null;
 
   // ── YÜKSELMELER (Engine 2: eyleme geçenler) ──
+  // Eski kayıtlarda risk 0–100 sınırından ÖNCE yazıldığı için 115/255/310 gibi değerler olabilir;
+  // hem simdikiRisk hem sebep metnindeki 100 üstü sayılar burada 100'e sınırlanır (görüntüde tutarlılık).
+  const kapRisk = (n: number) => Math.max(0, Math.min(100, Math.round(n || 0)));
+  const kapMetin = (s: string) => s.replace(/\d+/g, (m) => (Number(m) > 100 ? "100" : m));
   const yukselmeler = adaylar
     .filter((a) => a.sonYukselme)
-    .map((a) => ({ domain: a.domain, sebep: a.sonYukselme!.sebep, t: a.sonYukselme!.t, simdikiRisk: a.sonYukselme!.simdikiRisk }))
+    .map((a) => ({ domain: a.domain, sebep: (a.sonYukselme!.sebep || []).map(kapMetin), t: a.sonYukselme!.t, simdikiRisk: kapRisk(a.sonYukselme!.simdikiRisk) }))
     .sort((x, y) => y.t - x.t).slice(0, 12);
 
   // ── ORTAK NOKTA & ÜLKE (analizler.alanlar'dan) ──

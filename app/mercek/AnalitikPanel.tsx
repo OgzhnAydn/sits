@@ -125,7 +125,7 @@ type ReklamSonuc = { yapilandirildi: boolean; reklamlar: Reklam[]; supheli: numb
 type GReklam = { reklamveren: string; yasal?: string; konum?: string; dogrulama: string; url?: string; supheli: boolean; tur?: "tehdit" | "inceleme" | "ilgisiz" | "resmi"; konu?: string };
 type GReklamSonuc = { yapilandirildi: boolean; reklamlar: GReklam[]; supheli: number; guncelleme: number; not: string };
 
-export default function AnalitikPanel({ marka, bolum = "tam" }: { marka: string; bolum?: string }) {
+export default function AnalitikPanel({ marka, bolum = "tam", onAc }: { marka: string; bolum?: string; onAc?: (domain: string) => void }) {
   const [veri, setVeri] = useState<Panel | null>(null);
   const [yuk, setYuk] = useState(true);
   const [app, setApp] = useState<AppSonuc | null>(null);
@@ -409,9 +409,11 @@ export default function AnalitikPanel({ marka, bolum = "tam" }: { marka: string;
             {veri.yukselmeler.length ? (
               <Flex vertical gap={10}>
                 {veri.yukselmeler.map((y) => (
-                  <Flex key={y.domain} align="center" justify="space-between" style={{ padding: "8px 12px", border: "1px solid var(--c-17293c)", borderRadius: 8 }}>
+                  <Flex key={y.domain} align="center" justify="space-between" onClick={() => onAc?.(y.domain)}
+                    title={onAc ? "Detayı aç / incele" : undefined}
+                    style={{ padding: "8px 12px", border: "1px solid var(--c-17293c)", borderRadius: 8, cursor: onAc ? "pointer" : "default" }}>
                     <Flex vertical><Text style={{ color: "var(--c-e6eef7)", fontFamily: "monospace" }}>{y.domain}</Text><Text style={{ fontSize: 11, color: "var(--c-f6a35c)" }}>{y.sebep.join(" · ")}</Text></Flex>
-                    <Flex align="center" gap={10}><Tag color="error">risk {y.simdikiRisk}</Tag><Text style={{ fontSize: 11, color: "var(--c-5b6b7d)" }}>{gecenSure(y.t)}</Text></Flex>
+                    <Flex align="center" gap={10}><Tag color="error">risk {y.simdikiRisk}</Tag><Text style={{ fontSize: 11, color: "var(--c-5b6b7d)" }}>{gecenSure(y.t)}</Text>{onAc && <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--c-5b6b7d)" }}>chevron_right</span>}</Flex>
                   </Flex>
                 ))}
               </Flex>

@@ -421,7 +421,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
 
           {gorunum !== "evren" ? (
             <Col xs={24} lg={19} style={masaustu ? { height: "100%" } : undefined}>
-              <div style={masaustu ? { height: "100%", overflowY: "auto" } : undefined}><AnalitikPanel marka={markaFiltre} bolum={gorunum} /></div>
+              <div style={masaustu ? { height: "100%", overflowY: "auto" } : undefined}><AnalitikPanel marka={markaFiltre} bolum={gorunum} onAc={(domain) => { setGorunum("evren"); analizEt({ domain, marka: markaFiltre, skor: 0, durum: "canli" }); }} /></div>
             </Col>
           ) : (<>
           {/* MERKEZ: 3 grafik */}
