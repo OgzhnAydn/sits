@@ -122,6 +122,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
   const ctOnce = useRef(0);
   const [yakalananN, setYakalananN] = useState(0); // oturumda akıştan marka-eşleşmesiyle yakalanan sertifika sayısı
   const [canliAkis, setCanliAkis] = useState<AkisSatir[]>([]); // worker SSE ile gerçek zamanlı sertifika akışı
+  const [sonYakala, setSonYakala] = useState<Aday[]>([]); // TÜM markalar — en yeni gerçek yakalamalar (canlı şerit verisi)
   const [, setAkisBagli] = useState(false); // SSE bağlantı durumu (bağlantı değişimiyle yeniden çizim tetikler)
   const akisNo = useRef(0);
   const [adaylar, setAdaylar] = useState<Aday[]>([]);
@@ -246,6 +247,26 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
     cek(); const t = setInterval(cek, 30000);
     return () => { durdu = true; clearInterval(t); };
   }, [markaFiltre]);
+
+  // CANLI ŞERİT VERİSİ — TÜM markaların EN YENİ gerçek yakalamaları (zaman'a göre sıralı). Ham CT
+  // gürültüsü DEĞİL; kritere uyup kaydedilmiş gerçek adaylar. Marka-kilitli ekranda bile motorun
+  // tüm markalar için canlı iş yaptığını GÖZLE gösterir (Akbank 18:29, Garanti 18:22…). 15sn tazelenir.
+  useEffect(() => {
+    let durdu = false;
+    async function cek() {
+      try {
+        const j = await (await fetch("/api/marka-adaylari", { cache: "no-store" })).json();
+        if (durdu) return;
+        const a: Aday[] = (j.adaylar || [])
+          .filter((x: Aday) => x.zaman)
+          .sort((p: Aday, q: Aday) => (q.zaman || 0) - (p.zaman || 0))
+          .slice(0, 40);
+        setSonYakala(a);
+      } catch { /* sessiz */ }
+    }
+    cek(); const t = setInterval(cek, 15000);
+    return () => { durdu = true; clearInterval(t); };
+  }, []);
 
   const analizEt = useCallback(async (a: Aday, taze = false) => {
     setSecili(a); setRapor(null); setYukleniyor(true);
@@ -469,7 +490,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
             kaldırıldı (sol paneldeki filtre listesiyle mükerrerdi). */}
         {gorunum === "evren" && (
           <div style={{ flexShrink: 0 }}>
-            <CanliAkisSeridi akis={canliAkis.length ? canliAkis : akis} toplamCT={toplamCT} yakalananN={yakalananN} onSec={(d, m) => analizEt({ domain: d, marka: m, skor: 0, durum: "canli" })} />
+            <CanliAkisSeridi yakala={sonYakala} toplamCT={toplamCT} benMarka={markaFiltre} onSec={(a) => analizEt(a)} />
           </div>
         )}
       </div>
@@ -502,50 +523,61 @@ function Clock() {
 }
 // Stat satırı AYNI ZAMANDA filtre — iki ayrı liste (stat + Hızlı Filtre) yerine tek liste.
 // Tıklanınca o kovaya süzer; seçili satır vurgulanır. renk = grafik durum rengiyle eş.
-// CANLI AKIŞ ŞERİDİ — grafiğin altında, "sistem canlı mı + kriter çalışıyor mu" sorusunu
-// GÖZLE yanıtlar. Gerçek /api/ct-akis verisi: sertifikalar tek tek akar (çoğu "geçildi",
-// sönük). Worker bir sertifikayı markaya EŞLEŞTİRDİĞİ an (a.marka dolu) o satır kırmızı
-// "YAKALANDI" olur + rozet + tıklanınca İncele açılır. Sayaçlar: taranan (canlı CT toplamı) +
-// yakalanan (oturumda kritere uyan). Uydurma yok — akış da yakalama da gerçek olaylardan.
-function CanliAkisSeridi({ akis, toplamCT, yakalananN, onSec }: { akis: AkisSatir[]; toplamCT: number; yakalananN: number; onSec: (d: string, m: string) => void }) {
-  const satirlar = akis.slice(0, 40);
+// "ne kadar önce" — canlı akış satırlarına gerçek gecikme (kısa TR birim).
+function oncePrint(t: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (s < 60) return s + " sn";
+  if (s < 3600) return Math.floor(s / 60) + " dk";
+  if (s < 86400) return Math.floor(s / 3600) + " sa";
+  return Math.floor(s / 86400) + " g";
+}
+// CANLI TESPİT ŞERİDİ — grafiğin altında, "sistem canlı mı" sorusunu GÖZLE yanıtlar. Ham CT
+// gürültüsü DEĞİL: TÜM markaların EN YENİ gerçek yakalamaları (kritere uyup kaydedilen adresler),
+// zaman + risk rengi + marka çipiyle akar. Her satır tıklanınca İncele açılır. SİZİN markanız
+// çıkarsa satır kırmızı yanar. Sayaçlar: taranan (canlı CT toplamı) + son 24 saatteki yakalama.
+// Uydurma yok — hepsi gerçek, kaydedilmiş tespitler.
+function CanliAkisSeridi({ yakala, toplamCT, benMarka, onSec }: { yakala: Aday[]; toplamCT: number; benMarka: string; onSec: (a: Aday) => void }) {
+  const satirlar = yakala.slice(0, 40);
+  const son24 = yakala.filter((a) => a.zaman && Date.now() - a.zaman < 86_400_000).length;
   return (
     <div style={{ marginTop: 8, border: "1px solid var(--c-17293c)", borderRadius: 10, overflow: "hidden", background: "var(--c-0a1420)", height: 250, flexShrink: 0, display: "flex", flexDirection: "column" }}>
       <Flex align="center" gap={9} style={{ padding: "8px 12px", borderBottom: "1px solid var(--c-12202e)", background: "var(--c-0b1726)" }}>
         <Badge status="processing" color="var(--c-31c8a0)" />
         <Text strong style={{ fontSize: 11, letterSpacing: ".07em", color: "var(--c-31c8a0)" }}>CANLI TESPİT</Text>
-        <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)" }}>tüm markalar için 7/24 tarama · markanız çıkarsa kırmızı</Text>
+        <Text style={{ fontSize: 9.5, color: "var(--c-5c748b)" }}>son yakalananlar · tüm markalar{benMarka ? " · sizin markanız kırmızı" : ""}</Text>
         <Flex gap={16} style={{ marginLeft: "auto" }}>
           <div style={{ textAlign: "right" }}>
             <Text strong style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, color: "var(--c-e9f2fa)", display: "block", lineHeight: 1.1 }}>{toplamCT ? (toplamCT / 1e9).toFixed(2) + "B" : "—"}</Text>
-            <Text style={{ fontSize: 9, color: "var(--c-5c748b)" }}>taranan</Text>
+            <Text style={{ fontSize: 9, color: "var(--c-5c748b)" }}>taranan sertifika</Text>
           </div>
           <div style={{ textAlign: "right" }}>
-            <Text strong style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, color: "var(--c-ff5468)", display: "block", lineHeight: 1.1 }}>{yakalananN}</Text>
-            <Text style={{ fontSize: 9, color: "var(--c-5c748b)" }}>yakalanan</Text>
+            <Text strong style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, color: "var(--c-31c8a0)", display: "block", lineHeight: 1.1 }}>{son24}</Text>
+            <Text style={{ fontSize: 9, color: "var(--c-5c748b)" }}>son 24 saat</Text>
           </div>
         </Flex>
       </Flex>
       <div style={{ padding: "3px 0", flex: 1, minHeight: 0, overflowY: "auto" }}>
-        {satirlar.length === 0 && <Text style={{ display: "block", textAlign: "center", padding: "46px 0", fontSize: 11, color: "var(--c-5c748b)" }}>Akış başlatılıyor…</Text>}
-        {satirlar.map((a) => a.marka ? (
-          <div key={a.i} onClick={() => onSec(a.domain, a.marka!)} title="İncele"
-            style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 12px", fontFamily: "'IBM Plex Mono',monospace",
-              animation: "riseIn .4s ease", cursor: "pointer", borderLeft: "3px solid var(--c-ff5468)", background: "var(--c-2a0d13)" }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--c-ff5468)" }}>gpp_bad</span>
-            <Text style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--c-ff9aa4)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.domain}</Text>
-            <span style={{ background: "var(--c-ff5468)", color: "var(--c-160a0e)", fontSize: 9.5, fontWeight: 700, padding: "1px 8px", borderRadius: 20, whiteSpace: "nowrap" }}>{buyukHarf(a.marka!)}</span>
-            <Text style={{ fontSize: 9.5, fontWeight: 700, color: "var(--c-ff5468)", letterSpacing: ".04em", whiteSpace: "nowrap" }}>YAKALANDI →</Text>
-          </div>
-        ) : (
-          <div key={a.i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 12px", fontFamily: "'IBM Plex Mono',monospace", animation: "riseIn .4s ease", borderLeft: "3px solid transparent" }}>
-            <span style={{ width: 5, height: 5, borderRadius: 3, background: "var(--c-33506f)", flexShrink: 0, margin: "0 5px" }} />
-            <Text style={{ flex: 1, minWidth: 0, fontSize: 11, color: "var(--c-5f7c9c)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.domain}</Text>
-          </div>
-        ))}
+        {satirlar.length === 0 && <Text style={{ display: "block", textAlign: "center", padding: "46px 0", fontSize: 11, color: "var(--c-5c748b)" }}>Yakalamalar yükleniyor…</Text>}
+        {satirlar.map((a) => {
+          const sv = seviye(a.skor || 0);
+          const benim = !!benMarka && a.marka === benMarka;
+          return (
+            <div key={a.domain} onClick={() => onSec(a)} title="İncele"
+              style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 12px", fontFamily: "'IBM Plex Mono',monospace",
+                animation: "riseIn .4s ease", cursor: "pointer",
+                borderLeft: `3px solid ${benim ? "var(--c-ff5468)" : sv.renk}`,
+                background: benim ? "var(--c-2a0d13)" : "transparent" }}>
+              <span style={{ width: 7, height: 7, borderRadius: 4, background: sv.renk, flexShrink: 0 }} />
+              <Text style={{ fontSize: 10, color: "var(--c-5c748b)", width: 42, flexShrink: 0, textAlign: "right", whiteSpace: "nowrap" }}>{a.zaman ? oncePrint(a.zaman) : "—"}</Text>
+              <Text style={{ flex: 1, minWidth: 0, fontSize: 12, color: benim ? "var(--c-ff9aa4)" : "var(--c-e9f2fa)", fontWeight: benim ? 600 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.domain}</Text>
+              <span style={{ border: `1px solid ${sv.renk}`, color: sv.renk, fontSize: 9, fontWeight: 700, padding: "0 7px", borderRadius: 20, whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: ".03em" }}>{buyukHarf(a.marka)}</span>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: sv.renk, width: 24, textAlign: "right", flexShrink: 0 }}>{Math.round(a.skor || 0)}</Text>
+            </div>
+          );
+        })}
       </div>
       <Text style={{ display: "block", padding: "6px 12px", borderTop: "1px solid var(--c-12202e)", fontSize: 9.5, color: "var(--c-5c748b)", lineHeight: 1.4 }}>
-        Akışta markanı taklit eden bir adres çıkarsa <span style={{ color: "var(--c-ff9aa4)" }}>kırmızı</span> yanar ve inceleme kuyruğuna alınır.
+        Bu liste <span style={{ color: "var(--c-e9f2fa)" }}>gerçek yakalamalardır</span> — kriterimize uyup kaydedilen adresler. Motor sürekli tarıyor; {benMarka ? <>sizin markanız çıktığında <span style={{ color: "var(--c-ff9aa4)" }}>kırmızı</span> görünür ve inceleme kuyruğuna alınır.</> : "en yeni tespitler en üstte akar."}
       </Text>
     </div>
   );
