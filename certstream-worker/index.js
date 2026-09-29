@@ -284,6 +284,10 @@ function eslesenMarka(domain) {
         if ((k.length <= 4 || m.yaygin) && !baglamVar) continue;
         return m.anahtar;
       }
+      // TİRE-NORMALİZE: uzun açılım kalıpları (toplukonutidaresi, konutidaresi, toplukonut) domainde
+      // tireyle ayrılmış olabilir (toplu-konut-idaresi-basvuru). kok() tireyi silmez → düz includes
+      // kaçırır. Tiresiz halde tekrar dene; yalnız ≥8 harf ayırt edici kalıp (FP yok). lib ile aynı.
+      if (k.length >= 8 && label.includes("-") && label.replace(/-/g, "").includes(k)) return m.anahtar;
       // Harf-oyunu typosquat (anadolumet, turkcel…) — alt-dize değil ama çok benziyor.
       // YAYGIN markada typo'ya da bağlam kapısı: transvaro↔transparo/transpar FP'sini eler.
       if (yakinTypo(label, k)) {

@@ -389,6 +389,12 @@ function taklitKalip(d: string, k: string, yaygin?: boolean): boolean {
     if ((k.length <= 4 || yaygin) && YABANCI_ICERIK.test(label) && !TR_BAGLAM.test(label)) return false;
     return true;
   }
+  // TİRE-NORMALİZE: çok-kelimeli uzun açılım kalıpları (toplukonutidaresi, konutidaresi, toplukonut)
+  // domainde tireyle AYRILMIŞ olabilir (toplu-konut-idaresi-basvuru). kok() tireyi silmediği için
+  // düz .includes bunları kaçırır. Tireleri kaldırıp tekrar dene — YALNIZ uzun (≥8) ayırt edici
+  // kalıplar için; bu uzunlukta rastgele kelime çakışması olmaz (FP yok). Sınır kontrolü aranmaz:
+  // tire silinince sınırlar zaten kaybolur, uzun kalıbın kendisi yeterli sinyaldir.
+  if (k.length >= 8 && label.includes("-") && label.replace(/-/g, "").includes(k)) return true;
   // Harf-oyunu typosquat (anadolumet, aselan, turkcel…) — alt-dize DEĞİL ama çok benziyor.
   // YAYGIN markada typo eşleşmesine de bağlam kapısı: transvaro↔transparo/transpar (ayrı gerçek
   // şirketler, yabancı TLD) yanlış-pozitifini eler; gerçek typosquat riskli TLD/bağlam taşır.
