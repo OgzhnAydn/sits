@@ -119,6 +119,55 @@ services:
     restart: "no"
     networks: [sits]
 
+  # ── INGEST — CT → Redpanda → ClickHouse + Neo4j (Faz 2) ──────────────────────
+  # Üretici: CT loglarından sertifikaları çekip 'certificates' topic'ine yazar.
+  ct-producer:
+    build: ./ingest
+    container_name: sits-ct-producer
+    depends_on:
+      redpanda: { condition: service_healthy }
+    environment:
+      KAFKA_BROKER: redpanda:9092
+      KAFKA_TOPIC: certificates
+    command: ["node", "producer.js"]
+    restart: unless-stopped
+    networks: [sits]
+
+  # Tüketici 1: akışı ClickHouse'a (ham sertifika deposu) toplu yazar.
+  ch-consumer:
+    build: ./ingest
+    container_name: sits-ch-consumer
+    depends_on:
+      redpanda: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+    environment:
+      KAFKA_BROKER: redpanda:9092
+      KAFKA_TOPIC: certificates
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-sits}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?}
+    command: ["node", "consumer-clickhouse.js"]
+    restart: unless-stopped
+    networks: [sits]
+
+  # Tüketici 2: akıştan altyapı grafiğini (Domain→CA) Neo4j'e yazar.
+  neo4j-consumer:
+    build: ./ingest
+    container_name: sits-neo4j-consumer
+    depends_on:
+      redpanda: { condition: service_healthy }
+      neo4j: { condition: service_healthy }
+      neo4j-init: { condition: service_completed_successfully }
+    environment:
+      KAFKA_BROKER: redpanda:9092
+      KAFKA_TOPIC: certificates
+      NEO4J_URL: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?}
+    command: ["node", "consumer-neo4j.js"]
+    restart: unless-stopped
+    networks: [sits]
+
 volumes:
   redpanda_data:
   clickhouse_data:

@@ -1,0 +1,18 @@
+{
+  "name": "sits-ingest",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SİTS veri platformu ingest — CT → Redpanda → ClickHouse + Neo4j",
+  "scripts": {
+    "producer": "node producer.js",
+    "consumer:clickhouse": "node consumer-clickhouse.js",
+    "consumer:neo4j": "node consumer-neo4j.js"
+  },
+  "dependencies": {
+    "@clickhouse/client": "^1.7.0",
+    "kafkajs": "^2.2.4",
+    "neo4j-driver": "^5.24.0"
+  },
+  "engines": { "node": ">=20" }
+}
