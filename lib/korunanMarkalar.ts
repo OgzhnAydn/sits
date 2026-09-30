@@ -68,6 +68,14 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "agenciatributaria", ad: "Agencia Tributaria", resmi: ["agenciatributaria.gob.es", "agenciatributaria.es"] },
   { anahtar: "pttavm", ad: "PTT AVM", resmi: ["pttavm.com"] },
   { anahtar: "edevlet", ad: "e-Devlet", resmi: ["turkiye.gov.tr"] },
+  // Ticaret Bakanlığı — "ticaret" tek başına ÇOK yaygın (binlerce "X Ticaret Ltd"); FP yapmamak için
+  // anahtar ve kalıplar UZUN + ayırt edici (bakanlık/govtr/eticaret-başvuru). Tireli varyantlar
+  // (ticaret-bakanligi-basvuru) tire-normalize eşleştirmesiyle yakalanır.
+  { anahtar: "ticaretbakanligi", ad: "Ticaret Bakanlığı", resmi: ["ticaret.gov.tr"], kaliplari: ["ticaretbakanlik", "ticaretgovtr", "eticaretbasvuru", "eticaretbakanligi", "gumrukticaret"], resmiVarliklar: ["ticaret.gov.tr"] },
+  // ETBİS — Elektronik Ticaret Bilgi Sistemi (etbis.ticaret.gov.tr). "etbis" ayırt edici (yaygın kelime
+  // değil); sınır kontrolü sayesinde "getbisness" gibi kelime-içi çakışmalar elenir. E-ticaret kayıt
+  // dolandırıcılığı bu adı yoğun kullanır.
+  { anahtar: "etbis", ad: "ETBİS (E-Ticaret Bilgi Sistemi)", resmi: ["etbis.ticaret.gov.tr", "ticaret.gov.tr"], kaliplari: ["eticaretbilgisistemi", "etbisbasvuru", "etbiskayit", "etbisgovtr"], resmiVarliklar: ["etbis.ticaret.gov.tr"] },
   { anahtar: "tcmb", ad: "TCMB (Merkez Bankası)", resmi: ["tcmb.gov.tr"] },
   { anahtar: "ilbank", ad: "İLBANK (İller Bankası)", resmi: ["ilbank.gov.tr"] },
   // Türkiye Varlık Fonu — kısaltma "tvf" 3 harf (taranamaz/gürültü), o yüzden UZUN hali taranır:
@@ -218,6 +226,8 @@ export const KAMU_KURUMLARI: KamuKurumu[] = [
   { ad: "Hazine ve Maliye Bakanlığı", kelimeler: ["hazine ve maliye", "maliye bakanlığı", "hazine bakanlığı"], resmi: "hmb.gov.tr" },
   { ad: "Aile ve Sosyal Hizmetler Bakanlığı", kelimeler: ["aile ve sosyal", "sosyal hizmetler bakanlığı", "sosyal yardım"], resmi: "aile.gov.tr" },
   { ad: "Sanayi ve Teknoloji Bakanlığı", kelimeler: ["sanayi ve teknoloji", "sanayi bakanlığı"], resmi: "sanayi.gov.tr" },
+  { ad: "Ticaret Bakanlığı", kelimeler: ["ticaret bakanlığı", "ticaret bakanligi", "t.c. ticaret bakanlığı", "gümrük ve ticaret", "gumruk ve ticaret"], resmi: "ticaret.gov.tr" },
+  { ad: "ETBİS (E-Ticaret Bilgi Sistemi)", kelimeler: ["etbis", "elektronik ticaret bilgi sistemi", "e-ticaret bilgi sistemi", "etbis kayıt", "e-ticaret kaydı"], resmi: "etbis.ticaret.gov.tr" },
   { ad: "Kültür ve Turizm Bakanlığı", kelimeler: ["kültür ve turizm", "turizm bakanlığı", "kultur ve turizm"], resmi: "ktb.gov.tr" },
   { ad: "Tarım ve Orman Bakanlığı", kelimeler: ["tarım ve orman", "tarim ve orman", "tarım bakanlığı"], resmi: "tarimorman.gov.tr" },
   { ad: "Çalışma ve Sosyal Güvenlik Bakanlığı", kelimeler: ["çalışma ve sosyal güvenlik", "çalışma bakanlığı"], resmi: "csgb.gov.tr" },
