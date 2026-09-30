@@ -1,0 +1,130 @@
+# SİTS / MirLeon — VERİ PLATFORMU (Faz 1.1)
+# Certificate Transparency firehose'unu YUTMAK, SAKLAMAK ve İLİŞKİLENDİRMEK için üçlü omurga:
+#   • Redpanda   — Kafka-uyumlu mesaj kuyruğu (CT akışı buradan geçer; tüketiciler buradan okur)
+#   • ClickHouse — sütun-tabanlı veritabanı (ham sertifikaların TAMAMI + hızlı analitik, 30 gün TTL)
+#   • Neo4j      — grafik veritabanı (Domain → CA → IP → ASN altyapı ilişkileri)
+# Çalıştır:  docker compose --env-file .env up -d
+# Bu stack bir SUNUCUDA çalışır (Vercel değil). Geliştirme için tek-düğüm yapılandırma.
+
+name: sits-veri-platformu
+
+services:
+  # ── REDPANDA — Kafka-uyumlu akış kuyruğu ─────────────────────────────────────
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: sits-redpanda
+    command:
+      - redpanda start
+      - --smp 1                       # dev: 1 çekirdek (üretimde artır)
+      - --memory 1G
+      - --reserve-memory 0M
+      - --overprovisioned
+      - --node-id 0
+      - --check=false
+      # İç (docker ağı) + dış (host) dinleyiciler ayrı — host'tan localhost:19092 ile bağlanılır
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+    ports:
+      - "19092:19092"   # Kafka API (host tüketicileri/üreticileri)
+      - "18081:18081"   # Schema Registry
+      - "18082:18082"   # Pandaproxy (REST)
+      - "9644:9644"     # Admin API / metrics
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [sits]
+
+  # Redpanda Console — kuyruğu gözle (topic'ler, mesajlar) — http://localhost:8085
+  redpanda-console:
+    image: redpandadata/console:v2.7.2
+    container_name: sits-redpanda-console
+    depends_on: [redpanda]
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_SCHEMAREGISTRY_ENABLED: "true"
+      KAFKA_SCHEMAREGISTRY_URLS: http://redpanda:8081
+    ports:
+      - "8085:8080"
+    networks: [sits]
+
+  # ── CLICKHOUSE — ham sertifika deposu + analitik ─────────────────────────────
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: sits-clickhouse
+    environment:
+      CLICKHOUSE_DB: sits
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-sits}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD .env'de tanımlanmalı}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "8123:8123"     # HTTP arayüzü (sorgu + entegrasyon)
+      - "9000:9000"     # Native protokol (istemciler)
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      # init/*.sql konteyner İLK açılışta otomatik çalışır → tablolar+TTL kurulur
+      - ./clickhouse/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [sits]
+
+  # ── NEO4J — altyapı grafiği ──────────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5.24-community
+    container_name: sits-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?NEO4J_PASSWORD .env'de tanımlanmalı}
+      NEO4J_PLUGINS: '["apoc"]'                      # APOC yardımcı prosedürleri
+      NEO4J_dbms_memory_heap_max__size: 1G
+      NEO4J_dbms_memory_pagecache_size: 512M
+    ports:
+      - "7474:7474"     # HTTP Browser (http://localhost:7474)
+      - "7687:7687"     # Bolt (uygulama bağlantısı)
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - ./neo4j/init:/init:ro                        # şema cypher'ı (elle: bkz. README)
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [sits]
+
+  # Neo4j şemasını (kısıtlar + index) BİR KEZ uygular, sonra çıkar (init container)
+  neo4j-init:
+    image: neo4j:5.24-community
+    container_name: sits-neo4j-init
+    depends_on:
+      neo4j: { condition: service_healthy }
+    environment:
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?}
+    volumes:
+      - ./neo4j/init:/init:ro
+    entrypoint: >
+      bash -c "cypher-shell -a bolt://neo4j:7687 -u neo4j -p \"$$NEO4J_PASSWORD\" -f /init/01_schema.cypher && echo 'Neo4j şeması uygulandı.'"
+    restart: "no"
+    networks: [sits]
+
+volumes:
+  redpanda_data:
+  clickhouse_data:
+  neo4j_data:
+  neo4j_logs:
+
+networks:
+  sits:
+    driver: bridge
