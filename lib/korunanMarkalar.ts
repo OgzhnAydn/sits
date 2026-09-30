@@ -71,7 +71,7 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   // Ticaret Bakanlığı — "ticaret" tek başına ÇOK yaygın (binlerce "X Ticaret Ltd"); FP yapmamak için
   // anahtar ve kalıplar UZUN + ayırt edici (bakanlık/govtr/eticaret-başvuru). Tireli varyantlar
   // (ticaret-bakanligi-basvuru) tire-normalize eşleştirmesiyle yakalanır.
-  { anahtar: "ticaretbakanligi", ad: "Ticaret Bakanlığı", resmi: ["ticaret.gov.tr"], kaliplari: ["ticaretbakanlik", "ticaretgovtr", "eticaretbasvuru", "eticaretbakanligi", "gumrukticaret"], resmiVarliklar: ["ticaret.gov.tr"] },
+  { anahtar: "ticaretbakanligi", ad: "Ticaret Bakanlığı", resmi: ["ticaret.gov.tr"], kaliplari: ["ticaretbakanlik", "ticaretgovtr", "eticaretbasvuru", "eticaretbakanligi", "gumrukticaretbakanligi"], resmiVarliklar: ["ticaret.gov.tr"] },
   // ETBİS — Elektronik Ticaret Bilgi Sistemi (etbis.ticaret.gov.tr). "etbis" ayırt edici (yaygın kelime
   // değil); sınır kontrolü sayesinde "getbisness" gibi kelime-içi çakışmalar elenir. E-ticaret kayıt
   // dolandırıcılığı bu adı yoğun kullanır.
