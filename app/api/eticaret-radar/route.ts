@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { eticaretTR } from "@/lib/eticaretTespit";
+import { gorselSinifla } from "@/lib/siteSinifla";
 import { eticaretAdayKaydet, eticaretAdaylariGetir, eticaretAdaySayisi, eticaretAdaySayisiKosul, type EticaretAday } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -13,13 +14,14 @@ export const maxDuration = 60;
 // sayıda (≤ANALIZ_TUR) analiz yapılır — dürüst "örnekleme radarı".
 
 type Log = { url: string };
-type Aday = { domain: string; ca: string; zaman: number };
+type Aday = { domain: string; ca: string; zaman: number; oncelik: boolean };
 
 let LOGLAR: Log[] | null = null;
 let LOG_T = 0;
 const KUYRUK = new Map<string, Aday>();       // analiz bekleyen TR e-ticaret adayları (in-memory)
 const GORULEN = new Set<string>();            // analiz edilmiş (tekrar analiz yok) — kayıtlı/e-ticaret-değil dahil
-const ANALIZ_TUR = 6;                         // tur başına en fazla site FETCH+analiz (süre bütçesi)
+const ANALIZ_TUR = 6;                         // tur başına en fazla site FETCH+içerik analiz (süre bütçesi)
+const GORSEL_TUR = 3;                          // tur başına en fazla GÖRSEL doğrulama (Gemini Vision maliyeti)
 
 // Firestore okuma önbelleği (~15sn) — poll başına okuma maliyetini kıs.
 let fsCache: { v: EticaretAday[]; t: number } = { v: [], t: 0 };
@@ -110,11 +112,16 @@ export async function GET() {
         for (const e of ent.entries || []) {
           tarandi++;
           const der = derCoz(e.leaf_input, e.extra_data);
-          if (!der || !derTRAdayi(der)) continue;
+          if (!der) continue;
+          // KARAR domainden DEĞİL içerikten verilir; ama HANGİ certi ziyaret edeceğimizi seçerken
+          // ipuçlu olanı (derTRAdayi) önceliklendiririz + anahtarsız Türk mağazalarını da yakalamak için
+          // rastgele bir pay (~%3) örnekleriz (içerik-öncelikli kapsama). Nihai hüküm eticaretTR'de (içerik).
+          const oncelik = derTRAdayi(der);
+          if (!oncelik && Math.random() > 0.03) continue;
           const b = parseDomain(der);
           if (!b || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(b.domain)) continue;
           if (GORULEN.has(b.domain) || KUYRUK.has(b.domain)) continue;
-          KUYRUK.set(b.domain, { domain: b.domain, ca: b.ca, zaman: Date.now() });
+          KUYRUK.set(b.domain, { domain: b.domain, ca: b.ca, zaman: Date.now(), oncelik });
           kuyrukYeni++;
         }
       } catch { /* bu log turu atla */ }
@@ -122,9 +129,11 @@ export async function GET() {
   );
   if (KUYRUK.size > 400) { const eskiler = [...KUYRUK.values()].sort((a, b) => a.zaman - b.zaman).slice(0, KUYRUK.size - 400); for (const e of eskiler) KUYRUK.delete(e.domain); }
 
-  // 2) PAHALI FAZ: kuyruktan ≤ANALIZ_TUR domaini eticaretTR ile analiz et; KAYITSIZ e-ticaret ise sakla.
-  let analizEdildi = 0, kayitsizBulundu = 0;
-  const sira = [...KUYRUK.values()].slice(0, ANALIZ_TUR);
+  // 2) PAHALI FAZ: kuyruktan ≤ANALIZ_TUR domaini İÇERİKTEN analiz et (eticaretTR siteyi FETCH edip
+  // içerikten karar verir — domain adı hükme girmez). KAYITSIZ e-ticaret çıkanlara ayrıca GÖRSEL
+  // doğrulama (Gemini Vision, ≤GORSEL_TUR) → "gözle" onay + kategori + ne sattığı.
+  let analizEdildi = 0, kayitsizBulundu = 0, gorselYapildi = 0;
+  const sira = [...KUYRUK.values()].sort((x, y) => Number(y.oncelik) - Number(x.oncelik)).slice(0, ANALIZ_TUR);
   await Promise.all(sira.map(async (a) => {
     KUYRUK.delete(a.domain);
     GORULEN.add(a.domain);
@@ -133,10 +142,15 @@ export async function GET() {
       const s = await eticaretTR(a.domain);
       if (s.eticaret && s.sonuc === "kayitsiz-eticaret-aday") {
         kayitsizBulundu++;
+        // GÖRSEL DOĞRULAMA — tur başına sınırlı (Gemini + urlscan maliyeti). Farkımız: içerik yetmez, GÖRÜRÜZ.
+        let g: Awaited<ReturnType<typeof gorselSinifla>> | null = null;
+        if (gorselYapildi < GORSEL_TUR) { gorselYapildi++; try { g = await gorselSinifla(a.domain); } catch { /* görsel opsiyonel */ } }
         await eticaretAdayKaydet({
           domain: a.domain, guven: s.guven, sonuc: s.sonuc, etbisKayitli: s.etbisKayitli,
           etbisDogrulanmis: s.etbisDogrulanmis, platform: s.platform ?? null,
           odemeGecitleri: s.odemeGecitleri || [], sinyaller: s.sinyaller || [],
+          gorselAlisveris: g?.yapildi ? g.alisveris : null, kategori: g?.kategori || undefined,
+          satilan: g?.satilan || undefined, gorselNot: g?.not || undefined, ekranUrl: g?.ekranUrl,
           ca: a.ca, zaman: a.zaman, kaynak: "app-ct",
         });
       }
@@ -150,9 +164,10 @@ export async function GET() {
   const liste = kalici.slice(0, 120).map((a) => ({
     domain: a.domain, guven: a.guven, platform: a.platform, odemeGecitleri: a.odemeGecitleri || [],
     sinyaller: (a.sinyaller || []).slice(0, 4), etbisKayitli: a.etbisKayitli, etbisDogrulanmis: a.etbisDogrulanmis ?? null, zaman: a.zaman,
+    gorselAlisveris: a.gorselAlisveris ?? null, kategori: a.kategori || null, satilan: a.satilan || null, gorselNot: a.gorselNot || null, ekranUrl: a.ekranUrl || null,
   }));
   return NextResponse.json({
-    ctEvren, tarandi, kuyruk: KUYRUK.size, kuyrukYeni, analizEdildi, kayitsizBulundu,
+    ctEvren, tarandi, kuyruk: KUYRUK.size, kuyrukYeni, analizEdildi, kayitsizBulundu, gorselYapildi,
     kpi, liste,
   }, { headers: { "Cache-Control": "no-store" } });
 }

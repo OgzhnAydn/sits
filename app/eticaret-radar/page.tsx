@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 type Aday = {
   domain: string; guven: number; platform: string | null; odemeGecitleri: string[];
   sinyaller: string[]; etbisKayitli: boolean; etbisDogrulanmis: boolean | null; zaman: number;
+  gorselAlisveris?: boolean | null; kategori?: string | null; satilan?: string | null; gorselNot?: string | null; ekranUrl?: string | null;
 };
 type Kpi = { toplam: number; dogrulanmis: number; son24: number };
 
@@ -101,8 +102,21 @@ export default function EticaretRadar() {
           <div className="er-liste">
             {liste.map((a) => (
               <div key={a.domain} className="er-satir">
+                {/* GÖRSEL: siteyi "gördüğümüzün" kanıtı — ekran görüntüsü küçük resmi */}
+                {a.ekranUrl
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={a.ekranUrl} alt="" className="er-ekran" loading="lazy" />
+                  : <div className="er-ekran er-ekran-yok"><span className="material-symbols-outlined">image</span></div>}
                 <div className="er-s-sol">
                   <div className="er-dom">{a.domain}</div>
+                  {(a.gorselAlisveris || a.satilan || a.kategori) && (
+                    <div className="er-gorsel">
+                      <span className="material-symbols-outlined">visibility</span>
+                      {a.gorselAlisveris ? <b>Görsel: alışveriş sitesi</b> : <b>Görsel analiz</b>}
+                      {a.kategori && a.kategori !== "-" && <span className="er-kat">{a.kategori}</span>}
+                      {a.satilan && <span className="er-satilan">· {a.satilan}</span>}
+                    </div>
+                  )}
                   <div className="er-sinyaller">
                     {a.platform && <span className="er-cip er-plat">{a.platform}</span>}
                     {(a.odemeGecitleri || []).slice(0, 2).map((g) => <span key={g} className="er-cip er-odeme">{g}</span>)}
@@ -157,8 +171,16 @@ function Stil() {
     .er-liste{margin-top:14px;display:flex;flex-direction:column;gap:8px}
     .er-satir{display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid #17293c;border-left:3px solid #f5623d;border-radius:10px;background:#0d1a29;animation:erGir .4s ease}
     @keyframes erGir{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+    .er-ekran{width:64px;height:44px;object-fit:cover;object-position:top;border-radius:7px;border:1px solid #1f3652;background:#0a1420;flex-shrink:0}
+    .er-ekran-yok{display:flex;align-items:center;justify-content:center;color:#33506f}
+    .er-ekran-yok .material-symbols-outlined{font-size:20px}
     .er-s-sol{flex:1;min-width:0}
     .er-dom{font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600;color:#e9f2fa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .er-gorsel{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:11px;color:#9cc7f0}
+    .er-gorsel .material-symbols-outlined{font-size:14px;color:#4d9fe0}
+    .er-gorsel b{font-weight:600;color:#cfe3f7}
+    .er-kat{background:#1e3a5f;color:#9cc7f0;font-size:9.5px;font-weight:700;padding:1px 8px;border-radius:20px;text-transform:capitalize}
+    .er-satilan{color:#7690aa;font-size:11px}
     .er-sinyaller{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
     .er-cip{font-size:9.5px;font-weight:700;padding:1px 8px;border-radius:20px;white-space:nowrap}
     .er-plat{background:#1e3a5f;color:#9cc7f0}

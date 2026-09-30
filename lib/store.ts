@@ -541,6 +541,9 @@ export async function bahisAdaySayisiKosul(alan: string, op: WhereFilterOp, dege
 export type EticaretAday = {
   domain: string; guven: number; sonuc: string; etbisKayitli: boolean; etbisDogrulanmis?: boolean;
   platform: string | null; odemeGecitleri: string[]; sinyaller: string[];
+  // İÇERİK + GÖRSEL sınıflandırma (farkımız: domainden değil, siteyi ziyaret edip GÖREREK):
+  tip?: string; turkce?: boolean; baslik?: string;              // içerikten
+  gorselAlisveris?: boolean | null; kategori?: string; satilan?: string; gorselNot?: string; ekranUrl?: string; // görüntüden (Gemini Vision)
   ca?: string; zaman: number; sonTarama?: number; kaynak?: string;
 };
 export async function eticaretAdayKaydet(a: EticaretAday): Promise<void> {
