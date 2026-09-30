@@ -62,14 +62,36 @@ export type GorselSinif = {
   hata?: string;
 };
 
-async function urlscanEkran(domain: string): Promise<string | null> {
+async function urlscanEkran(domain: string, tetikle = false): Promise<string | null> {
   const key = process.env.URLSCAN_KEY;
+  // 1) Mevcut tarama var mı? — anında ekran görüntüsü.
   try {
     const s = (await (await fetch(`https://urlscan.io/api/v1/search/?q=page.domain:%22${encodeURIComponent(domain)}%22&size=1`, { headers: key ? { "API-Key": key } : UA, signal: AbortSignal.timeout(8000) })).json()) as { results?: { screenshot?: string; _id?: string }[] };
     const r = s.results?.[0];
     if (r?.screenshot) return r.screenshot;
     if (r?._id) return `https://urlscan.io/screenshots/${r._id}.png`;
   } catch { /* */ }
+  // 2) Yoksa ve tetikle=true ise: TAZE tarama başlat (siteyi VATANDAŞ gibi ziyaret et) → sonucu bekle.
+  if (!tetikle || !key) return null;
+  try {
+    const r = await fetch("https://urlscan.io/api/v1/scan/", {
+      method: "POST", headers: { "API-Key": key, "Content-Type": "application/json" },
+      body: JSON.stringify({ url: `http://${domain}`, visibility: "unlisted" }),
+      signal: AbortSignal.timeout(9000),
+    });
+    const j = (await r.json()) as { uuid?: string };
+    if (!j.uuid) return null;
+    // Sonucu poll et (~24sn bütçe). Tarama tamamlanınca screenshot hazır olur.
+    for (let i = 0; i < 8; i++) {
+      await new Promise((z) => setTimeout(z, 3000));
+      try {
+        const res = await fetch(`https://urlscan.io/api/v1/result/${j.uuid}/`, { headers: { "API-Key": key }, signal: AbortSignal.timeout(7000) });
+        if (res.status === 404) continue; // henüz hazır değil
+        const rj = (await res.json()) as { task?: { screenshotURL?: string } };
+        if (rj.task?.screenshotURL) return rj.task.screenshotURL;
+      } catch { /* devam */ }
+    }
+  } catch { /* tetikleme başarısız */ }
   return null;
 }
 
@@ -81,11 +103,11 @@ const VIZYON_SYS =
   "turkce = görünen metin Türkçe mi. kategori = giyim/elektronik/kozmetik/gıda/mobilya/ayakkabı/aksesuar/genel/yok. " +
   "satilan = ne sattığı (en çok 4 kelime, Türkçe). guven = 0-100. not = tek cümle Türkçe özet. Türkçe yaz.";
 
-export async function gorselSinifla(domain: string): Promise<GorselSinif> {
+export async function gorselSinifla(domain: string, tetikle = false): Promise<GorselSinif> {
   const bos = (h: string): GorselSinif => ({ yapildi: false, alisveris: null, turkce: null, kategori: "-", satilan: "", guven: 0, not: h, hata: h });
   if (!geminiVarMi) return bos("Görsel analiz için Gemini anahtarı tanımlı değil.");
-  const ekranUrl = await urlscanEkran(domain);
-  if (!ekranUrl) return bos("Ekran görüntüsü bulunamadı (site henüz taranmamış olabilir).");
+  const ekranUrl = await urlscanEkran(domain, tetikle);
+  if (!ekranUrl) return bos("Ekran görüntüsü alınamadı (tarama tetiklenemedi / zaman aşımı).");
   let b64 = "";
   try {
     const img = await fetch(ekranUrl, { signal: AbortSignal.timeout(9000) });

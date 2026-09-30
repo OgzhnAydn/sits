@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   try {
     const [icerik, gorsel] = await Promise.all([
       eticaretTR(domain),
-      gorselIste ? gorselSinifla(domain) : Promise.resolve(null),
+      gorselIste ? gorselSinifla(domain, true) : Promise.resolve(null), // on-demand: taze tarama tetikle
     ]);
     return NextResponse.json({ ...icerik, gorsel }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
