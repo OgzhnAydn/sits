@@ -535,6 +535,44 @@ export async function bahisAdaySayisiKosul(alan: string, op: WhereFilterOp, dege
   }
 }
 
+// ── KAYIT DIŞI E-TİCARET RADARI (Ticaret Bakanlığı) ─────────────────────────────
+// ETBİS'te KAYITLI OLMAYAN ama TR'ye e-ticaret yapan siteler. eticaretTR() motoruyla tespit;
+// yalnız "kayitsiz-eticaret-aday" saklanır (kayıtlı site = meşru → saklanmaz). Koleksiyon: eticaret_adaylari.
+export type EticaretAday = {
+  domain: string; guven: number; sonuc: string; etbisKayitli: boolean; etbisDogrulanmis?: boolean;
+  platform: string | null; odemeGecitleri: string[]; sinyaller: string[];
+  ca?: string; zaman: number; sonTarama?: number; kaynak?: string;
+};
+export async function eticaretAdayKaydet(a: EticaretAday): Promise<void> {
+  if (!firebaseHazir || !db) return;
+  try {
+    const ref = doc(db, "eticaret_adaylari", belgeId("dom", a.domain));
+    const mevcut = await getDoc(ref); // İLK-BULUNMA zamanını KORU; yalnız durum/güven tazelenir.
+    if (mevcut.exists()) {
+      await setDoc(ref, { sonTarama: Date.now(), guven: a.guven, etbisKayitli: a.etbisKayitli, sonuc: a.sonuc }, { merge: true });
+    } else {
+      await setDoc(ref, { ...a, zaman: a.zaman || Date.now(), sonTarama: Date.now() });
+    }
+  } catch { /* kurallar yoksa sessiz */ }
+}
+export async function eticaretAdaylariGetir(n = 200): Promise<EticaretAday[]> {
+  if (!firebaseHazir || !db) return [];
+  try {
+    const snap = await getDocs(query(collection(db, "eticaret_adaylari"), orderBy("zaman", "desc"), fbLimit(n)));
+    return snap.docs.map((d) => d.data() as EticaretAday);
+  } catch { return []; }
+}
+export async function eticaretAdaySayisi(): Promise<number> {
+  if (!firebaseHazir || !db) return 0;
+  try { const s = await getCountFromServer(collection(db, "eticaret_adaylari")); return s.data().count; }
+  catch { return 0; }
+}
+export async function eticaretAdaySayisiKosul(alan: string, op: WhereFilterOp, deger: unknown): Promise<number> {
+  if (!firebaseHazir || !db) return 0;
+  try { const s = await getCountFromServer(query(collection(db, "eticaret_adaylari"), where(alan, op, deger))); return s.data().count; }
+  catch { return 0; }
+}
+
 // ── GOOGLE ADS (BigQuery Transparency) reklam cache'i — günlük birleşik sorgu
 // sonucunu marka başına saklar (istek-başına BigQuery çağırma = maliyet). ──
 // NOT: yeni koleksiyon (rules deploy) engelini aşmak için, zaten yazmaya-izinli
