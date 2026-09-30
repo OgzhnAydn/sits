@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const marka = (req.nextUrl.searchParams.get("marka") || "").trim().toLowerCase();
   // Hem hardcoded KORUNAN hem de KULLANICI'nın eklediği markaları çöz — aksi halde kullanıcı
   // markası (ör. tuvturk) "Bilinmeyen marka" dönüp "Şimdi Tara" hiç çalışmıyordu.
-  let m = KORUNAN_MARKALAR.find((x) => x.anahtar === marka) as { anahtar: string; ad: string; resmi?: string[] } | undefined;
+  let m = KORUNAN_MARKALAR.find((x) => x.anahtar === marka) as { anahtar: string; ad: string; resmi?: string[]; kaliplari?: string[] } | undefined;
   if (!m) {
     const ozel = await kullaniciMarkalariGetir().catch(() => []);
     const u = ozel.find((x) => x.anahtar === marka && x.anahtar.length >= 4);
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   }
   if (!m) return NextResponse.json({ hata: "Bilinmeyen marka." }, { status: 400 });
   try {
-    const sonuc = await markaTaraTekil({ anahtar: m.anahtar, ad: m.ad, resmi: m.resmi });
+    const sonuc = await markaTaraTekil({ anahtar: m.anahtar, ad: m.ad, resmi: m.resmi, kaliplari: m.kaliplari });
     return NextResponse.json({ ok: true, marka: m.anahtar, ...sonuc });
   } catch {
     return NextResponse.json({ hata: "Tarama tamamlanamadı." }, { status: 500 });

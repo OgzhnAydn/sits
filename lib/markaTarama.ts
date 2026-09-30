@@ -36,18 +36,27 @@ async function batch<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Pro
 
 // TEK MARKAYI aktif tara — urlscan'de marka adını taşıyan resmî-olmayan domainleri bul,
 // aday kuyruğuna yaz. Operatör "Tara" butonu + toplu tarama ikisi de bunu kullanır.
-export async function markaTaraTekil(m: { anahtar: string; ad: string; resmi?: string[] }): Promise<{ taranan: number; yeni: number }> {
+export async function markaTaraTekil(m: { anahtar: string; ad: string; resmi?: string[]; kaliplari?: string[] }): Promise<{ taranan: number; yeni: number }> {
   const tarih = new Date().toISOString().slice(0, 10);
   let taranan = 0, yeni = 0;
-  const res = await urlscanAra(`page.domain:${m.anahtar}*`, 40);
+  // GENİŞ ARAMA: yalnız ana anahtarın öneki DEĞİL — anahtar + tüm açılım kalıpları (gumrukticaret.info
+  // gibi kalıp-eşleşmeleri kaçmasın), her biri için PREFIX (page.domain:k*) VE geniş (bare q=k, alt-alan/
+  // URL içinde geçen taklitleri de bulur, ör. etbis-…ticaretbakanligi…koreavm.net). ≥5 harf kalıplar
+  // (gürültü sınırlı). HOST bir kalıbı içermezse (bare aramanın alakasız sonucu) elenir.
+  const kaliplar = [m.anahtar, ...(m.kaliplari || [])].filter((k) => k && k.length >= 5);
   const gorulen = new Set<string>();
+  const res: UsSonuc[] = [];
+  for (const k of kaliplar) {
+    res.push(...await urlscanAra(`page.domain:${k}*`, 20));
+    res.push(...await urlscanAra(k, 20));
+  }
   for (const r of res) {
     const dom = (r.page?.domain || "").toLowerCase().replace(/^www\./, "");
     if (!dom || gorulen.has(dom) || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) continue;
     gorulen.add(dom);
     taranan++;
-    // ALLOWLIST: markanın kendi resmî domaini → aday DEĞİL.
-    if (!dom.includes(m.anahtar) || resmiMarkaDomaini(dom) || resmiListedeMi(dom, m.resmi || []) || itibarliMi(dom)) continue;
+    // HOST (alt-alan dahil) kalıplardan birini içermeli; resmî/itibarlı ise aday DEĞİL.
+    if (!kaliplar.some((k) => dom.includes(k)) || resmiMarkaDomaini(dom) || resmiListedeMi(dom, m.resmi || []) || itibarliMi(dom)) continue;
 
     let skor = 42; // marka adını taşıyan + resmî değil
     const tld = dom.split(".").pop() || "";
