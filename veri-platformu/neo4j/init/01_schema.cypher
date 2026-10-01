@@ -12,7 +12,7 @@ CREATE CONSTRAINT ca_ad         IF NOT EXISTS FOR (c:CertificateAuthority) REQUI
 CREATE CONSTRAINT ip_adr        IF NOT EXISTS FOR (i:IPAddress)            REQUIRE i.address IS UNIQUE;
 CREATE CONSTRAINT asn_no        IF NOT EXISTS FOR (a:ASN)                  REQUIRE a.number  IS UNIQUE;
 CREATE CONSTRAINT ns_host       IF NOT EXISTS FOR (n:Nameserver)           REQUIRE n.host    IS UNIQUE;
-CREATE CONSTRAINT ca_issuer_uq  IF NOT EXISTS FOR (c:CertificateAuthority) REQUIRE c.name    IS NOT NULL;
+-- Not: varlık (IS NOT NULL) kısıtları yalnız Neo4j Enterprise'da; Community'de benzersizlik yeterli.
 
 // ── ARAMA İNDEKSLERİ ─────────────────────────────────────────────────────────
 CREATE INDEX domain_tld    IF NOT EXISTS FOR (d:Domain)    ON (d.tld);

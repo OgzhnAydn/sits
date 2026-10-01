@@ -53,7 +53,7 @@ services:
       KAFKA_SCHEMAREGISTRY_ENABLED: "true"
       KAFKA_SCHEMAREGISTRY_URLS: http://redpanda:8081
     ports:
-      - "8085:8080"
+      - "8086:8080"
     networks: [sits]
 
   # ── CLICKHOUSE — ham sertifika deposu + analitik ─────────────────────────────
@@ -67,7 +67,6 @@ services:
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
     ports:
       - "8123:8123"     # HTTP arayüzü (sorgu + entegrasyon)
-      - "9000:9000"     # Native protokol (istemciler)
     ulimits:
       nofile: { soft: 262144, hard: 262144 }
     volumes:
@@ -157,7 +156,6 @@ services:
     depends_on:
       redpanda: { condition: service_healthy }
       neo4j: { condition: service_healthy }
-      neo4j-init: { condition: service_completed_successfully }
     environment:
       KAFKA_BROKER: redpanda:9092
       KAFKA_TOPIC: certificates
