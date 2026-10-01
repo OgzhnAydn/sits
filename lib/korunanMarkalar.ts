@@ -176,8 +176,11 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "bilkent", ad: "Bilkent Üniversitesi", resmi: ["bilkent.edu.tr"], logo: "https://w3.bilkent.edu.tr/www/wp-content/uploads/sites/5/2015/03/favicon.ico" },
   { anahtar: "tepehome", ad: "Tepe Home", resmi: ["tepehome.com.tr", "tepehome.com"], logo: "https://www.tepehome.com.tr/favicon.ico" },
   { anahtar: "sportsinternational", ad: "Sports International", resmi: ["sportsinternational.com.tr"], logo: "https://www.sportsinternational.com.tr/images/favicon-sportsint.png" },
-  // Astoras — kurumsal firma; "astoras" ayırt edici marka adı (yaygın kelime değil), FP-güvenli.
-  { anahtar: "astoras", ad: "Astoras", resmi: ["astoras.com.tr"], resmiVarliklar: ["astoras.com.tr"] },
+  // Astor Enerji A.Ş. (astoras.com.tr — transformatör/enerji). "astoras" adını başka firmalar da taşır
+  // (Astor Associates, Astor Asset, Astoras Rent-a-Car) → SAG_SINIR_ZORUNLU ile yalnız AYRIK taklitler
+  // (astoras-giris, astoras.online) yakalanır; bitişik farklı-firma (astorassociates) elenir. Ayrıca
+  // ayırt edici isim varyantları kalıp olarak eklendi.
+  { anahtar: "astoras", ad: "Astor Enerji", resmi: ["astoras.com.tr"], kaliplari: ["astorenerji", "astorasenerji", "astorastransformator"], resmiVarliklar: ["astoras.com.tr"] },
   // ── Milli Piyango (sahte çekiliş/piyango dolandırıcılığında sık taklit edilir) ──
   // logo: KARE ikon (yatay logo dairesel node'da eziliyordu). millipiyangoonline.com resmî faviconu.
   { anahtar: "millipiyango", ad: "Milli Piyango", resmi: ["mpi.gov.tr", "millipiyango.gov.tr", "millipiyangoonline.com"], logo: "https://icons.duckduckgo.com/ip3/millipiyangoonline.com.ico" },
@@ -304,6 +307,10 @@ export function tescilliBilgi(host: string): { label: string; altAlan: boolean; 
   return { label: p[p.length - tldParca] || "", altAlan: p.length > tldParca, tld: p.slice(p.length - tldParca + 1).join(".") };
 }
 
+// SIKI SAĞ-SINIR seti: adını BİRÇOK farklı firma taşıyan anahtarlar (astoras → Astor Associates,
+// Astor Asset, Astoras Rent-a-Car…). Bunlar için sağ-sınır ZORUNLU: "astoras-giris"/"astoras.online"
+// yakalanır ama "astorassociates"/"astorasfilo" (bitişik, farklı firma) ELENİR. Uzunluktan bağımsız.
+const SAG_SINIR_ZORUNLU = new Set<string>(["astoras"]);
 function sinirdaGecer(label: string, k: string): boolean {
   const i = label.indexOf(k);
   if (i < 0) return false;
@@ -312,7 +319,7 @@ function sinirdaGecer(label: string, k: string): boolean {
   if (!solSinir) return false;
   const sonraki = label[i + k.length];
   const sagSinir = sonraki === undefined || sonraki === "-";
-  if (k.length <= 6 && !sagSinir) return false;
+  if ((k.length <= 6 || SAG_SINIR_ZORUNLU.has(k)) && !sagSinir) return false;
   return true;
 }
 
