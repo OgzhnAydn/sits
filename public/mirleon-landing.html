@@ -92,14 +92,50 @@ section.blk{padding-block:70px}
 .blk-head{text-align:center;max-width:46ch;margin:0 auto 40px}
 .blk-head h2{font-family:var(--ff-serif);font-weight:600;font-size:clamp(25px,3.6vw,36px);letter-spacing:-.015em;margin:0 0 12px;text-wrap:balance}
 .blk-head p{color:var(--muted);margin:0;font-size:15.5px}
+/* Farkımız — asimetrik: metin + görsel analiz kanıtı */
+.fark{display:grid;grid-template-columns:1fr 400px;gap:52px;align-items:center;max-width:1000px;margin:0 auto 64px}
+@media(max-width:860px){.fark{grid-template-columns:1fr;gap:34px}}
+.etik{font-family:var(--ff-mono);font-size:11px;letter-spacing:.16em;color:var(--teal);margin-bottom:14px}
+.fark-sol h2{font-family:var(--ff-serif);font-weight:700;font-size:clamp(26px,3.8vw,38px);line-height:1.08;letter-spacing:-.02em;margin:0 0 16px}
+.fark-sol h2 .vurgu{color:var(--lacivert)}
+.fark-sol>p{color:var(--muted);font-size:15.5px;line-height:1.6;margin:0 0 20px;max-width:46ch}
+.fark-liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:13px}
+.fark-liste li{display:flex;gap:11px;align-items:flex-start;font-size:14.5px;color:var(--fg)}
+.fark-liste b{font-weight:600}
+.fl-ok{flex:none;width:9px;height:9px;border-radius:3px;margin-top:6px}
+/* analiz kanıt kartı */
+.analiz{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 30px 60px -30px rgba(12,53,87,.35);font-family:var(--ff-sans)}
+.an-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.an-dom{font-family:var(--ff-mono);font-weight:600;font-size:14px}
+.an-rozet{font-family:var(--ff-mono);font-size:10px;font-weight:700;color:#fff;background:var(--kirmizi);padding:3px 9px;border-radius:20px;letter-spacing:.03em}
+.an-ss{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px}
+.an-bar{display:flex;gap:5px;padding:8px 10px;background:color-mix(in srgb,var(--lacivert) 4%,transparent);border-bottom:1px solid var(--line2)}
+.an-bar i{width:8px;height:8px;border-radius:50%;background:var(--line);display:block}
+.an-ss-ic{padding:26px 12px;text-align:center;font-size:12px;color:var(--faint);font-family:var(--ff-mono);background:repeating-linear-gradient(135deg,transparent,transparent 7px,color-mix(in srgb,var(--lacivert) 3%,transparent) 7px,color-mix(in srgb,var(--lacivert) 3%,transparent) 8px)}
+.an-sat{display:flex;gap:10px;align-items:baseline;font-size:13px;color:var(--muted);padding:6px 2px;line-height:1.4}
+.an-sat>span:last-child{flex:1;min-width:0}
+.an-ok{flex:none;width:68px;font-family:var(--ff-mono);font-size:10px;font-weight:700;letter-spacing:.03em;color:var(--teal);text-transform:uppercase}
+.an-ok.ai{color:var(--mavi)}.an-ok.etbis{color:var(--lacivert)}
+.an-verdict{margin-top:12px;padding:11px 13px;border-radius:10px;background:color-mix(in srgb,var(--kirmizi) 8%,transparent);color:var(--kirmizi);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+.an-verdict .material-nokta{font-size:9px}
+/* özellik kartları — jenerik gri kutu yok: aksan çizgi + renkli ikon, hover */
 .feat{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 @media(max-width:820px){.feat{grid-template-columns:1fr}}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;min-width:0}
-.card .ic{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;background:color-mix(in srgb,var(--lacivert) 10%,transparent);color:var(--lacivert)}
-.card .ic svg{width:21px;height:21px}
-.card h3{font-weight:600;font-size:17px;margin:0 0 8px}
+.card{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--ac,var(--lacivert));border-radius:0 0 14px 14px;padding:24px;min-width:0;transition:transform .18s,box-shadow .18s}
+.card:hover{transform:translateY(-3px);box-shadow:0 20px 40px -24px rgba(12,53,87,.3)}
+.card .ic{width:34px;height:34px;display:flex;align-items:center;justify-content:center;margin-bottom:15px;color:var(--ac,var(--lacivert))}
+.card .ic svg{width:26px;height:26px}
+.card h3{font-weight:600;font-size:16.5px;margin:0 0 8px}
 .card p{color:var(--muted);font-size:14px;margin:0;line-height:1.55}
-.card .tag{display:inline-block;margin-top:14px;font-family:var(--ff-mono);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--teal);border:1px solid color-mix(in srgb,var(--teal) 40%,transparent);padding:2px 9px;border-radius:20px}
+/* CTA bandı — koyu, ritim/kontrast */
+.cta-band{background:var(--lacivert);color:#fff}
+.cta-in{display:flex;align-items:center;justify-content:space-between;gap:24px;padding-block:34px;flex-wrap:wrap}
+.cta-in h2{font-family:var(--ff-serif);font-weight:600;font-size:clamp(21px,3vw,28px);margin:0;letter-spacing:-.01em}
+.cta-in p{margin:6px 0 0;color:#c2d4e6;font-size:14.5px}
+.btn-beyaz{flex:none;background:#fff;color:var(--lacivert);font-weight:600;font-size:15px;padding:13px 26px;border-radius:11px;text-decoration:none;white-space:nowrap}
+.btn-beyaz:hover{background:#eef3fb}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .cta-band{background:#0d2238}.cta-band .btn-beyaz{background:var(--mavi);color:#fff}}
+:root[data-theme="dark"] .cta-band{background:#0d2238}:root[data-theme="dark"] .cta-band .btn-beyaz{background:var(--mavi);color:#fff}
 
 .flow{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;font-family:var(--ff-mono);max-width:720px;margin:0 auto}
 .flow-h{display:flex;align-items:center;gap:9px;padding:11px 16px;border-bottom:1px solid var(--line2);font-size:11px;letter-spacing:.06em;color:var(--teal)}
@@ -165,12 +201,39 @@ footer{border-top:1px solid var(--line);padding-block:30px;margin-top:20px}
 </div>
 
 <section class="blk" id="urunler"><div class="wrap">
-  <div class="blk-head"><h2>Herkes domain adına bakar. Biz siteyi görürüz.</h2><p>Sadece adı değil — içeriği ve görüntüsüyle. Yapay zekâ, siteyi bir vatandaş gibi ziyaret eder.</p></div>
-  <div class="feat">
-    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2c3 3 3 17 0 20M12 2c-3 3-3 17 0 20"/></svg></div><h3>CT Firehose İzleme</h3><p>Dünyadaki tüm Certificate Transparency loglarını kesintisiz tarar; yeni domainleri sertifikaları çıktığı an kuyruğa alırız.</p><span class="tag">Gerçek zamanlı</span></div>
-    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M8 11h6M11 8v6"/></svg></div><h3>İçerik + Görsel Analiz</h3><p>Siteyi ziyaret eder, içeriğini okur ve ekran görüntüsünü yapay zekâyla değerlendirir: Türkçe alışveriş sitesi mi, ne satıyor, taklit mi?</p><span class="tag">Yapay zekâ</span></div>
-    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Marka &amp; ETBİS Koruması</h3><p>Markanızı taklit eden sahte adresleri ve ETBİS'te kayıtsız e-ticaret sitelerini yakalar — meşru firmaları yanlış-pozitiften ayırırız.</p><span class="tag">Kayıt dışı radar</span></div>
+  <div class="fark">
+    <div class="fark-sol">
+      <div class="etik">FARKIMIZ</div>
+      <h2>Herkes domain adına bakar.<br><span class="vurgu">Biz siteyi görürüz.</span></h2>
+      <p>Adında "karaca" geçiyor mu diye bakmak kolay. Biz siteyi bir vatandaş gibi <b>ziyaret eder</b>, içeriğini okur ve ekran görüntüsünü yapay zekâyla <b>değerlendiririz</b> — gerçek taklidi meşru firmadan böyle ayırırız.</p>
+      <ul class="fark-liste">
+        <li><span class="fl-ok" style="background:var(--teal)"></span><div><b>İçerik analizi</b> — ödeme geçidi, TL fiyat, Türkçe sepet akışı</div></li>
+        <li><span class="fl-ok" style="background:var(--mavi)"></span><div><b>Görsel analiz (AI)</b> — ekran görüntüsünden "ne satıyor, taklit mi"</div></li>
+        <li><span class="fl-ok" style="background:var(--lacivert)"></span><div><b>ETBİS çapraz kontrol</b> — kayıtlı mı, kayıt dışı mı</div></li>
+      </ul>
+    </div>
+    <div class="fark-sag">
+      <div class="analiz">
+        <div class="an-h"><span class="an-dom">karacasepet.shop</span><span class="an-rozet">ŞÜPHELİ · 80</span></div>
+        <div class="an-ss"><div class="an-bar"><i></i><i></i><i></i></div><div class="an-ss-ic">mutfak · ev eşyası vitrini (ekran görüntüsü)</div></div>
+        <div class="an-sat"><span class="an-ok">İçerik</span><span>iyzico + PayTR · ₺ fiyat · "sepete ekle"</span></div>
+        <div class="an-sat"><span class="an-ok ai">Görsel&nbsp;AI</span><span>"Karaca taklidi — mutfak eşyası satan alışveriş sitesi"</span></div>
+        <div class="an-sat"><span class="an-ok etbis">ETBİS</span><span>Kayıt bulunamadı → kayıt dışı</span></div>
+        <div class="an-verdict"><span class="material-nokta">●</span>Kayıt dışı e-ticaret taklidi · <b>risk 80</b></div>
+      </div>
+    </div>
   </div>
+
+  <div class="feat">
+    <div class="card" style="--ac:var(--teal)"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2c3 3 3 17 0 20M12 2c-3 3-3 17 0 20"/></svg></div><h3>CT Firehose İzleme</h3><p>Dünyadaki tüm Certificate Transparency loglarını kesintisiz tarar; yeni domainleri sertifikaları çıktığı an yakalar.</p></div>
+    <div class="card" style="--ac:var(--mavi)"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M8 11h6M11 8v6"/></svg></div><h3>İçerik + Görsel Analiz</h3><p>Siteyi ziyaret eder, içeriğini okur ve ekran görüntüsünü yapay zekâyla değerlendirir: alışveriş sitesi mi, ne satıyor, taklit mi?</p></div>
+    <div class="card" style="--ac:var(--lacivert)"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Marka &amp; ETBİS Koruması</h3><p>Taklit adresleri ve ETBİS'te kayıtsız e-ticareti yakalar — meşru firmaları yanlış-pozitiften ayırır.</p></div>
+  </div>
+</div></section>
+
+<section class="cta-band"><div class="wrap cta-in">
+  <div><h2>Markanız şu an taklit ediliyor olabilir.</h2><p>Web sitenizi girin, 30 saniyede öğrenin. Hesap gerekmez, ücretsiz.</p></div>
+  <a class="btn-beyaz" href="https://siber-bildir-web.vercel.app/basla" target="_blank" rel="noopener">Ücretsiz Tara →</a>
 </div></section>
 
 <section class="blk" id="radar" style="padding-top:0"><div class="wrap">
