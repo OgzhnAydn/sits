@@ -175,6 +175,9 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "bilkentholding", ad: "Bilkent Holding", resmi: ["bilkentholding.com.tr"], logo: "https://www.bilkentholding.com.tr/favicon.ico" },
   { anahtar: "bilkent", ad: "Bilkent Üniversitesi", resmi: ["bilkent.edu.tr"], logo: "https://w3.bilkent.edu.tr/www/wp-content/uploads/sites/5/2015/03/favicon.ico" },
   { anahtar: "tepehome", ad: "Tepe Home", resmi: ["tepehome.com.tr", "tepehome.com"], logo: "https://www.tepehome.com.tr/favicon.ico" },
+  // Karaca — ev eşyası/mutfak markası (ETBİS-kayıtlı). "karaca" YAYGIN soyad/kelime (geyik türü) →
+  // yaygin: bağlam kapısı; yalnız riskli TLD VEYA Türkçe phishing bağlamı taşıyan karaca* taklit sayılır.
+  { anahtar: "karaca", ad: "Karaca", resmi: ["karaca.com", "karaca.com.tr"], yaygin: true, logo: "https://www.karaca.com/favicon.ico" },
   { anahtar: "sportsinternational", ad: "Sports International", resmi: ["sportsinternational.com.tr"], logo: "https://www.sportsinternational.com.tr/images/favicon-sportsint.png" },
   // Astor Enerji A.Ş. (astoras.com.tr — transformatör/enerji). "astoras" adını başka firmalar da taşır
   // (Astor Associates, Astor Asset, Astoras Rent-a-Car) → SAG_SINIR_ZORUNLU ile yalnız AYRIK taklitler
