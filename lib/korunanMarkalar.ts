@@ -176,6 +176,8 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "bilkent", ad: "Bilkent Üniversitesi", resmi: ["bilkent.edu.tr"], logo: "https://w3.bilkent.edu.tr/www/wp-content/uploads/sites/5/2015/03/favicon.ico" },
   { anahtar: "tepehome", ad: "Tepe Home", resmi: ["tepehome.com.tr", "tepehome.com"], logo: "https://www.tepehome.com.tr/favicon.ico" },
   { anahtar: "sportsinternational", ad: "Sports International", resmi: ["sportsinternational.com.tr"], logo: "https://www.sportsinternational.com.tr/images/favicon-sportsint.png" },
+  // Astoras — kurumsal firma; "astoras" ayırt edici marka adı (yaygın kelime değil), FP-güvenli.
+  { anahtar: "astoras", ad: "Astoras", resmi: ["astoras.com.tr"], resmiVarliklar: ["astoras.com.tr"] },
   // ── Milli Piyango (sahte çekiliş/piyango dolandırıcılığında sık taklit edilir) ──
   // logo: KARE ikon (yatay logo dairesel node'da eziliyordu). millipiyangoonline.com resmî faviconu.
   { anahtar: "millipiyango", ad: "Milli Piyango", resmi: ["mpi.gov.tr", "millipiyango.gov.tr", "millipiyangoonline.com"], logo: "https://icons.duckduckgo.com/ip3/millipiyangoonline.com.ico" },
