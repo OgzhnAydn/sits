@@ -175,9 +175,13 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "bilkentholding", ad: "Bilkent Holding", resmi: ["bilkentholding.com.tr"], logo: "https://www.bilkentholding.com.tr/favicon.ico" },
   { anahtar: "bilkent", ad: "Bilkent Üniversitesi", resmi: ["bilkent.edu.tr"], logo: "https://w3.bilkent.edu.tr/www/wp-content/uploads/sites/5/2015/03/favicon.ico" },
   { anahtar: "tepehome", ad: "Tepe Home", resmi: ["tepehome.com.tr", "tepehome.com"], logo: "https://www.tepehome.com.tr/favicon.ico" },
-  // Karaca — ev eşyası/mutfak markası (ETBİS-kayıtlı). "karaca" YAYGIN soyad/kelime (geyik türü) →
-  // yaygin: bağlam kapısı; yalnız riskli TLD VEYA Türkçe phishing bağlamı taşıyan karaca* taklit sayılır.
-  { anahtar: "karaca", ad: "Karaca", resmi: ["karaca.com", "karaca.com.tr"], yaygin: true, logo: "https://www.karaca.com/favicon.ico" },
+  // Karaca — ev eşyası/mutfak markası (ETBİS-kayıtlı). "karaca" YAYGIN soyad/kelime (geyik türü; Karacabey,
+  // Karacaahmet yer adları) → yaygin: bağlam kapısı + 6-harf sağ-sınır kuralı yer adlarını eler. Ama bitişik
+  // GERÇEK taklitler (karacasepet, karacakitchen) de elenirdi → ayırt edici EV-EŞYASI kalıpları eklendi
+  // (≥8 harf, sınırı aşar, yer/kişi adıyla çakışmaz): karaca+sepet/kitchen/mutfak/outlet/store/turkiye.
+  { anahtar: "karaca", ad: "Karaca", resmi: ["karaca.com", "karaca.com.tr"], yaygin: true,
+    kaliplari: ["karacasepet", "karacakitchen", "karacamutfak", "karacaoutlet", "karacastore", "karacashop", "karacaturkiye", "karacaevi", "karacahome"],
+    logo: "https://www.karaca.com/favicon.ico" },
   { anahtar: "sportsinternational", ad: "Sports International", resmi: ["sportsinternational.com.tr"], logo: "https://www.sportsinternational.com.tr/images/favicon-sportsint.png" },
   // Astor Enerji A.Ş. (astoras.com.tr — transformatör/enerji). "astoras" adını başka firmalar da taşır
   // (Astor Associates, Astor Asset, Astoras Rent-a-Car) → SAG_SINIR_ZORUNLU ile yalnız AYRIK taklitler
@@ -299,7 +303,7 @@ export function anahtarKok(domain: string): string {
 // Eler: markanın kendi domainleri (vodafone.com/.gr ve alt alanları), marka adını
 // başka kelimenin içinde taşıyanlar (primegarantia, paparazzi, kennisbank, autogarantia).
 const IKI_PARCA_SONEK = new Set(["com.tr", "net.tr", "org.tr", "gov.tr", "edu.tr", "co.uk", "org.uk", "com.ph", "org.ph", "net.ph", "gov.ph", "com.au", "co.jp", "com.br", "co.za", "com.mx", "com.tw", "co.in", "com.ec"]);
-const TAKLIT_RISKLI_TLD = new Set(["xyz", "top", "tk", "buzz", "icu", "cyou", "rest", "monster", "click", "shop", "live", "online", "site", "vip", "club", "fun", "website", "space", "info", "biz", "sbs", "cfd", "help", "wiki", "quest", "store"]);
+const TAKLIT_RISKLI_TLD = new Set(["xyz", "top", "tk", "buzz", "icu", "cyou", "rest", "monster", "click", "shop", "live", "online", "site", "vip", "club", "fun", "website", "space", "info", "biz", "sbs", "cfd", "help", "wiki", "quest", "store", "homes"]);
 
 export function tescilliBilgi(host: string): { label: string; altAlan: boolean; tld: string } {
   const p = host.split(".");
