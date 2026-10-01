@@ -46,6 +46,9 @@ export async function kayitOl(email: string, sifre: string, ad: string, resmiMet
   });
   const j = await r.json();
   if (!r.ok || !j.anahtar) throw new Error(j.hata || "Resmî adresler kaydedilemedi.");
+  // 1b) GEÇMİŞ TARAMAYI HEMEN BAŞLAT — müşteri kayıt olur olmaz ilk taklitler aransın (boş ekran yok).
+  // keepalive: /mercek'e yönlendirilse bile istek sunucuda tamamlanır; urlscan ile taklitleri bulup kaydeder.
+  try { fetch(`/api/marka-tara-tekil?marka=${encodeURIComponent(j.anahtar)}`, { keepalive: true }).catch(() => {}); } catch { /* */ }
   // 2) Hesabı oluştur + markaya kilitle.
   const cred = await createUserWithEmailAndPassword(auth, email.trim(), sifre);
   await setDoc(doc(db, "marka_hesaplari", cred.user.uid), {

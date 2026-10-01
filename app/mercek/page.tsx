@@ -230,6 +230,7 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
     return () => { try { es && es.close(); } catch { /* */ } setAkisBagli(false); };
   }, []);
 
+  const ilkTaramaRef = useRef<Set<string>>(new Set()); // marka başına "ilk otomatik tarama tetiklendi" guard'ı
   useEffect(() => {
     let durdu = false;
     async function cek() {
@@ -241,6 +242,13 @@ function Kokpit({ tema, koyu, degistir }: { tema: string; koyu: boolean; degisti
         if (durdu) return;
         const a: Aday[] = (j.adaylar || []).slice(0, 300);
         setAdaylar(a); a.slice(0, 10).forEach((x) => yeniSet.current.add(x.domain));
+        // BACKSTOP: marka 0 adayla geldiyse (yeni kayıt / hiç taranmamış) → İLK GEÇMİŞ TARAMASINI tetikle.
+        // Marka başına tek sefer; sonuçlar 30sn'lik poll ile gelir. Kayıttaki keepalive taraması
+        // başarısız olsa bile burası garanti eder.
+        if (markaFiltre && a.length === 0 && !ilkTaramaRef.current.has(markaFiltre)) {
+          ilkTaramaRef.current.add(markaFiltre);
+          fetch(`/api/marka-tara-tekil?marka=${encodeURIComponent(markaFiltre)}`, { cache: "no-store" }).catch(() => {});
+        }
       } catch { /* sessiz */ }
     }
     cek(); const t = setInterval(cek, 30000);
