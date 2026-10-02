@@ -76,8 +76,14 @@ function iliskiEtiket(r: Rapor): string {
   return "%" + (r.risk || 0);
 }
 
-// Ekran görüntüsü al (pasif → yoksa aktif tarama poll). Gerçek-vs-sahte karşılaştırma için.
+// Ekran görüntüsü al. ÖNCE KENDİ RENDER'IMIZ (gerçek TR görünümü — urlscan'in bayat/timeout
+// görüntüsünü değil, siteyi biz ziyaret edip alırız). Render yoksa (RENDER_URL tanımsız) urlscan'e
+// düşer. Böylece "panelde gösterilen ekran ≠ tıklayınca görülen" sorunu çözülür.
 async function ekranAl(domain: string): Promise<string | null> {
+  try {
+    const d = await (await fetch(`/api/davranis-tr?domain=${encodeURIComponent(domain)}`, { cache: "no-store" })).json();
+    if (d?.ekran) return d.ekran; // data:image/jpeg;base64,... — bizim gerçek görüntümüz
+  } catch { /* render yoksa urlscan'e düş */ }
   try {
     let j = await (await fetch(`/api/ekran?domain=${encodeURIComponent(domain)}`)).json();
     if (j.durum === "hazir") return j.screenshot;

@@ -1,0 +1,28 @@
+# TR-vantage render servisi — Fly.io dağıtımı. Worker'larla aynı hesapta.
+# Kurulum (bir kez):
+#   cd veri-platformu/render
+#   flyctl launch --copy-config --no-deploy --name sits-render --region fra
+#   flyctl secrets set RENDER_SECRET=guclu-bir-sir          (Vercel'e de aynısını girilecek)
+#   flyctl secrets set TR_PROXY="http://kullanici:parola@gateway:port"   (opsiyonel — TR residential proxy)
+#   flyctl deploy
+# Sonuç adresi:  https://sits-render.fly.dev  →  Vercel env'e RENDER_URL olarak eklenir.
+
+app = "sits-render"
+primary_region = "fra"            # Frankfurt (TR'ye yakın, düşük gecikme)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "4700"
+
+[http_service]
+  internal_port = 4700
+  force_https = true
+  auto_stop_machines = "suspend"  # kullanılmadığında uykuya al (ucuz)
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"                  # Chromium için yeterli
