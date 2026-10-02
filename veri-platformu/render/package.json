@@ -1,0 +1,10 @@
+{
+  "name": "sits-render",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "TR-vantage render servisi — Playwright ile gerçek TR görünümü + ekran görüntüsü",
+  "scripts": { "start": "node server.mjs" },
+  "dependencies": { "playwright": "1.48.0" },
+  "engines": { "node": ">=20" }
+}

@@ -166,6 +166,20 @@ services:
     restart: unless-stopped
     networks: [sits]
 
+  # ── TR-VANTAGE RENDER — Playwright (cloaking'i kır, kurbanın gördüğü GERÇEK ekranı al) ──
+  render:
+    build: ./render
+    container_name: sits-render
+    environment:
+      PORT: 4700
+      RENDER_SECRET: ${RENDER_SECRET:-}      # app'in çağırması için paylaşılan sır
+      TR_PROXY: ${TR_PROXY:-}                 # opsiyonel TR residential proxy (yoksa sunucu IP'si)
+    ports:
+      - "4700:4700"
+    shm_size: "1gb"                           # Chromium için paylaşımlı bellek
+    restart: unless-stopped
+    networks: [sits]
+
 volumes:
   redpanda_data:
   clickhouse_data:

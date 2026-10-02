@@ -4,6 +4,7 @@
 //   iceriktenSinifla → HTML içeriğinden: dil (Türkçe mi), site tipi, alışveriş sinyali.
 //   gorselSinifla    → urlscan ekran görüntüsü + Gemini Vision: "Türkçe alışveriş sitesi mi?"
 import { geminiGorselJson, geminiVarMi } from "./gemini";
+import { trVantageRender, baslikFarkli } from "./trVantage";
 
 const UA = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36", "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.6" };
 
@@ -59,19 +60,23 @@ export type GorselSinif = {
   guven: number;               // 0-100 görsel güven
   not: string;                 // tek cümle özet
   ekranUrl?: string;
+  kaynak?: "tr-vantage" | "urlscan";  // ekran görüntüsünü nereden aldık
+  proxyTR?: boolean;           // TR proxy üzerinden mi (gerçek TR vantage)
+  cloaking?: boolean | null;   // urlscan görünümü ≠ TR görünümü → kılık değiştirme ipucu
   hata?: string;
 };
 
-async function urlscanEkran(domain: string, tetikle = false): Promise<string | null> {
+async function urlscanEkran(domain: string, tetikle = false): Promise<{ url: string; baslik: string } | null> {
   const key = process.env.URLSCAN_KEY;
-  // 1) Mevcut tarama var mı? — anında ekran görüntüsü.
+  // 1) Mevcut tarama var mı? — anında ekran görüntüsü + başlık.
   try {
-    const s = (await (await fetch(`https://urlscan.io/api/v1/search/?q=page.domain:%22${encodeURIComponent(domain)}%22&size=1`, { headers: key ? { "API-Key": key } : UA, signal: AbortSignal.timeout(8000) })).json()) as { results?: { screenshot?: string; _id?: string }[] };
+    const s = (await (await fetch(`https://urlscan.io/api/v1/search/?q=page.domain:%22${encodeURIComponent(domain)}%22&size=1`, { headers: key ? { "API-Key": key } : UA, signal: AbortSignal.timeout(8000) })).json()) as { results?: { screenshot?: string; _id?: string; page?: { title?: string } }[] };
     const r = s.results?.[0];
-    if (r?.screenshot) return r.screenshot;
-    if (r?._id) return `https://urlscan.io/screenshots/${r._id}.png`;
+    const baslik = (r?.page?.title || "").slice(0, 160);
+    if (r?.screenshot) return { url: r.screenshot, baslik };
+    if (r?._id) return { url: `https://urlscan.io/screenshots/${r._id}.png`, baslik };
   } catch { /* */ }
-  // 2) Yoksa ve tetikle=true ise: TAZE tarama başlat (siteyi VATANDAŞ gibi ziyaret et) → sonucu bekle.
+  // 2) Yoksa ve tetikle=true ise: TAZE tarama başlat → sonucu bekle.
   if (!tetikle || !key) return null;
   try {
     const r = await fetch("https://urlscan.io/api/v1/scan/", {
@@ -81,14 +86,13 @@ async function urlscanEkran(domain: string, tetikle = false): Promise<string | n
     });
     const j = (await r.json()) as { uuid?: string };
     if (!j.uuid) return null;
-    // Sonucu poll et (~24sn bütçe). Tarama tamamlanınca screenshot hazır olur.
     for (let i = 0; i < 8; i++) {
       await new Promise((z) => setTimeout(z, 3000));
       try {
         const res = await fetch(`https://urlscan.io/api/v1/result/${j.uuid}/`, { headers: { "API-Key": key }, signal: AbortSignal.timeout(7000) });
-        if (res.status === 404) continue; // henüz hazır değil
-        const rj = (await res.json()) as { task?: { screenshotURL?: string } };
-        if (rj.task?.screenshotURL) return rj.task.screenshotURL;
+        if (res.status === 404) continue;
+        const rj = (await res.json()) as { task?: { screenshotURL?: string }; page?: { title?: string } };
+        if (rj.task?.screenshotURL) return { url: rj.task.screenshotURL, baslik: (rj.page?.title || "").slice(0, 160) };
       } catch { /* devam */ }
     }
   } catch { /* tetikleme başarısız */ }
@@ -106,17 +110,32 @@ const VIZYON_SYS =
 export async function gorselSinifla(domain: string, tetikle = false): Promise<GorselSinif> {
   const bos = (h: string): GorselSinif => ({ yapildi: false, alisveris: null, turkce: null, kategori: "-", satilan: "", guven: 0, not: h, hata: h });
   if (!geminiVarMi) return bos("Görsel analiz için Gemini anahtarı tanımlı değil.");
-  const ekranUrl = await urlscanEkran(domain, tetikle);
-  if (!ekranUrl) return bos("Ekran görüntüsü alınamadı (tarama tetiklenemedi / zaman aşımı).");
-  let b64 = "";
-  try {
-    const img = await fetch(ekranUrl, { signal: AbortSignal.timeout(9000) });
-    if (!img.ok) return bos("Ekran görüntüsü indirilemedi.");
-    b64 = Buffer.from(await img.arrayBuffer()).toString("base64");
-  } catch { return bos("Ekran görüntüsü indirilemedi (zaman aşımı)."); }
 
+  // ── EKRAN GÖRÜNTÜSÜNÜ AL: ÖNCE KENDİ TR-VANTAGE RENDER (gerçek kurban görünümü, cloaking'i kırar),
+  //    yoksa urlscan'e düş. İkisi de varsa başlıkları karşılaştırıp CLOAKING ipucu çıkarırız.
+  const [tr, us] = await Promise.all([ trVantageRender(domain), urlscanEkran(domain, tetikle) ]);
+
+  let b64 = "", mime = "image/png", kaynak: "tr-vantage" | "urlscan" = "urlscan", proxyTR = false, ekranUrl: string | undefined;
+  let cloaking: boolean | null = null;
+  if (tr && tr.title && us?.baslik) cloaking = baslikFarkli(us.baslik, tr.title); // urlscan görünümü ≠ TR görünümü
+
+  if (tr?.shotB64) {
+    // Kendi TR görüntümüz — GERÇEK olan. Gemini'ye bunu veriyoruz.
+    b64 = tr.shotB64; mime = "image/jpeg"; kaynak = "tr-vantage"; proxyTR = !!tr.proxy;
+  } else if (us) {
+    try {
+      const img = await fetch(us.url, { signal: AbortSignal.timeout(9000) });
+      if (!img.ok) return bos("Ekran görüntüsü indirilemedi.");
+      b64 = Buffer.from(await img.arrayBuffer()).toString("base64");
+      kaynak = "urlscan"; ekranUrl = us.url;
+    } catch { return bos("Ekran görüntüsü indirilemedi (zaman aşımı)."); }
+  } else {
+    return bos("Ekran görüntüsü alınamadı (TR-render + urlscan ikisi de başarısız).");
+  }
+
+  const cloakNot = cloaking ? " ÖNEMLİ: urlscan'in gördüğü sayfa, gerçek TR görünümünden FARKLI — site kılık değiştiriyor (cloaking) olabilir." : "";
   const j = await geminiGorselJson<{ alisveris?: boolean; turkce?: boolean; kategori?: string; satilan?: string; guven?: number; not?: string }>(
-    VIZYON_SYS, `Bu ${domain} adresinin ekran görüntüsüdür. Görüntüye bakarak sınıflandır.`, b64, "image/png",
+    VIZYON_SYS, `Bu ${domain} adresinin ${kaynak === "tr-vantage" ? "GERÇEK Türkiye görünümündeki" : ""} ekran görüntüsüdür. Görüntüye bakarak sınıflandır.${cloakNot}`, b64, mime,
   );
   if (!j) return bos("Görsel model yanıt vermedi.");
   return {
@@ -126,7 +145,7 @@ export async function gorselSinifla(domain: string, tetikle = false): Promise<Go
     kategori: (j.kategori || "-").slice(0, 24),
     satilan: (j.satilan || "").slice(0, 48),
     guven: Math.max(0, Math.min(100, Math.round(Number(j.guven) || 0))),
-    not: (j.not || "").slice(0, 160),
-    ekranUrl,
+    not: ((j.not || "").slice(0, 160)) + (cloaking ? " · ⚠ cloaking şüphesi" : ""),
+    ekranUrl, kaynak, proxyTR, cloaking,
   };
 }
