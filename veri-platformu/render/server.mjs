@@ -36,24 +36,68 @@ async function render(url) {
   if (TR_PROXY) { try { const u = new URL(TR_PROXY); opts.proxy = { server: `${u.protocol}//${u.host}`, username: u.username ? decodeURIComponent(u.username) : undefined, password: u.password ? decodeURIComponent(u.password) : undefined }; } catch { /* geçersiz proxy → proxysiz */ } }
 
   const ctx = await b.newContext(opts);
+  // CLIPBOARD İZLEME — sayfa panoya bir şey yazarsa (clipboard hijack) kaydet.
+  await ctx.addInitScript(() => {
+    window.__clip = [];
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        const o = navigator.clipboard.writeText.bind(navigator.clipboard);
+        navigator.clipboard.writeText = (t) => { try { window.__clip.push(String(t).slice(0, 400)); } catch { /* */ } return o(t); };
+      }
+    } catch { /* */ }
+    document.addEventListener("copy", () => { try { const s = (document.getSelection && document.getSelection().toString()) || ""; if (s) window.__clip.push(s.slice(0, 400)); } catch { /* */ } });
+  });
   const page = await ctx.newPage();
-  const chain = [];
-  page.on("response", (r) => { try { if (r.request().isNavigationRequest()) chain.push({ u: r.url().slice(0, 120), s: r.status() }); } catch { /* */ } });
+
+  // AĞ TRANSACTIONLARI — her istek+yanıt (method, durum, URL, tip, IP). Yönlendirme zinciri de burada.
+  const network = [], chain = [];
+  page.on("response", async (r) => {
+    try {
+      const req = r.request();
+      let ip = ""; try { const a = await r.serverAddr(); ip = a ? a.ipAddress : ""; } catch { /* */ }
+      const tip = (r.headers()["content-type"] || "").split(";")[0];
+      if (network.length < 120) network.push({ m: req.method(), s: r.status(), u: r.url().slice(0, 200), t: tip, ip });
+      if (req.isNavigationRequest()) chain.push({ u: r.url().slice(0, 120), s: r.status() });
+    } catch { /* */ }
+  });
 
   let status = null, finalUrl = url, title = "", html = "";
   try {
     const resp = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
     status = resp ? resp.status() : null;
-    await page.waitForTimeout(2000); // JS yönlendirme / lazy içerik otursun
+    await page.waitForTimeout(2500); // JS yönlendirme / lazy içerik / geç istekler otursun
     finalUrl = page.url();
     title = (await page.title().catch(() => "")).slice(0, 200);
     html = (await page.content().catch(() => "")).slice(0, 80000);
   } catch { /* navigasyon hatası — yine de ekran görüntüsü deneriz */ }
 
+  // SCRIPT TOPLAMA + ŞÜPHE ANALİZİ (inline + external; zararlı/obfuscation/clipboard-hijack işaretleri)
+  let scripts = { inlineN: 0, external: [], supheli: [] };
+  let clipboard = [];
+  try {
+    const sc = await page.evaluate(() => {
+      const inline = [...document.querySelectorAll("script:not([src])")].map((s) => s.textContent || "").filter(Boolean);
+      const external = [...document.querySelectorAll("script[src]")].map((s) => s.src).filter(Boolean).slice(0, 40);
+      return { inlineN: inline.length, src: inline.join("\n").slice(0, 40000), external };
+    });
+    clipboard = await page.evaluate(() => (window.__clip || []).slice(0, 10)).catch(() => []);
+    const SUPHE = [
+      [/eval\s*\(|new Function\s*\(/i, "eval / dinamik kod çalıştırma"],
+      [/atob\s*\(|unescape\s*\(|String\.fromCharCode/i, "gizlenmiş (obfuscated) kod"],
+      [/clipboard\.writeText|execCommand\(['"]copy/i, "panoya yazma — clipboard ele geçirme olabilir"],
+      [/coinhive|cryptonight|miner|coinimp|webminepool/i, "kripto madenciliği"],
+      [/document\.write\s*\(\s*['"]?\s*<script/i, "dinamik script enjeksiyonu"],
+      [/addEventListener\(['"]keydown['"]|onkeypress/i, "tuş-kaydı (keylogger) şüphesi"],
+      [/\.php['"]?\s*[,)]|bot\d|sendData|exfil/i, "veri sızdırma ucu"],
+    ];
+    const havuz = sc.src + " " + sc.external.join(" ") + " " + clipboard.join(" ");
+    scripts = { inlineN: sc.inlineN, external: sc.external, supheli: SUPHE.filter(([re]) => re.test(havuz)).map(([, ad]) => ad) };
+  } catch { /* */ }
+
   let shotB64 = "";
   try { const buf = await page.screenshot({ type: "jpeg", quality: 68, fullPage: false }); shotB64 = buf.toString("base64"); } catch { /* */ }
   await ctx.close().catch(() => {});
-  return { status, finalUrl, title, html, shotB64, proxy: !!TR_PROXY, chain: chain.slice(0, 12) };
+  return { status, finalUrl, title, html, shotB64, proxy: !!TR_PROXY, chain: chain.slice(0, 12), network, clipboard, scripts };
 }
 
 http.createServer(async (req, res) => {

@@ -2,9 +2,13 @@
 // görünümüyle çeker: TR locale/UA + opsiyonel TR residential proxy. urlscan'in bulut-IP'den gördüğü
 // "temiz" sayfayı değil, kurbanın gördüğü GERÇEK sayfayı alırız → cloaking'i kırar. RENDER_URL yoksa
 // (servis kurulu değilse) null döner; çağıran urlscan'e düşer.
+export type AgIstek = { m: string; s: number; u: string; t: string; ip: string };
 export type TrVantage = {
   status: number | null; finalUrl: string; title: string; html: string;
   shotB64: string; proxy: boolean; chain: { u: string; s: number }[];
+  // dinamik davranış (urlcheckup tarzı): ağ transactionları, clipboard, script analizi
+  network?: AgIstek[]; clipboard?: string[];
+  scripts?: { inlineN: number; external: string[]; supheli: string[] };
 };
 
 export async function trVantageRender(domain: string): Promise<TrVantage | null> {
