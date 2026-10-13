@@ -4,14 +4,20 @@ import { normalize } from "@/lib/demoVeri";
 import { domainOsint, telefonOsint, ibanOsint, typosquatDurustlukCap, kategoriKarti, kSeviye, domainDurumu, saldiriAsamasi, SALDIRI_ASAMALARI, altyapiDna, takipIdBirincil, type OsintRapor } from "@/lib/osint";
 import { kriptoOsint } from "@/lib/kripto";
 import { itibarliMi } from "@/lib/itibarli";
-import { gostergeSorgula, baglantilariGetir, analizKaydet, delilCikar, riskGecmisiEkle, riskGecmisiGetir, dnaEslesenler, takipEslesenler, telegramEslesenler } from "@/lib/store";
+import { gostergeSorgula, baglantilariGetir, analizKaydet, delilCikar, riskGecmisiEkle, riskGecmisiGetir, dnaEslesenler, takipEslesenler, telegramEslesenler, markaAdayKaydet, apkTriageKaydet, apkTriageGetir } from "@/lib/store";
+import { triageGonder, triageYapilandi } from "@/lib/triage";
 import { cacheOku, cacheYaz } from "@/lib/osintCache";
+import { baslikFarkli } from "@/lib/trVantage";
 import { seedKontrol } from "@/lib/seed";
 import { ESIK, GOSTER_ESIK } from "@/lib/esik";
 import { limitAsildi } from "@/lib/rateLimit";
 import { insanYorum, type Anlati } from "@/lib/insanYorum";
 
 export const runtime = "nodejs";
+
+// Müşteri paneli (ayrı origin) derin analizi POST ile çağırır → CORS açık.
+const CORS: Record<string, string> = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type" };
+export async function OPTIONS() { return new NextResponse(null, { headers: CORS }); }
 
 function seviye(risk: number): "Yüksek" | "Orta" | "Düşük" {
   if (risk >= 60) return "Yüksek";
@@ -115,15 +121,20 @@ async function dedektifHukmu(
   const s = rapor.sayfa;
   const icerik = s ? ` | Sayfa: ${s.baslik || ""} ${(s.ozetMetin || "").slice(0, 300)}` : "";
   const system =
-    `Sen MirLeon'in kıdemli dolandırıcılık istihbarat analistisin — bir insan dedektif gibi düşün. ` +
-    `Sana bir adres hakkında toplanan HAM SİNYALLER veriliyor; sen bunlardan MANTIK YÜRÜTEREK bir hüküm çıkaracaksın. UYDURMA — yalnız verilen sinyallere dayan. ` +
+    `Sen MirLeon'in kıdemli CTI (siber tehdit istihbaratı) analistisin; kurumsal bir vaka dosyası yazıyorsun. ` +
+    `YANLIŞ-POZİTİF üretmek en büyük hatadır. GÖZLEM ile ÇIKARIM'ı ASLA karıştırma: ne gözlendiğini söyle, ne ANLAMA GELEBİLECEĞİNİ "olası/şüphe/doğrulanmadı" diliyle ver. ` +
+    `Doğrulanmamış bir şeyi KANITLANMIŞ gibi yazma ("kanıtlamaktadır/doğrulamaktadır/göstermektedir" deme — "olabilir/işaret edebilir/doğrulanmadı" de). UYDURMA — yalnız verilen sinyallere dayan. ` +
+    `YASAK aşırı-iddialar (kanıt yoksa ASLA): "organize operasyonun parçası" (yalnız kardeş-domain/ortak-altyapı sinyali VARSA); ` +
+    `"sunucusunu/konumunu gizliyor" (CDN/proxy normaldir → "CDN/proxy arkasında, origin doğrulanamadı" de); ` +
+    `"ziyaretçiyi (zararlı adrese) yönlendiriyor" (başlık sadece 'Redirecting' ise → "yönlendirme hedefi doğrulanmadı" de); ` +
+    `"RDAP desteklemiyor" (sorgu başarısızsa → "RDAP sorgusu başarısız, neden doğrulanmadı" de). ` +
     `Hesaplanan risk (${riskSeviye}) ile çelişme. SADECE şu JSON'u döndür: ` +
     `{"tur":"dolandırıcılık türü (ör. Kamu kurumu taklidi kimlik-avı | Sahte yatırım/kripto | Marka taklidi phishing | Yasadışı bahis | Sahte e-ticaret | Zararlı yazılım | Belirsiz/temiz)",` +
-    `"hedef":"kimi hedefliyor (ör. banka müşterileri, öğrenciler, genel halk) — sinyalden çıkmazsa 'genel'",` +
-    `"paraYontemi":"parayı nasıl topluyor (IBAN, kart, kripto, ödeme sayfası) — sinyalde yoksa 'tespit edilmedi'",` +
-    `"operasyon":"tek site mi yoksa organize operasyonun parçası mı (kardeş domain/ortak IP sinyaline bak) — 1 cümle",` +
-    `"gerekce":["kanıt→sonuç mantığı, her madde tek cümle, sinyale dayalı"],` +
-    `"guven":"Yüksek|Orta|Düşük (kanıt gücüne göre)"}. gerekce 3-5 madde. Türkçe, teknik-terim yok.`;
+    `"hedef":"kimi hedefliyor olabilir — sinyalden çıkmazsa 'genel'",` +
+    `"paraYontemi":"parayı nasıl topluyor olabilir — sinyalde yoksa 'tespit edilmedi'",` +
+    `"operasyon":"SADECE kardeş-domain/ortak-IP/ortak-kit sinyali VARSA 'organize olabilir' de; yoksa 'Tek adres — başka adreslerle doğrulanmış ilişki yok' — 1 cümle",` +
+    `"gerekce":["her madde: NE GÖZLENDİ → bunun ne anlama GELEBİLECEĞİ (kanıt değil, olasılık), tek cümle"],` +
+    `"guven":"Yüksek|Orta|Düşük — yalnız BAĞIMSIZ ve DOĞRULANMIŞ kanıt çoksa Yüksek, tek sinyalde Düşük"}. gerekce 3-5 madde. Türkçe, teknik-terim yok.`;
   const user = `Adres: ${rapor.deger}. Risk: ${riskSeviye} (${rapor.risk}/100). Kategoriler: ${kat || "yok"}. Ham sinyaller: ${sinyaller}${icerik}`;
   const j = await geminiJson<Partial<DedektifHukmu>>(system, user);
   if (!j || !j.tur) return undefined;
@@ -131,15 +142,41 @@ async function dedektifHukmu(
   const metin = `${j.tur} ${(j.gerekce || []).join(" ")}`.toLowerCase();
   if (riskSeviye === "Yüksek" && /\btemiz\b|meşru|güvenli/.test(j.tur.toLowerCase())) return undefined;
   if (riskSeviye === "Düşük" && /kesin dolandırıc|kesinlikle sahte/.test(metin)) return undefined;
+  // AŞIRI-İDDİA GUARDRAIL'leri (AI gözden kaçırırsa son emniyet):
+  // (1) İlişki kanıtı yoksa "organize operasyon" iddiasını düşür → tek adres.
+  const iliskiKaniti = rapor.alanlar.some((a) => /kardeş|kampanya|ortak ip|ortak altyapı|aynı sunucu|\bDNA\b|takip kimliği/i.test(`${a.ad} ${a.deger}`));
+  let operasyon = (j.operasyon || "Tek adres — başka adreslerle doğrulanmış ilişki yok.").trim();
+  if (!iliskiKaniti && /organize/i.test(operasyon)) operasyon = "Tek adres — başka adreslerle doğrulanmış bir ilişki bulunmadı.";
+  // (2) Kesin-fiil → gözlem dili (CDN=gizleme, Redirecting=yönlendirme, RDAP=desteklemiyor aşırı-iddialarını yumuşat).
+  const yumusat = (t: string) => t
+    .replace(/(doğrulamaktadır|kanıtlamaktadır|ispatlamaktadır)/gi, "işaret edebilir")
+    .replace(/gizlendiğini/gi, "gizlenmiş olabileceğini")
+    .replace(/desteklemiyor/gi, "sorgusu başarısız (neden doğrulanmadı)");
+  const gerekce = (Array.isArray(j.gerekce) ? j.gerekce.slice(0, 5) : []).map(yumusat);
   return {
     tur: j.tur,
     hedef: j.hedef || "genel",
     paraYontemi: j.paraYontemi || "tespit edilmedi",
-    operasyon: j.operasyon || "tek site",
-    gerekce: Array.isArray(j.gerekce) && j.gerekce.length ? j.gerekce.slice(0, 5) : [],
+    operasyon,
+    gerekce,
     guven: j.guven === "Yüksek" || j.guven === "Düşük" ? j.guven : "Orta",
     ai: true,
   } as DedektifHukmu;
+}
+
+// İÇERİK ROTASYONU KORUMASI — bir domainin ŞU ANKİ <title>'ını hızlıca çeker (hafif, ~6s).
+// Önbellekteki başlıkla karşılaştırmak için: farklıysa site içeriğini değiştirmiş (dönen abuse).
+async function guncelBaslik(domain: string): Promise<string | null> {
+  const UA = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36", "Accept-Language": "tr-TR,tr;q=0.9", Accept: "text/html" };
+  for (const url of [`https://${domain}/`, `http://${domain}/`]) {
+    try {
+      const r = await fetch(url, { headers: UA, redirect: "follow", signal: AbortSignal.timeout(6000) });
+      const html = (await r.text()).slice(0, 40_000);
+      const m = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) || html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      return m ? m[1].trim().slice(0, 160) : null;
+    } catch { /* diğer şema */ }
+  }
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -157,6 +194,17 @@ export async function POST(req: NextRequest) {
   // Topluluk/seed/bağlantı sinyalleri cache SONRASI eklenir — hep taze kalır.
   // taze:true → önbelleği ATLA (operatör "yeniden tara" dediğinde site durumu değişmiş olabilir).
   let rapor = taze ? null : (await cacheOku(tip, deger)) as OsintRapor | null;
+  // İÇERİK ROTASYONU KORUMASI: önbellekteki başlık ile CANLI başlık belirgin farklıysa, site içeriğini
+  // değiştirmiş demektir (escort→park→şablon gibi dönen abuse domainleri) → bayat gösterme, TAZE analiz et.
+  // Yalnız URL'de + başlık varsa; canlı fetch başarısızsa önbellek korunur (bizim taraf hatası ≠ rotasyon).
+  let icerikDegisti = false;
+  if (rapor && tip === "url") {
+    const eskiBaslik = (rapor.alanlar.find((a) => a.ad === "Sayfa başlığı")?.deger || "").trim();
+    if (eskiBaslik) {
+      const simdiki = await guncelBaslik(deger);
+      if (simdiki && baslikFarkli(eskiBaslik, simdiki)) { rapor = null; icerikDegisti = true; }
+    }
+  }
   if (!rapor) {
     // Tam URL'yi (yol dahil) içerik analizi için geçir — paylaşılan belirli
     // sayfayı (haber makalesi gibi) tanımlayabilelim.
@@ -166,6 +214,9 @@ export async function POST(req: NextRequest) {
     else rapor = ibanOsint(deger);
     await cacheYaz(tip, deger, rapor);
   }
+  // Rotasyon tespit edildiyse NÖTR bilgi notu (risk eklemez — taze analiz zaten güncel içeriği puanlar;
+  // meşru siteler de başlığını değiştirebilir → suçlama yok, yalnız şeffaflık).
+  if (icerikDegisti) rapor.alanlar.push({ ad: "Analiz tazeliği", deger: "Site içeriği önceki analizden bu yana değişti — gösterilen analiz tazelenmiştir." });
 
   // İtibarlı/resmî site (banka, .gov.tr, büyük haber sitesi…) crowd/seed
   // gürültüsüyle risk almasın — üstteki başlıkla tutarlı, düşük risk kalsın.
@@ -202,6 +253,7 @@ export async function POST(req: NextRequest) {
   rapor.risk = Math.min(100, rapor.risk);
 
   // DÜRÜST BELİRSİZLİK GEÇİDİ (paylaşımlı — sahte-bul da aynısını kullanır → tutarlı skor).
+  // NOT: doorway (alan adı↔içerik) + içerik rotasyonu artık domainOsint içinde — HER derin analiz alır.
   typosquatDurustlukCap(rapor);
 
   // Kategori skor kartı + canlı durum — yalnız URL/domain analizinde.
@@ -260,6 +312,30 @@ export async function POST(req: NextRequest) {
       dedektifGuven: dedektif?.guven,
       deliller: delilCikar(rapor.alanlar),
     }).catch(() => {});
+
+    // SALT-LOGO TAKLİDİ → AVCI KUYRUĞUNA (adım #1): domain adında marka GEÇMESE de sayfa
+    // bir korunan markanın logosunu gösteriyorsa (isimsiz), operatör takibi için aday yap.
+    // Böylece "başka bir isimle marka içeriği" (örn. Akbank logolu guvenli-odeme-tr.com)
+    // izlemeye girer. İtibarlı/resmî domaini osint zaten eledi (meşru logo kullanımı).
+    if (rapor.logoMarka?.isimsiz && rapor.risk >= 55) {
+      const lm = rapor.logoMarka;
+      markaAdayKaydet({
+        domain: deger, marka: lm.anahtar, markaAdi: lm.ad,
+        skor: Math.min(85, Math.max(55, rapor.risk)), seviye: rapor.risk >= 60 ? "Yüksek" : "Orta",
+        sinyaller: [`Salt-logo taklidi — domain adında "${lm.ad}" GEÇMİYOR ama sayfa ${lm.ad} logosunu/amblemini gösteriyor (görsel AI tespiti).`],
+        kaynak: "logo-gorsel", zaman: Date.now(),
+      }).catch(() => {});
+    }
+
+    // SAHTE APK → TRIAGE DAVRANIŞ ANALİZİ: site doğrudan .apk indirtiyorsa (apkDagitimi), APK'yı
+    // sanal makinede patlatması için tria.ge'ye gönder (fire-and-forget; domain başına BİR kez).
+    // Rapor dakikalar sonra /api/apk-triage?domain=... ile çekilir (skor/aile/C2).
+    const apkUrl = rapor.apkDagitimi?.url || "";
+    if (triageYapilandi && /^https?:\/\/.+\.apk(\?|#|$)/i.test(apkUrl)) {
+      apkTriageGetir(deger)
+        .then((m) => { if (m?.triageId) return; return triageGonder(apkUrl).then((id) => { if (id) return apkTriageKaydet(deger, apkUrl, id); }); })
+        .catch(() => {});
+    }
   }
 
   // ── RİSK YÖRÜNGESİ + ALTYAPI DNA (gerçek, zamansal + ilişkisel) ──
@@ -292,7 +368,7 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ...rapor, riskSeviye, analiz, baglantilar, kategoriler, durum, dedektif,
-    asama, asamalar: tip === "url" ? SALDIRI_ASAMALARI : undefined, gecmis, dna, takip });
+    asama, asamalar: tip === "url" ? SALDIRI_ASAMALARI : undefined, gecmis, dna, takip }, { headers: CORS });
   } catch (e: unknown) {
     // Güvenlik ağı: tek bir enricher (site fetch, whois, VT…) beklenmedik hata verse bile
     // tüm analiz 500 ile çökmesin — temiz mesaj dön, ayrıntıyı sunucu loguna yaz.

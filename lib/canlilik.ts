@@ -21,8 +21,11 @@ export type CanlilikSonuc = {
   ssl: { gecerli: boolean | null; guvenilir: boolean | null; veren: string | null; bitis: string | null; baslangic?: string | null };
   redirectHedef: string | null;   // yönlendirme varsa İLK çapraz-host hedef (sınıflandırma)
   redirectZinciri?: string[];     // TAM zincir: A → B → C → son (her hop)
-  cloaking?: boolean;             // bot vs tarayıcı parmak-izinde FARKLI hedef → gizleme
+  cloaking?: boolean;             // bot vs tarayıcı parmak-izinde FARKLI hedef/içerik → gizleme
   cloakingNot?: string;
+  cloakingTur?: "yonlendirme" | "icerik";  // host farkı mı, içerik/durum farkı mı
+  vantajKor?: boolean;            // DNS çözülüyor ama bizim bulut vantajımızdan erişilemedi →
+                                  // olası IP-COĞRAFİ cloaking (yalnız TR residential IP'ye içerik) / cloud-IP engeli
   kokNeden: string;               // insan-okunur açıklama (kök neden analizi)
   zaman: number;
 };
@@ -158,15 +161,24 @@ export async function canlilikProbe(domain: string): Promise<CanlilikSonuc> {
   // gidiyorsa → site kim istediğine göre farklı davranıyor (gizleme). Yalnız yönlendirme
   // varken bak (maliyet). NOT: bu UA/dil-tabanlı cloaking'i yakalar; IP-COĞRAFİ cloaking
   // (bota park, Türk IP'ye tuzak) için TR vantaj noktası gerekir.
-  if (httpRes.redirectHedef || httpRes.sonHedef) {
+  if (httpRes.redirectHedef || httpRes.sonHedef || httpRes.status === 200) {
     try {
       const botRes = await httpProbe(d, { "User-Agent": "curl/8.4.0", Accept: "*/*" });
       const h = (u: string | null) => { try { return u ? new URL(u).hostname.replace(/^www\./, "") : ""; } catch { return ""; } };
-      const tara = h(httpRes.sonHedef) || h(httpRes.redirectHedef);
-      const bot = h(botRes.sonHedef) || h(botRes.redirectHedef);
+      const tara = h(httpRes.sonHedef) || h(httpRes.redirectHedef) || d;
+      const bot = h(botRes.sonHedef) || h(botRes.redirectHedef) || d;
+      const sonHedefHost = tara;
+      const parkPazarHedef = PARK_PAZAR.test(sonHedefHost); // GoDaddy/Sedo vb. → Akamai bot-engeli benign
       if (tara && bot && tara !== bot) {
-        sonuc.cloaking = true;
+        // 1) HOST farkı: tarayıcı ile bot FARKLI adrese gidiyor → klasik cloaking.
+        sonuc.cloaking = true; sonuc.cloakingTur = "yonlendirme";
         sonuc.cloakingNot = `Gizleme (cloaking): tarayıcıya "${tara}", bota "${bot}" gösteriyor — kim istediğine göre farklı hedef.`;
+      } else if (!parkPazarHedef && httpRes.status && botRes.status && httpRes.status !== botRes.status
+        && (httpRes.status === 200) && (botRes.status === 401 || botRes.status === 403)) {
+        // 2) İÇERİK/DURUM farkı: tarayıcıya içerik (200), bota engel (401/403) → parmak-izine göre
+        //    farklı davranış (park pazarı hariç — orada Akamai bot-engeli zararsızdır).
+        sonuc.cloaking = true; sonuc.cloakingTur = "icerik";
+        sonuc.cloakingNot = `Gizleme (cloaking): tarayıcıya içerik (HTTP ${httpRes.status}), bota engel (HTTP ${botRes.status}) veriyor — parmak-izine göre farklı davranıyor.`;
       }
     } catch { /* cloaking sondası başarısız → atla */ }
   }
@@ -177,13 +189,13 @@ export async function canlilikProbe(domain: string): Promise<CanlilikSonuc> {
   // engelliyor / ağ yolu / geçici kapalı olabilir → "bilinmiyor" (EMİN DEĞİLİZ), asla "dead".
   // (Gerçek örnek: tuvturk.com.tr Vercel'den timeout ama site CANLI.) Tek kesin "dead" = NXDOMAIN.
   if (httpRes.hata === "refused" || (p443 === "refused" && httpRes.status === null)) {
-    sonuc.durum = "bilinmiyor";
-    sonuc.kokNeden = "Alan adı DNS'te KAYITLI ama sonda bağlantısı reddedildi (port kapalı görünüyor) — sunucu kapalı OLABİLİR ama cloud-IP engeli de olabilir; kaldırıldığı KESİN DEĞİL.";
+    sonuc.durum = "bilinmiyor"; sonuc.vantajKor = true;
+    sonuc.kokNeden = "Alan adı DNS'te KAYITLI ama sonda bağlantısı reddedildi (port kapalı görünüyor) — sunucu kapalı OLABİLİR ama cloud-IP engeli / IP-coğrafi gizleme de olabilir; kaldırıldığı KESİN DEĞİL.";
     return sonuc;
   }
   if (httpRes.hata === "timeout" && httpRes.status === null) {
-    sonuc.durum = "bilinmiyor";
-    sonuc.kokNeden = "Alan adı DNS'te KAYITLI ama sunucu sondaya yanıt vermedi (zaman aşımı) — site cloud-IP'mizi engelliyor ya da geçici kapalı olabilir; kaldırıldığı KESİN DEĞİL.";
+    sonuc.durum = "bilinmiyor"; sonuc.vantajKor = true;
+    sonuc.kokNeden = "Alan adı DNS'te KAYITLI ama sunucu sondaya yanıt vermedi (zaman aşımı) — site bulut-IP'mizi engelliyor ya da içeriği yalnız Türk IP'sine gösteriyor (IP-coğrafi gizleme) olabilir; kaldırıldığı KESİN DEĞİL.";
     return sonuc;
   }
   if (httpRes.hata === "ssl") {

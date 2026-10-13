@@ -38,3 +38,25 @@ export function baslikFarkli(a: string, b: string): boolean {
   if (x === y) return false;
   return !(x.includes(y.slice(0, 14)) || y.includes(x.slice(0, 14)));
 }
+
+// Bir adayı GERÇEK tarayıcıda (TR locale) açıp cloaking + dinamik davranış sinyallerini çıkarır.
+// Hem derin-analiz hem günlük otomatik yeniden-tarama bunu kullanır → "yakalanan her link
+// otomatik gerçek tarayıcıda açılır". RENDER_URL yoksa/erişilemezse null (statik analizle devam).
+export type RenderSinyal = { zaman: number; finalUrl?: string; yonlendirme?: number; cloaking?: boolean; clipboard?: boolean; supheliScript?: string[]; agHost?: number };
+export async function renderAday(domain: string, pasifBaslik?: string): Promise<RenderSinyal | null> {
+  if (!process.env.RENDER_URL) return null;
+  const tr = await trVantageRender(domain).catch(() => null);
+  if (!tr) return null;
+  const host = domain.replace(/^www\./, "");
+  const disHost = new Set((tr.network || []).map((n) => { try { return new URL(n.u).hostname.replace(/^www\./, ""); } catch { return ""; } })
+    .filter((h) => h && h !== host && !h.endsWith("." + host))).size;
+  return {
+    zaman: Date.now(),
+    finalUrl: tr.finalUrl,
+    yonlendirme: (tr.chain || []).length,
+    cloaking: !!pasifBaslik && baslikFarkli(tr.title || "", pasifBaslik),
+    clipboard: (tr.clipboard || []).length > 0,
+    supheliScript: tr.scripts?.supheli || [],
+    agHost: disHost,
+  };
+}

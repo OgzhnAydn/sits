@@ -26,6 +26,8 @@ export default function Basla() {
   const durdu = useRef(false);
 
   useEffect(() => () => { durdu.current = true; }, []);
+  // Landing'den (#kayit formu) gelen web adresini otomatik doldur → kullanıcı tek tık "Tara".
+  useEffect(() => { try { const s = new URLSearchParams(window.location.search).get("site"); if (s) setSite(s); } catch { /* */ } }, []);
 
   async function basla(e: React.FormEvent) {
     e.preventDefault(); setHata("");

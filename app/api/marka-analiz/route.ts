@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { markaAdaylariMarka, markaAdayKaydet, yasamGecisUygula, type MarkaAday } from "@/lib/store";
 import { domainOsint, saldiriAsamasi, domainDurumu } from "@/lib/osint";
-import { gercekTaklit } from "@/lib/korunanMarkalar";
+import { renderAday } from "@/lib/trVantage";
+import { pasifDns } from "@/lib/passiveDns";
+import { itibarliMi } from "@/lib/itibarli";
+import { gercekTaklit, AVCI_MARKALAR, resmiMarkaDomaini } from "@/lib/korunanMarkalar";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -40,17 +43,47 @@ export async function GET(req: NextRequest) {
       const r = await domainOsint(a.domain, undefined, true); // içerik + ekran + Gemini görsel analiz
       const aiTur = r.alanlar.find((x) => x.ad === "Görsel analiz (AI)" || x.ad === "İçerik analizi (AI)")?.deger || "";
       const asama = saldiriAsamasi(r);
-      const kimlikAvi = asama >= 6 || r.bulgular.some((b) => /kimlik.?av|kart bilgisi isteniyor|üçüncü bir tarafa aktar|şifre.*girme/i.test(b));
-      const aiNot = (r.alanlar.find((x) => x.ad === "Görsel notu")?.deger) || (r.bulgular[0] || "").slice(0, 130);
-      const guncel: MarkaAday = { ...a, aiTur: aiTur || undefined, aiKimlikAvi: kimlikAvi, aiNot: aiNot || undefined, analizZaman: Date.now() };
+
+      // ── GERÇEK TARAYICI RENDER (otomatik; her aday Chromium'da TR locale ile açılır) ──
+      // Bot'a temiz görünen sayfanın kurbana gösterdiği GERÇEK halini + dinamik davranışı yakalar.
+      const render = (await renderAday(a.domain, r.alanlar.find((x) => x.ad === "Sayfa başlığı")?.deger).catch(() => null)) || undefined;
+      const renderTehdit = !!(render && (render.clipboard || (render.supheliScript && render.supheliScript.length)));
+
+      const kimlikAvi = asama >= 6 || renderTehdit || r.bulgular.some((b) => /kimlik.?av|kart bilgisi isteniyor|üçüncü bir tarafa aktar|şifre.*girme/i.test(b));
+      const cloakNot = render?.cloaking ? "Cloaking: bot'a temiz, gerçek tarayıcıda farklı sayfa. " : "";
+      const aiNot = (cloakNot + ((r.alanlar.find((x) => x.ad === "Görsel notu")?.deger) || (r.bulgular[0] || ""))).slice(0, 150);
+      const guncel: MarkaAday = { ...a, aiTur: aiTur || undefined, aiKimlikAvi: kimlikAvi, aiNot: aiNot || undefined, analizZaman: Date.now(), ...(render ? { render } : {}) };
       await markaAdayKaydet(guncel).catch(() => {});
       // YAŞAM DÖNGÜSÜ: derin analiz verdicti geçişi sürer (kimlik-avı/canlı → DOGRULANDI, park → IZLEMEDE).
       await yasamGecisUygula(a.domain, a.yasamDurumu, { tur: "derin-analiz", canliDurum: domainDurumu(r).durum, aktifTehdit: kimlikAvi, skor: r.risk }).catch(() => {});
-      return { domain: a.domain, aiTur, aiKimlikAvi: kimlikAvi, aiNot, risk: r.risk };
+
+      // ── KAMPANYA AVI (passive DNS) — gerçek tehditse IP'sindeki KARDEŞ domainlerden markaya uyanları
+      // OTOMATİK aday yap: "1 yakalama → tüm saldırgan altyapısı/kampanyası". Ücretsiz reverse-IP.
+      let kardesAday = 0;
+      if (kimlikAvi || r.risk >= 60) {
+        try {
+          const pd = await pasifDns(a.domain);
+          for (const kd of (pd.kardesDomainler || []).slice(0, 25)) {
+            const d = kd.domain.toLowerCase().replace(/^www\./, "").replace(/\/.*$/, "");
+            if (d === a.domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)) continue;
+            const mm = AVCI_MARKALAR.find((x) => gercekTaklit(d, x.anahtar));
+            if (mm && !resmiMarkaDomaini(d) && !itibarliMi(d)) {
+              await markaAdayKaydet({
+                domain: d, marka: mm.anahtar, markaAdi: mm.ad, skor: 52, seviye: "Orta",
+                sinyaller: [`Kampanya: ${a.domain} ile AYNI sunucuda (${kd.pivot}) barınıyor — aynı saldırgan altyapısı.`],
+                kaynak: "kardes-pdns", zaman: Date.now(),
+              }).catch(() => {});
+              kardesAday++;
+            }
+          }
+        } catch { /* passive DNS başarısız → geç */ }
+      }
+
+      return { domain: a.domain, aiTur, aiKimlikAvi: kimlikAvi, aiNot, risk: r.risk, kardesAday, render: render ? { cloaking: render.cloaking, clipboard: render.clipboard, supheli: render.supheliScript?.length || 0 } : null };
     } catch {
       return { domain: a.domain, aiTur: "", aiKimlikAvi: false, aiNot: "", risk: 0 };
     }
   });
 
-  return NextResponse.json({ ok: true, marka, analizEdilen: sonuc.length, kimlikAviSayisi: sonuc.filter((s) => s.aiKimlikAvi).length, sonuc }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ ok: true, marka, analizEdilen: sonuc.length, kimlikAviSayisi: sonuc.filter((s) => s.aiKimlikAvi).length, kardesToplam: sonuc.reduce((t, s) => t + (s.kardesAday || 0), 0), sonuc }, { headers: { "Cache-Control": "no-store" } });
 }

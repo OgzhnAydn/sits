@@ -23,6 +23,7 @@ import {
 import { db, firebaseHazir } from "./firebase";
 import { gercekTaklit } from "./korunanMarkalar";
 import { usomBilgi } from "./tehditListeleri";
+import { gecerliPlan, type PlanAnahtar, type KullanimTuru } from "./planlar";
 import type { Analiz } from "./analyze";
 import { gecisHesapla, etkinYasam, type YasamDurumu, type YasamOlay, type YasamSinyali } from "./yasamDongusu";
 
@@ -305,6 +306,16 @@ export type MarkaAday = {
   aiKimlikAvi?: boolean;   // görselde/içerikte GERÇEK kimlik-avı formu doğrulandı mı
   aiNot?: string;          // 1 cümle özet
   analizZaman?: number;    // en son derin analiz zamanı (ms)
+  // GERÇEK TARAYICI RENDER'ı (TR-vantage; her aday otomatik gerçek Chromium'da açılır — cloaking kırma)
+  render?: {
+    zaman: number;             // render anı (ms)
+    finalUrl?: string;         // yönlendirmelerden sonra oturan adres
+    yonlendirme?: number;      // navigasyon zinciri uzunluğu
+    cloaking?: boolean;        // render başlığı ≠ pasif/urlscan başlığı (bot'a temiz, kurbana tuzak)
+    clipboard?: boolean;       // sayfa panoya yazdı (clipboard ele geçirme)
+    supheliScript?: string[];  // çalışan sayfada yakalanan zararlı imzalar
+    agHost?: number;           // temas edilen farklı dış host sayısı
+  };
   // ── YAŞAM DÖNGÜSÜ (canlılık `durum`'dan AYRI; lib/yasamDongusu.ts durum makinesi) ──
   bildirim?: { zaman: number; kaynak?: string }; // USOM'a bildirildi (operatör aksiyonu + tarih)
   manuel?: boolean;             // operatör "Şüpheli Ekle" ile ekledi / içerik-taklidi doğrulandı
@@ -671,6 +682,22 @@ export async function analizKaydet(a: AnalizKaydi): Promise<void> {
   }
 }
 
+// ── SAHTE APK DAVRANIŞ ANALİZİ (Triage) ── yakalanan APK'yı tria.ge'ye gönderip sonucu saklar.
+// Koleksiyon küçük (APK tespiti nadir) → kota derdi yok. domain başına tek kayıt (upsert).
+export type ApkTriageKaydi = { domain: string; apkUrl: string; triageId: string; durum: string; zaman: number; ozet?: unknown; raporZaman?: number };
+export async function apkTriageKaydet(domain: string, apkUrl: string, triageId: string): Promise<void> {
+  if (!firebaseHazir || !db) return;
+  try { await setDoc(doc(db, "apk_triage", belgeId("dom", domain)), { domain, apkUrl, triageId, durum: "running", zaman: Date.now(), olusturma: serverTimestamp() }, { merge: true }); } catch {}
+}
+export async function apkTriageGetir(domain: string): Promise<ApkTriageKaydi | null> {
+  if (!firebaseHazir || !db) return null;
+  try { const s = await getDoc(doc(db, "apk_triage", belgeId("dom", domain))); return s.exists() ? (s.data() as ApkTriageKaydi) : null; } catch { return null; }
+}
+export async function apkTriageOzetYaz(domain: string, ozet: unknown): Promise<void> {
+  if (!firebaseHazir || !db) return;
+  try { await setDoc(doc(db, "apk_triage", belgeId("dom", domain)), { ozet, durum: "reported", raporZaman: Date.now() }, { merge: true }); } catch {}
+}
+
 // ── RİSK YÖRÜNGESİ ── domainin risk+aşama gelişimini zaman içinde kaydeder.
 // Yalnız ANLAMLI değişimde nokta ekler (aşama arttı / risk ±5 / >1sa geçti) → gürültüsüz.
 export type GecmisNokta = { t: number; risk: number; asama: number };
@@ -698,6 +725,17 @@ export async function riskGecmisiEkle(domain: string, risk: number, asama: numbe
       await setDoc(ref, veri, { merge: true });
     }
   } catch { /* kurallar yoksa sessiz */ }
+}
+
+// Bir domainin saklı kampanya imzaları (analizler belgesinden) — graf/kümeleme için.
+export async function domainImzalari(domain: string): Promise<{ dnaImza?: string; takipId?: string; telegramImza?: string; risk?: number; zaman?: number } | null> {
+  if (!firebaseHazir || !db) return null;
+  try {
+    const s = await getDoc(doc(db, "analizler", belgeId("dom", domain)));
+    if (!s.exists()) return null;
+    const d = s.data() as { dnaImza?: string; takipId?: string; telegramImza?: string; risk?: number; zaman?: number };
+    return { dnaImza: d.dnaImza, takipId: d.takipId, telegramImza: d.telegramImza, risk: d.risk, zaman: d.zaman };
+  } catch { return null; }
 }
 
 // Aynı altyapı DNA imzasını taşıyan diğer domainler (kampanya kümesi). Rules canlıysa çalışır.
@@ -730,6 +768,31 @@ export async function telegramEslesenler(tgImza: string, haricDomain: string): P
     return snap.docs.map((d) => (d.data() as { domain?: string }).domain || "").filter((x) => x && x !== haricDomain);
   } catch { return []; }
 }
+// ── İÇERİK ROTASYONU — doorway/churn tespiti ───────────────────────────────────
+// Bir domainin zaman içinde gösterdiği FARKLI içerikleri (başlık parmak-izi) kalıcı tutar
+// (analizler/dom_<domain> belgesinde icerikGecmisi). Dönen abuse domainleri (escort→park→şablon)
+// birden çok farklı içerik gösterir → rotasyonSayisi. UYDURMA YOK: yalnız gerçekten gözlenen başlıklar.
+export type RotasyonSonuc = { rotasyonSayisi: number; degisti: boolean; oncekiBaslik: string | null; icerikler: string[] };
+const icerikFp = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9ğüşıöç]/gi, "").slice(0, 48);
+export async function icerikRotasyonKaydet(domain: string, baslik: string): Promise<RotasyonSonuc> {
+  const bos: RotasyonSonuc = { rotasyonSayisi: 0, degisti: false, oncekiBaslik: null, icerikler: [] };
+  if (!firebaseHazir || !db || !baslik || !baslik.trim()) return bos;
+  try {
+    const ref = doc(db, "analizler", belgeId("dom", domain));
+    const snap = await getDoc(ref);
+    const gec: { t: number; b: string }[] = snap.exists() && Array.isArray((snap.data() as { icerikGecmisi?: { t: number; b: string }[] }).icerikGecmisi)
+      ? (snap.data() as { icerikGecmisi: { t: number; b: string }[] }).icerikGecmisi : [];
+    const son = gec[gec.length - 1];
+    const yeniFp = icerikFp(baslik);
+    const degisti = !!son && icerikFp(son.b) !== yeniFp;
+    // Yeni içerik (ilk kez VEYA öncekinden farklı parmak-izi) → ekle.
+    if (!son || degisti) gec.push({ t: Date.now(), b: baslik.slice(0, 120) });
+    const icerikler = [...new Map(gec.map((x) => [icerikFp(x.b), x.b])).values()]; // farklı içerikler (tekil)
+    await setDoc(ref, { domain, icerikGecmisi: gec.slice(-20), zaman: Date.now() }, { merge: true }).catch(() => {});
+    return { rotasyonSayisi: icerikler.length, degisti, oncekiBaslik: son ? son.b : null, icerikler };
+  } catch { return bos; }
+}
+
 export async function riskGecmisiGetir(domain: string): Promise<GecmisNokta[]> {
   if (!firebaseHazir || !db) return [];
   try {
@@ -961,4 +1024,54 @@ export async function baglantilariGetir(
     .filter((v) => v && v.deger)
     .sort((a, b) => (b.sayi || 0) - (a.sayi || 0))
     .slice(0, 4);
+}
+
+// ── PLAN & KULLANIM (Faz 1 — ödemesiz) ───────────────────────────────────────
+// Hesabın planı marka_hesaplari/{uid}.plan'da tutulur (varsayılan pro). Kullanım olayları
+// (derin analiz, rapor, tr-render…) kullanim koleksiyonuna yazılır → kullanım panosu okur.
+export async function hesapPlanGetir(uid: string): Promise<PlanAnahtar> {
+  if (!firebaseHazir || !db || !uid) return "pro";
+  try {
+    const snap = await getDoc(doc(db, "marka_hesaplari", uid));
+    return gecerliPlan(snap.exists() ? (snap.data() as { plan?: string }).plan : undefined);
+  } catch { return "pro"; }
+}
+export async function hesapPlanAta(uid: string, plan: PlanAnahtar): Promise<void> {
+  if (!firebaseHazir || !db || !uid) return;
+  try { await setDoc(doc(db, "marka_hesaplari", uid), { plan }, { merge: true }); } catch { /* kurallar yoksa sessiz */ }
+}
+// Kullanım, AYRI koleksiyon yerine hesap belgesindeki günlük sayaçlarda tutulur
+// (marka_hesaplari/{uid}.kullanim.gunluk["YYYY-MM-DD"][tur]) → zaten çalışan okuma/yazma kuralları,
+// yeni koleksiyon/App-Check sorunu yok.
+export async function kullanimKaydet(uid: string, tur: KullanimTuru): Promise<void> {
+  if (!firebaseHazir || !db || !uid) return;
+  const gun = new Date().toISOString().slice(0, 10);
+  try { await setDoc(doc(db, "marka_hesaplari", uid), { kullanim: { gunluk: { [gun]: { [tur]: increment(1) } } } }, { merge: true }); } catch { /* */ }
+}
+export type KullanimOzet = {
+  toplam: number;
+  turBazli: { tur: KullanimTuru; adet: number }[];
+  gunBazli: { gun: string; adet: number }[];
+};
+export async function kullanimOzet(uid: string, gun = 30): Promise<KullanimOzet> {
+  const bos: KullanimOzet = { toplam: 0, turBazli: [], gunBazli: [] };
+  if (!firebaseHazir || !db || !uid) return bos;
+  try {
+    const snap = await getDoc(doc(db, "marka_hesaplari", uid));
+    const gunluk = (snap.exists() ? (snap.data() as { kullanim?: { gunluk?: Record<string, Record<string, number>> } }).kullanim?.gunluk : {}) || {};
+    const esikGun = new Date(Date.now() - gun * 86400000).toISOString().slice(0, 10);
+    const turMap = new Map<string, number>(), gunMap = new Map<string, number>();
+    let toplam = 0;
+    for (const [g, turler] of Object.entries(gunluk)) {
+      if (g < esikGun) continue;
+      let gunTop = 0;
+      for (const [tur, n] of Object.entries(turler)) { const v = Number(n) || 0; turMap.set(tur, (turMap.get(tur) || 0) + v); gunTop += v; toplam += v; }
+      gunMap.set(g, gunTop);
+    }
+    return {
+      toplam,
+      turBazli: [...turMap.entries()].map(([tur, adet]) => ({ tur: tur as KullanimTuru, adet })).sort((a, b) => b.adet - a.adet),
+      gunBazli: [...gunMap.entries()].map(([g, adet]) => ({ gun: g, adet })).sort((a, b) => a.gun.localeCompare(b.gun)),
+    };
+  } catch { return bos; }
 }

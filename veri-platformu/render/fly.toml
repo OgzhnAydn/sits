@@ -19,9 +19,9 @@ primary_region = "fra"            # Frankfurt (TR'ye yakın, düşük gecikme)
 [http_service]
   internal_port = 4700
   force_https = true
-  auto_stop_machines = "suspend"  # kullanılmadığında uykuya al (ucuz)
+  auto_stop_machines = "off"      # worker döngüsü sürekli çalışsın (anlık render) → uykuya ALMA
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1        # her zaman 1 makine açık (worker + sıcak HTTP render)
 
 [[vm]]
   size = "shared-cpu-1x"

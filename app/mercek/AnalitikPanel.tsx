@@ -120,7 +120,7 @@ function SaatIsi({ veri }: { veri: number[] }) {
 
 type AppBulgu = { platform: string; ad: string; gelistirici: string; paket: string; url: string; ikon?: string; puan?: number; sayi?: number; ulke: string; resmiMi: boolean; durum: string };
 type AppSonuc = { markaAdi: string; sonuc: AppBulgu[]; toplam: number; resmi: number; incele: number; not?: string };
-type Reklam = { reklamveren: string; baslik?: string; metin?: string; hedefAlan?: string; snapshot?: string; baslangic?: string; platformlar?: string[]; supheli: boolean };
+type Reklam = { reklamveren: string; baslik?: string; metin?: string; hedefAlan?: string; snapshot?: string; baslangic?: string; platformlar?: string[]; supheli: boolean; tur?: "resmi" | "supheli" | "incele" | "ilgisiz" };
 type ReklamSonuc = { yapilandirildi: boolean; reklamlar: Reklam[]; supheli: number; not: string };
 type GReklam = { reklamveren: string; yasal?: string; konum?: string; dogrulama: string; url?: string; supheli: boolean; tur?: "tehdit" | "inceleme" | "ilgisiz" | "resmi"; konu?: string };
 type GReklamSonuc = { yapilandirildi: boolean; reklamlar: GReklam[]; supheli: number; guncelleme: number; not: string };
@@ -298,22 +298,26 @@ export default function AnalitikPanel({ marka, bolum = "tam", onAc }: { marka: s
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<Text style={{ color: "var(--c-5b6b7d)", fontSize: 12 }}>{reklam.not}</Text>} />
           ) : (
             <Flex vertical gap={8}>
-              {reklam.reklamlar.slice(0, 10).map((r, i) => (
+              {reklam.reklamlar.slice(0, 10).map((r, i) => {
+                const t = r.tur || (r.supheli ? "supheli" : "resmi");
+                const renk = t === "supheli" ? "var(--c-f5222d)" : t === "incele" ? "var(--c-f2a33c)" : "var(--c-3ee08a)";
+                const etiket = t === "supheli" ? "şüpheli" : t === "incele" ? "incele" : "resmî";
+                const tagColor = t === "supheli" ? "error" : t === "incele" ? "warning" : "success";
+                return (
                 <a key={i} href={r.snapshot || "#"} target="_blank" rel="noreferrer"
-                  style={{ display: "block", padding: "9px 12px", border: "1px solid var(--c-17293c)", borderRadius: 10, borderLeft: `3px solid ${r.supheli ? "var(--c-f5222d)" : "var(--c-3ee08a)"}`, textDecoration: "none" }}>
+                  style={{ display: "block", padding: "9px 12px", border: "1px solid var(--c-17293c)", borderRadius: 10, borderLeft: `3px solid ${renk}`, textDecoration: "none" }}>
                   <Flex align="center" justify="space-between" gap={8}>
                     <Text style={{ color: "var(--c-e6eef7)", fontSize: 13, fontWeight: 600 }}>{r.reklamveren || "—"}</Text>
-                    {r.supheli
-                      ? <Tag icon={<WarningOutlined />} color="error" style={{ margin: 0 }}>şüpheli</Tag>
-                      : <Tag icon={<CheckCircleOutlined />} color="success" style={{ margin: 0 }}>resmî</Tag>}
+                    <Tag icon={t === "resmi" ? <CheckCircleOutlined /> : <WarningOutlined />} color={tagColor} style={{ margin: 0 }}>{etiket}</Tag>
                   </Flex>
                   {r.baslik && <Text style={{ display: "block", color: "var(--c-c7d6e6)", fontSize: 12, marginTop: 2 }}>{r.baslik}</Text>}
                   <Flex align="center" gap={8} style={{ marginTop: 3 }}>
-                    {r.hedefAlan && <Text style={{ color: r.supheli ? "var(--c-ff9aa4)" : "var(--c-8fb0d4)", fontSize: 11, fontFamily: "monospace" }}>→ {r.hedefAlan}</Text>}
+                    {r.hedefAlan && <Text style={{ color: t === "supheli" ? "var(--c-ff9aa4)" : "var(--c-8fb0d4)", fontSize: 11, fontFamily: "monospace" }}>→ {r.hedefAlan}</Text>}
                     {r.platformlar?.length ? <Text style={{ color: "var(--c-5b6b7d)", fontSize: 10 }}>{r.platformlar.join(", ")}</Text> : null}
                   </Flex>
                 </a>
-              ))}
+                );
+              })}
             </Flex>
           )}
         </Card>

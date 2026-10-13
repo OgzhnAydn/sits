@@ -1,0 +1,32 @@
+# SİTS CZDS ZONE worker — büyük gTLD zone dosyalarını (Vercel'in atladığı .sbs/.xyz/.shop…) stream eder.
+# ZONE_MODE=1 → CT okumaz; aynı index.js'in eslesenMarka guardrail'i + adayGonder(kaynak:"zone") altyapısını kullanır.
+# Kurulum: fly apps create sits-zone
+#          fly secrets set MARKA_ADAY_SECRET=<sır> ICANN_USER=<eposta> ICANN_PASS=<parola> -a sits-zone
+#          fly deploy -c fly.zone.toml
+# NOT: CT konumu tutmaz → volume YOK. Her 24s'de onaylı büyük zone'ları yeniden tam tarar.
+app = "sits-zone"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  SITS_URL = "https://siber-bildir-web.vercel.app"
+  ZONE_MODE = "1"
+  ZONE_MIN_MB = "8"     # Vercel bu boyutun ALTINI işliyor → bu worker ÜSTÜNÜ (çakışma yok)
+  PORT = "8080"
+
+# Sağlık ucu: akış durursa (5 dk yanıt yok) Fly makineyi yeniden başlatır.
+# Arka plan işi hep açık kalmalı → otomatik durdurma KAPALI, en az 1 makine.
+[http_service]
+  internal_port = 8080
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "60s"
+    method = "GET"
+    path = "/health"

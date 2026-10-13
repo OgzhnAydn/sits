@@ -6,7 +6,7 @@ import { mailGonder, mailSablon, mailVar } from "@/lib/mail";
 import { yenidenTaraBatch } from "@/lib/yenidenTara";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const PERIYOT_MS: Record<string, number> = {
   haftalik: 7 * 24 * 3600 * 1000,
@@ -20,9 +20,10 @@ export async function GET(req: NextRequest) {
   if (sir && req.headers.get("authorization") !== `Bearer ${sir}`) {
     return NextResponse.json({ hata: "Yetkisiz." }, { status: 401 });
   }
-  // Günlük YENİDEN TARAMA: aktif adayların bir batch'ini yeniden analiz et → risk
-  // yörüngesine nokta ekle (mail servisinden bağımsız çalışır). Ayrı cron limiti yemez.
-  const yorunge = await yenidenTaraBatch(6).catch(() => ({ taranan: 0, kaydedilen: 0, aktif: 0, yukselen: 0 }));
+  // Günlük YENİDEN TARAMA + OTOMATİK GERÇEK-TARAYICI RENDER: aktif adayların bir batch'ini yeniden
+  // analiz eder, her birini Chromium'da açıp cloaking/davranış sinyallerini yazar (gün-bazlı rotasyon
+  // → tüm adaylar birkaç günde kapsanır). Render'a 220s bütçe; kalan süre e-posta izlemeye.
+  const yorunge = await yenidenTaraBatch(35, undefined, undefined, 220_000).catch(() => ({ taranan: 0, kaydedilen: 0, aktif: 0, yukselen: 0 }));
 
   if (!mailVar()) return NextResponse.json({ ok: true, gonderilen: 0, yorunge, not: "mail servisi kapalı" });
 

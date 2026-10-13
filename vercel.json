@@ -1,5 +1,7 @@
 {
   "crons": [
+    { "path": "/api/czds-tara", "schedule": "0 4 * * *" },
+    { "path": "/api/nrd-tara", "schedule": "30 5 * * *" },
     { "path": "/api/rapor-uret", "schedule": "0 6 * * *" },
     { "path": "/api/izleme-cron", "schedule": "0 7 * * *" },
     { "path": "/api/google-reklam-cron", "schedule": "0 8 * * *" }

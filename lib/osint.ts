@@ -15,6 +15,8 @@ export type OsintRapor = {
   cikisAni?: number; // sahte adresin DOĞUŞ anı (ms) — en eski sertifika notBefore'u (tespit hızı için)
   sayfa?: SayfaBilgi; // paylaşılan sayfanın içerik özeti (başlık/tür/açıklama)
   telegramImza?: string; // çalınan verinin gittiği Telegram bot/kanal — operatör parmak izi (kampanya bağı)
+  logoMarka?: { anahtar: string; ad: string; isimsiz: boolean }; // sayfada GÖRSEL logosu tespit edilen korunan marka (isimsiz=domain adında marka YOK → salt-logo taklidi)
+  apkDagitimi?: { url: string; dosya?: string; markali: boolean }; // sayfa doğrudan Android .apk indirtiyor (mağaza-dışı sideload) → bankacılık trojanı dağıtım işareti
 };
 
 import tls from "node:tls";
@@ -28,6 +30,7 @@ import { geminiVarMi, geminiGorselJson, geminiJson } from "./gemini";
 import { faviconMarkaEslesme } from "./faviconMarka";
 import { etbisSorgu } from "./etbis";
 import { etbisYerel } from "./etbisYerel";
+import { icerikRotasyonKaydet } from "./store";
 
 // Canlı TLS sertifikasını okur: CA (issuer), geçerlilik başlangıcı ve
 // sertifikanın geçerli/güvenilir olup olmadığı (kendinden-imzalı/uyumsuz = risk).
@@ -836,6 +839,8 @@ export function kategoriKarti(rapor: OsintRapor): KategoriDurum[] {
   if (rapor.alanlar.some((x) => x.ad === "İçerikte kurum taklidi" || x.ad === "Logo taklidi (görsel)")) marka = Math.max(marka, 85);
   // Klon: sayfa başka bir sitenin birebir kopyası → neredeyse kesin marka taklidi.
   if (rapor.alanlar.some((x) => x.ad === "Klon kaynağı")) marka = Math.max(marka, 85);
+  // Marka adıyla sahte APK = marka taklidi + zararlı yazılım birlikte.
+  if (rapor.apkDagitimi?.markali) marka = Math.max(marka, 80);
 
   // Zararlı Yazılım (Malware) — YALNIZ gerçek malware sinyaliyle. VirusTotal "şüpheli" hükmü
   // GENELDİR (çoğunlukla phishing/scam) ve kategori vermez → VT sayısını "malware" saymak
@@ -843,6 +848,8 @@ export function kategoriKarti(rapor: OsintRapor): KategoriDurum[] {
   // ya da açık malware kelimesi olmadıkça bu kategori "Yok" kalır.
   let malware = 0;
   if (has(/\bmalware\b|zararlı yazılım|social_engineering|unwanted_software|truva|trojan|kategori: (zararlı|malware)/)) malware = 70;
+  // Mağaza-dışı .apk sideload = zararlı yazılım dağıtımı (markalıysa bankacılık trojanı → en ağır).
+  if (rapor.apkDagitimi) malware = Math.max(malware, rapor.apkDagitimi.markali ? 85 : 55);
 
   // Dolandırıcılık (Scam)
   let scam = 0;
@@ -1181,10 +1188,19 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
         // MEŞRU birleştirme mi? (a) aynı marka etiketi: fnss.com → fnss.com.tr
         // (b) hedef, korunan bir markanın RESMÎ adresi (c) itibarlı site.
         const ayniMarka = !!kaynakLabel && kaynakLabel === hedefLabel;
-        const mesruHedef = ayniMarka || resmiMarkaDomaini(sonHost) || itibarliMi(sonHost);
+        // DECOY / CLOAKING: bir alan adı KENDİ ana sayfasını arama/yardımcı bir siteye (google,
+        // dns.google, bing…) yönlendiriyorsa bu MEŞRU birleştirme DEĞİL — gerçek içeriği gizleyen
+        // bir paravandır. Bahis/sahte siteler tespitten böyle kaçar (betkanyon1654.com → dns.google).
+        // itibarliMi(sonHost) tek başına "meşru" sayıyordu → bu FP'yi kapatıyoruz.
+        const decoyHedef = /(^|\.)(google\.[a-z.]+|dns\.google|bing\.com|duckduckgo\.com|yandex\.[a-z.]+|example\.(com|org|net)|cloudflare\.com)$/i.test(sonHost);
+        const mesruHedef = !decoyHedef && (ayniMarka || resmiMarkaDomaini(sonHost) || itibarliMi(sonHost));
         if (mesruHedef) {
           mesruYonlendirme = true;
           r.alanlar.push({ ad: "Not", deger: `Kendi/resmî marka adresine yönlendiriyor (${sonHost}) — meşru birleştirme` });
+        } else if (decoyHedef) {
+          r.risk += 22;
+          r.alanlar.push({ ad: "İçerik gizleme (cloaking)", deger: `Arama/yardımcı siteye (${sonHost}) yönlendirip gerçek içeriği gizliyor — kaçınma/paravan` });
+          r.bulgular.unshift(`Bu adres, ziyaretçiyi zararsız görünen bir siteye (${sonHost}) yönlendirerek gerçek içeriğini GİZLİYOR — bahis/sahte sitelerin tespitten kaçma (cloaking/paravan) yöntemidir. Adrese güvenme.`);
         } else if (PARK_PAZAR.test(sonHost)) {
           // Alan adı bir SATIŞ/park pazarına (forsale.godaddy, sedo, dan, afternic…) yönleniyor.
           // Bu "sahte sayfayı gizleme" DEĞİLDİR — alan adı satışa çıkarılmış/park edilmiş, ŞU AN
@@ -1650,6 +1666,42 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
     if (parkHostRe.test(sonUrl) || parkMetin || parkYonlendirme) parkli = true;
     if (sayfa) {
       iceriktenBulgu(sayfa, r, !!markaEslesme);
+
+      // ── SAHTE MOBİL UYGULAMA / APK SİDELOAD (#3) ──────────────────────────────
+      // Bankacılık trojanlarının klasik dağıtım yolu: resmî mağaza DIŞINDA, doğrudan bir
+      // web sayfasından .apk indirtmek. GERÇEK bankalar/kurumlar ASLA linkle APK dağıtmaz
+      // (kullanıcıyı Play/App Store'a yollar) → bir sayfanın APK indirtmesi + marka bağlamı
+      // neredeyse kesin trojan. Mağaza taraması appTarama.ts'te; bu ONDAN FARKLI (mağaza-dışı).
+      if (!resmiMarkaDomaini(domain) && !itibarliMi(domain)) {
+        // .apk uzantılı mutlak/göreli bağlantı veya Android paket MIME'ı (sorgu eki olabilir).
+        const apkUrlM = sayfa.match(/https?:\/\/[^\s"'<>()]+?\.apk(?:[?#][^\s"'<>()]*)?/i)
+          || sayfa.match(/(?:href|src|data-[a-z-]+|content)\s*=\s*["']([^"'<>]+?\.apk(?:[?#][^"'<>]*)?)["']/i);
+        const apkMime = /application\/vnd\.android\.package-archive/i.test(sayfa);
+        // İndirme-niyeti metni (APK kelimesi tek başına az; "indir/yükle/mobil" ile birlikte güçlü).
+        const indirNiyet = /(apk['"\s]?(?:indir|yükle|download)|uygulamay[ıi]\s*(?:indir|yükle)|mobil\s*uygulamay[ıi]\s*indir|download\s*apk|\.apk)/i.test(sayfa);
+        if (apkUrlM || apkMime) {
+          const apkUrl = (Array.isArray(apkUrlM) ? (apkUrlM[1] || apkUrlM[0]) : "") || "";
+          // Göreli bağlantıyı mutlaka çevir; dosya adını çıkar.
+          let tamApk = apkUrl;
+          try { if (apkUrl && !/^https?:\/\//i.test(apkUrl)) tamApk = new URL(apkUrl, sonUrl || `https://${domain}`).toString(); } catch { /* göreli çözülemedi */ }
+          const dosya = (tamApk.split(/[?#]/)[0].split("/").pop() || "").slice(0, 80);
+          // Dosya adı VEYA URL markayı taşıyor mu → markalı (bankacılık trojanı) = en ağır.
+          const markaKok = (markaAnahtarE || (markaEslesme || "").toLowerCase().replace(/[^a-z0-9]/g, "")).slice(0, 6);
+          const markali = !!markaEslesme || (markaKok.length >= 4 && (`${dosya} ${tamApk}`.toLowerCase().includes(markaKok)));
+          r.apkDagitimi = { url: tamApk || "(APK MIME)", dosya: dosya || undefined, markali };
+          r.risk += markali ? 45 : 32;
+          r.alanlar.push({ ad: "Sahte mobil uygulama (APK)", deger: `Mağaza-DIŞI doğrudan .apk indirtiyor${dosya ? ` (${dosya})` : ""}${markali ? " — marka adıyla, bankacılık trojanı riski" : ""}` });
+          r.bulgular.unshift(
+            markali
+              ? `Bu sayfa doğrudan bir Android uygulaması (.apk) indirtiyor${dosya ? ` (${dosya})` : ""} — resmî mağaza DIŞINDAN. Gerçek bankalar/kurumlar uygulamayı ASLA linkle APK olarak dağıtmaz; bu neredeyse kesin bir bankacılık trojanıdır. Kurma, telefonuna yükleme.`
+              : `Bu sayfa doğrudan bir .apk dosyası indirtiyor — resmî mağaza (Play/App Store) dışından uygulama yüklemek ciddi risktir (sideload). Kaynağı doğrulamadan kurma.`
+          );
+        } else if (indirNiyet && markaEslesme) {
+          // APK linki bulunamadı ama marka bağlamında "uygulamayı indir" dili var → zayıf işaret.
+          r.alanlar.push({ ad: "Mobil uygulama iddiası", deger: "Sayfa marka adıyla 'uygulama indir' diyor — resmî mağaza bağlantısı doğrulanmalı" });
+          r.risk += 6;
+        }
+      }
       // TELEGRAM EXFİL — kimlik-hırsızı kitleri bot token'ını çoğu zaman sayfa JS'ine GÖMER
       // (form gönderilince çağrılır; urlscan sayfayı yalnız açtığı için o isteği kaçırır).
       // Kaynağı burada tara → çok daha güvenilir tetikler + operatör parmak izi (telegramImza).
@@ -1727,7 +1779,11 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
   // GÖRSEL ANALİZ (AI Vision): marka-taklit şüphesi + ekran görüntüsü varsa, sayfanın
   // GÖRSELİNİ AI'a analiz ettir — sahte giriş/ödeme formu mu, meşru içerik mi? Metin
   // başlığı yanıltabilir (edevletile.com "blog" başlıklı ama...) — göz kesin karar verir.
-  if (markaEslesme && r.ekranGoruntusu && geminiVarMi) {
+  // SALT-LOGO TAKLİDİ (adım #1): domain adında marka GEÇMESE bile (etbisSorgusu=derin analiz),
+  // sayfa bir markanın LOGOSUNU gösteriyorsa yakala — "başka bir isimle marka içeriği"
+  // (örn. guvenli-odeme-tr.com sayfasında Akbank/e-Devlet logosu). Firehose'u yormaz:
+  // domainOsint cert başına değil, aday + vatandaş sorgusunda çağrılır; derin modda sınırlı.
+  if (r.ekranGoruntusu && geminiVarMi && (markaEslesme || etbisSorgusu)) {
     try {
       const img = await fetch(r.ekranGoruntusu, { signal: AbortSignal.timeout(8000) });
       const buf = img.ok ? Buffer.from(await img.arrayBuffer()) : null;
@@ -1771,13 +1827,39 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
             r.risk += 30;
             r.bulgular.unshift(`Ekran görüntüsünde: "${markaEslesme}" adını taşıyan bu sayfa kullanıcıdan şifre/kart/kimlik bilgisi İSTİYOR — kimlik avı (phishing) sayfası. Bilgi girme.`);
           }
-          // GÖRSEL LOGO TAKLİDİ: AI, sayfada bir marka/kurum LOGOSU tespit ettiyse (adım 10).
+          // GÖRSEL LOGO TAKLİDİ (adım #1): AI, sayfada bir marka/kurum LOGOSU tespit ettiyse.
           // Hata/challenge/park(bayat) ekranındaysa UYGULAMA (halüsinasyon koruması).
           const tk = (gj.taklitKurum || "").trim();
           if (tk && tk.length > 2 && !/yok|none|belli değil|belirsiz/i.test(tk) && !bayatGorsel) {
-            r.risk += 25;
-            r.bulgular.unshift(`Görselde "${tk}" logosu/amblemi kullanılıyor — bu adres o kurumun/markanın resmî sitesi değil, logo taklidiyle güven kazanmaya çalışıyor.`);
-            r.alanlar.push({ ad: "Logo taklidi (görsel)", deger: tk });
+            // Tespit edilen logoyu KORUNAN markalardan birine eşle (isim-bağımsız).
+            const nrm = (s: string) => s.toLowerCase().replace(/[İı]/g, "i").replace(/̇/g, "").replace(/[^a-z0-9ğüşöç]/g, "");
+            const nTk = nrm(tk);
+            const logoM = nTk.length >= 3
+              ? MARKALAR.find((m) => {
+                  const na = nrm(m.anahtar), nd = nrm(m.ad);
+                  return (na.length >= 3 && nTk.includes(na)) || (nd.length >= 3 && (nTk.includes(nd) || nd.includes(nTk)));
+                })
+              : undefined;
+            // SALT-LOGO (isimsiz): domain adında marka YOK ama sayfada logosu var → en güçlü
+            // niyet işareti. Ama meşru site logo kullanabilir (haber/makale) → itibarlı veya
+            // resmî domaini ELE: yalnız itibarsız/resmî-olmayan domaini taklit say (FP kalkanı).
+            const isimsiz = !markaEslesme;
+            const mesruLogoKullanimi = isimsiz && logoM && (resmiMarkaDomaini(domain) || itibarliMi(domain));
+            if (logoM && !mesruLogoKullanimi) {
+              r.logoMarka = { anahtar: logoM.anahtar, ad: logoM.ad, isimsiz };
+            }
+            if (mesruLogoKullanimi) {
+              // İtibarlı/resmî domainde marka logosu → muhtemelen meşru (haber/iş ortağı). Not düş, risk EKLEME.
+              r.alanlar.push({ ad: "Logo (görsel)", deger: `${logoM!.ad} — itibarlı/meşru domainde, taklit sayılmadı` });
+            } else {
+              r.risk += isimsiz && logoM ? 40 : 25; // isimsiz salt-logo taklidi daha güçlü işaret
+              r.bulgular.unshift(
+                isimsiz && logoM
+                  ? `Domain adında "${logoM.ad}" GEÇMİYOR ama sayfa "${logoM.ad}" logosunu/amblemini gösteriyor — başka bir isim altında marka içeriği kullanılıyor (salt-logo taklidi). Bu adres ${logoM.ad}'ın resmî sitesi değil.`
+                  : `Görselde "${tk}" logosu/amblemi kullanılıyor — bu adres o kurumun/markanın resmî sitesi değil, logo taklidiyle güven kazanmaya çalışıyor.`
+              );
+              r.alanlar.push({ ad: "Logo taklidi (görsel)", deger: logoM ? `${logoM.ad}${isimsiz ? " (isimsiz — domain adında marka yok)" : ""}` : tk });
+            }
           }
         }
       }
@@ -1928,6 +2010,43 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
     }
   }
 
+  // ── DOORWAY / ÖRTÜ İÇERİK: alan adı resmî marka/kurum taşıyor ama içerik alakasız sektör ──
+  // (ör. "toki" adı + escort/bahis içeriği). HER derin analizde çalışır → panel, sorgu, rapor hepsi alır.
+  // Yabancı-içerik FP guard'ından SONRA (taklit kanıtı temizlenmişse markaRef zaten false → tetiklemez).
+  {
+    const markaRef = r.alanlar.some((a) => /^(Taklit uyarısı|İçerikte kurum taklidi|Logo taklidi|Marka taklidi güveni)/.test(a.ad));
+    if (markaRef) {
+      const al = (ad: string) => r.alanlar.find((a) => a.ad === ad)?.deger || "";
+      const icerik = `${al("Sayfa başlığı")} ${r.sayfa?.ozetMetin || ""} ${r.sayfa?.siteAdi || ""} ${al("İçerik analizi (AI)")} ${al("Görsel analiz (AI)")} ${al("Site")}`.toLowerCase();
+      if (/escort|yeti[şs]kin content|\bxxx\b|\bporn|seks(i| )|canlı sohbet hattı|hızlı randevu|\b18\+/.test(icerik)) {
+        r.risk += 25;
+        r.bulgular.unshift("Alan adı resmî bir kurum/marka adını taşıyor ancak içerik yetişkin/escort sektörüne ait — markayla hiçbir ilgisi olmayan örtü (doorway) içerik.");
+        r.alanlar.push({ ad: "Alan adı ↔ içerik", deger: "Uyumsuz — örtü/doorway içerik" });
+      } else if (/\bcasino\b|yasa dışı bahis|\bslot\b|\bbet\b|iddaa|rulet|\bpoker\b|bahis sitesi/.test(icerik)) {
+        r.risk += 22;
+        r.bulgular.unshift("Alan adı resmî bir kurum/marka adını taşıyor ancak içerik yasadışı bahis/kumar sektörüne ait — örtü (doorway) içerik.");
+        r.alanlar.push({ ad: "Alan adı ↔ içerik", deger: "Uyumsuz — örtü/doorway içerik" });
+      }
+    }
+  }
+
+  // ── İÇERİK ROTASYONU: domain zaman içinde kaç FARKLI içerik gösterdi (kalıcı; churn/doorway) ──
+  {
+    const bslk = r.alanlar.find((a) => a.ad === "Sayfa başlığı")?.deger || r.sayfa?.baslik || "";
+    if (bslk) {
+      try {
+        const rot = await icerikRotasyonKaydet(r.deger, bslk);
+        if (rot.rotasyonSayisi >= 2) {
+          r.alanlar.push({ ad: "İçerik rotasyonu", deger: `${rot.rotasyonSayisi} farklı içerik gözlendi (dönen sayfa)` });
+          if (rot.rotasyonSayisi >= 3) {
+            r.risk += 10;
+            r.bulgular.push(`Bu adres zaman içinde ${rot.rotasyonSayisi} farklı içerik gösterdi (dönen/churn sayfa) — ele geçirilmiş barındırma ya da örtü (doorway) abuse işareti; yarın sahte marka paneline dönebilir.`);
+          }
+        }
+      } catch { /* Firestore yoksa sessiz */ }
+    }
+  }
+
   // RİSK SINIRI: 0–100. Sinyaller toplamı 100'ü aşabilir (USOM+yaş+TLD+içerik…); DEPOLANAN skorun
   // 100'ü geçmemesi için burada sınırla (yeniden-tarama domainOsint'i doğrudan çağırıyor).
   r.risk = Math.max(0, Math.min(100, Math.round(r.risk)));
@@ -2004,7 +2123,8 @@ export function typosquatDurustlukCap(rapor: OsintRapor): void {
   const teyitliKotucul =
     /usom|urlscan.*zararl|tehdit listesi|dolandırıcı olarak bildirdi|güvenli bağlantı.*yok/.test(metinHavuzu) ||
     /virustotal[^;]*?([3-9]|\d\d)\s*\/\s*\d+\s*firma/.test(metinHavuzu) ||
-    /park \/ satılık/.test(metinHavuzu);
+    /park \/ satılık/.test(metinHavuzu) ||
+    rapor.alanlar.some((a) => a.ad === "Alan adı ↔ içerik"); // doorway/örtü içerik = teyitli kötücül (cap'leme)
   if (typosquat && !icerikTeyitli && !teyitliKotucul && rapor.risk > 55) {
     const marka = rapor.alanlar.find((a) => a.ad === "Taklit uyarısı")?.deger || "";
     const markaAd = marka.split(/[ (]/)[0] || "bu marka";

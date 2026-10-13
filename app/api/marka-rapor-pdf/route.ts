@@ -10,13 +10,16 @@ import { etbisYerel } from "@/lib/etbisYerel";
 import { canlilikProbe } from "@/lib/canlilik";
 import { appTara } from "@/lib/appTarama";
 import { reklamTara } from "@/lib/reklamTarama";
+import { pasifDns } from "@/lib/passiveDns";
+import { trVantageRender } from "@/lib/trVantage";
+import { davranisStatik } from "@/lib/davranisStatik";
 
 // Hafif teknik envanter (tam liste için) — canlilikProbe (DNS IP + SSL CA + canlılık) + ip-api (ASN/ülke).
 // domainOsint (40-60s) yerine ~5s → tüm adreslerde batch çalışabilir.
 async function ipApi(ip: string): Promise<{ as?: string; country?: string; org?: string; isp?: string; hosting?: boolean }> {
   try { const r = await fetch(`http://ip-api.com/json/${ip}?fields=country,as,org,isp,hosting`, { signal: AbortSignal.timeout(5000) }); return await r.json(); } catch { return {}; }
 }
-async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; canliNeden?: string; sslBitis?: string | null; sertBaslangic?: string | null; usomda?: boolean | null; engelli?: boolean | null; sslGuvenli?: boolean | null; redirectHedef?: string | null; redirectZinciri?: string[]; cloaking?: boolean }> {
+async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; canliNeden?: string; sslBitis?: string | null; sertBaslangic?: string | null; usomda?: boolean | null; engelli?: boolean | null; sslGuvenli?: boolean | null; redirectHedef?: string | null; redirectZinciri?: string[]; cloaking?: boolean; cloakingNot?: string; cloakingTur?: "yonlendirme" | "icerik"; vantajKor?: boolean; disHostlar?: string[]; exfilHedef?: string | null; supheliScript?: string[]; clipboardHijack?: boolean; davranisKaynak?: "statik" | "render" | null }> {
   try {
     // canlılık + USOM PARALEL — her adrese "canlı mı + USOM'da mı" birlikte bakılır (bildir kararı için).
     const [c, usomda] = await Promise.all([canlilikProbe(domain), usomBiliniyor(domain).catch(() => null)]);
@@ -25,13 +28,16 @@ async function hizliTeknik(domain: string): Promise<{ ip?: string; asn?: string;
     const asnNo = String(g.as || "").split(" ")[0];
     // BTK engel-sayfası da HTTP 200 döner (canlı görünür) → yalnız CANLI adreste BTK'ya bak; ölüde boşa 8sn harcama.
     const engelli = c.durum === "live" ? await btkEngelli(domain).catch(() => null) : null;
+    // DAVRANIŞ (initiator/ağ) — yalnız CANLI/erişim-kısıtlı adreste (ölü/park/NXDOMAIN'de içerik yok).
+    const dav = (c.durum === "live" || c.durum === "erisim_kisitli") ? await davranisStatik(domain).catch(() => null) : null;
     return {
       ip: c.dns.ip || "", ca: c.ssl.veren || "",
       asn: [org, asnNo].filter(Boolean).join(" · "),
       ulke: g.country || "",
       altyapi: g.hosting ? "CDN/proxy" : (org ? "Veri merkezi" : ""),
       canliDurum: c.durum, canliNeden: c.kokNeden, sslBitis: c.ssl.bitis, sertBaslangic: c.ssl.baslangic ?? null, usomda, engelli, sslGuvenli: c.ssl.guvenilir,
-      redirectHedef: c.redirectHedef, redirectZinciri: c.redirectZinciri, cloaking: c.cloaking,
+      redirectHedef: c.redirectHedef, redirectZinciri: c.redirectZinciri, cloaking: c.cloaking, cloakingNot: c.cloakingNot, cloakingTur: c.cloakingTur, vantajKor: c.vantajKor,
+      ...(dav?.ulasildi ? { disHostlar: dav.disHostlar, exfilHedef: dav.exfilHedef, supheliScript: dav.supheliScript, clipboardHijack: dav.clipboardHijack, davranisKaynak: "statik" as const } : {}),
     };
   } catch { return {}; }
 }
@@ -58,8 +64,69 @@ async function resimDataUri(url: string, ms = 8000): Promise<string | null> {
   } catch { return null; }
 }
 async function logoDataUri(anahtar: string): Promise<string | null> {
-  const url = markaLogoAnahtar(anahtar, 128);
-  return url ? resimDataUri(url) : null;
+  const url = markaLogoAnahtar(anahtar, 256);
+  if (!url) return null;
+  // Site-içi logo (ör. "/turkcell-logo.png") → public klasöründen DOĞRUDAN oku (sunucuda fetch
+  // için mutlak URL gerekmez; PDF üretimi ağdan bağımsız + logo net/canlı gömülür).
+  if (url.startsWith("/")) {
+    try {
+      const fs = await import("node:fs/promises"); const path = await import("node:path");
+      const dosya = path.join(process.cwd(), "public", url.replace(/^\//, ""));
+      const buf = await fs.readFile(dosya);
+      const tip = url.endsWith(".svg") ? "image/svg+xml" : url.endsWith(".jpg") || url.endsWith(".jpeg") ? "image/jpeg" : "image/png";
+      return `data:${tip};base64,${buf.toString("base64")}`;
+    } catch { return null; }
+  }
+  return resimDataUri(url);
+}
+
+// ÖNE ÇIKAN İÇİN GERÇEK EKRAN GÖRÜNTÜSÜ — ÖNCE kendi TR-vantage render'ımız (gerçek kurban görünümü,
+// cloaking'i kırar), yoksa urlscan'in mevcut taramasına düş. Döner: {dataUri, kaynak}.
+async function ekranGoruntusu(domain: string): Promise<{ dataUri: string | null; kaynak: "tr-vantage" | "urlscan" | null; render: Awaited<ReturnType<typeof trVantageRender>> }> {
+  let render: Awaited<ReturnType<typeof trVantageRender>> = null;
+  try {
+    render = await trVantageRender(domain);
+    if (render?.shotB64) return { dataUri: `data:image/jpeg;base64,${render.shotB64}`, kaynak: "tr-vantage", render };
+  } catch { /* render yok → urlscan */ }
+  try {
+    const key = process.env.URLSCAN_KEY;
+    const s = (await (await fetch(`https://urlscan.io/api/v1/search/?q=page.domain:%22${encodeURIComponent(domain)}%22&size=1`, { headers: key ? { "API-Key": key } : undefined, signal: AbortSignal.timeout(8000) })).json()) as { results?: { screenshot?: string; _id?: string }[] };
+    const r = s.results?.[0];
+    const url = r?.screenshot || (r?._id ? `https://urlscan.io/screenshots/${r._id}.png` : null);
+    if (url) { const du = await resimDataUri(url); if (du) return { dataUri: du, kaynak: "urlscan", render }; }
+  } catch { /* */ }
+  return { dataUri: null, kaynak: null, render };
+}
+
+// Render'ın (Playwright) GERÇEK ağ transactionlarından initiator/davranış çıkar → statik sondadan
+// daha güçlü (JS ile çalışan exfil/yönlendirme/clipboard'ı da yakalar). render yoksa null döner.
+function davranisRenderden(domain: string, render: Awaited<ReturnType<typeof trVantageRender>>): Pick<RaporTespit, "disHostlar" | "supheliScript" | "clipboardHijack" | "davranisKaynak"> | null {
+  if (!render || !render.network) return null;
+  const kok = domain.replace(/^www\./, "");
+  const disHostlar = [...new Set((render.network || [])
+    .map((n) => { try { return new URL(n.u).hostname.replace(/^www\./, ""); } catch { return ""; } })
+    .filter((h) => h && h !== kok && !h.endsWith("." + kok) && !kok.endsWith("." + h)))].slice(0, 12);
+  return {
+    disHostlar,
+    supheliScript: render.scripts?.supheli || [],
+    clipboardHijack: (render.clipboard || []).length > 0,
+    davranisKaynak: "render",
+  };
+}
+
+// ÖNE ÇIKAN İÇİN ALTYAPI İLİŞKİ ANALİZİ — passive DNS (geçmiş IP) + reverse-IP kardeş domainler.
+// "Domainin ötesini gör": tek sahte site değil, arkasındaki ALTYAPI AĞI. Paylaşımlı/CDN IP'de
+// yanlış-pozitif yok (passiveDns FANOUT_ESIK kapısı). Tarih damgaları ms → gün.
+async function altyapiIliski(domain: string, ip?: string): Promise<Pick<RaporTespit, "gecmisIpler" | "kardesDomainler" | "paylasimliAltyapi" | "pivotSayisi" | "altyapiNot">> {
+  try {
+    const p = await pasifDns(domain, ip);
+    const gun = (ts?: number) => (ts ? new Date(ts).toISOString().slice(0, 10) : undefined);
+    return {
+      gecmisIpler: p.gecmisIpler.slice(0, 8).map((k) => ({ ip: k.ip, ilk: gun(k.ilkGorulen), son: gun(k.sonGorulen) })),
+      kardesDomainler: p.kardesDomainler.map((k) => k.domain),
+      paylasimliAltyapi: p.paylasimliAltyapi, pivotSayisi: p.pivotSayisi, altyapiNot: p.not,
+    };
+  } catch { return {}; }
 }
 
 export async function GET(req: NextRequest) {
@@ -78,7 +145,10 @@ export async function GET(req: NextRequest) {
 
   // Veri: markanın GERÇEK-taklit adayları, zaman aralığına süz.
   const ham = await markaAdaylariMarka(marka, 400);
-  let gecerli = ham.filter((a) => gercekTaklit(a.domain, a.marka));
+  // DNS taraması adayları (kaynak:"dns-tarama") yazılırken zaten doğrulandı (DNS-canlı + marka
+  // kalıbı + resmî DEĞİL + itibarlı DEĞİL) → panel gibi raporda da göster; strict gercekTaklit'e
+  // takılıp "aradaki kayıplar" raporda tek tespite düşmesin.
+  let gecerli = ham.filter((a) => a.manuel || a.kaynak === "dns-tarama" || a.kaynak === "logo-gorsel" || a.kaynak === "dork-url" || gercekTaklit(a.domain, a.marka));
   if (tekDomain) gecerli = gecerli.filter((a) => a.domain === tekDomain);
   else if (aralik.ms) { const esik = Date.now() - aralik.ms; gecerli = gecerli.filter((a) => (a.zaman || 0) >= esik); }
   // cPanel/oto alt-alan daraltması: webmail/webdisk/cpcontacts/autodiscover/autoconfig/mail… gibi
@@ -155,8 +225,18 @@ export async function GET(req: NextRequest) {
     reklamTara(marka).catch(() => null),
   ]);
   const zengin = (t: RaporTespit): RaporTespit => ({ ...t, ...(envMap.get(t.domain) || {}) });
-  const oneCikan: RaporTespit[] = oneCikanHam.map(zengin);
   const digerleriZ = digerleri.map(zengin);
+  // ÖNE ÇIKAN: teknik envantere EK olarak GERÇEK ekran görüntüsü + ALTYAPI İLİŞKİ (passive DNS +
+  // reverse-IP kardeş domain) — en değerli kanıtlar yalnız öne çıkanlarda (maliyet/süre bütçesi).
+  const oneCikan: RaporTespit[] = await Promise.all(oneCikanHam.map(zengin).map(async (t): Promise<RaporTespit> => {
+    const [ss, infra] = await Promise.all([
+      ekranGoruntusu(t.domain).catch(() => ({ dataUri: null, kaynak: null as "tr-vantage" | "urlscan" | null, render: null })),
+      altyapiIliski(t.domain, t.ip).catch(() => ({})),
+    ]);
+    // Render'ın gerçek ağ izlemesi varsa statik davranışı EZ (daha güçlü); yoksa statik kalır.
+    const davRender = davranisRenderden(t.domain, ss.render);
+    return { ...t, screenshot: ss.dataUri, ekranKaynak: ss.kaynak, ...infra, ...(davRender || {}) };
+  }));
 
   const logo = await logoDataUri(marka);
   const refNo = `MRL-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 899999)}`;

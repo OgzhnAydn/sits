@@ -21,6 +21,9 @@ const crypto = require("crypto");
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib");
+const readline = require("readline");
+const { Readable } = require("stream");
 
 const SITS = (process.env.SITS_URL || "https://siber-bildir-web.vercel.app").replace(/\/$/, "");
 const SECRET = process.env.MARKA_ADAY_SECRET;
@@ -30,6 +33,13 @@ const SECRET = process.env.MARKA_ADAY_SECRET;
 // açık tut; operatör-worker'larında BAHIS_AKTIF=0 / AKTIF_TARAMA=0 ile kapat.
 const BAHIS_AKTIF = process.env.BAHIS_AKTIF !== "0";   // vars açık; operatör-worker'da "0"
 const AKTIF_TARAMA = process.env.AKTIF_TARAMA !== "0"; // vars açık; operatör-worker'da "0"
+// FAVICON-AVCI modu: kelime ipucu OLMAYAN (isimsiz) ama markanın logosunu/favicon'unu kopyalayan
+// sahteleri yakalar. Riskli-TLD'li HER domainin favicon'una bakar (yerel hash), eşleşeni bildirir.
+const FAVICON_MODE = process.env.FAVICON_MODE === "1";
+// ZONE modu: CT okumaz; ICANN CZDS zone dosyalarını (büyükler — Vercel'in atladıkları) STREAM edip
+// NS-sahip domainleri eslesenMarka guardrail'inden geçirir, taklitleri adayGonder(kaynak:"zone") ile yollar.
+const ZONE_MODE = process.env.ZONE_MODE === "1";
+const FAVICON_ESZAMAN = Math.max(5, Number(process.env.FAVICON_ESZAMAN) || 40); // eşzamanlı favicon fetch
 const CT_MAX_LOG = Math.max(1, Number(process.env.CT_MAX_LOG) || 24); // vars: TÜM usable loglar (21) tek worker'da; zero-miss için
 const PORT = Number(process.env.PORT) || 8080;
 const LOG_LIST_URL = "https://www.gstatic.com/ct/log_list/v3/log_list.json";
@@ -83,6 +93,9 @@ function bahisEslesen(domain) {
 // Ön-filtre needle'ları (küçük harf Buffer): marka anahtarları (≥4) + şüpheli + BAHİS token'ları.
 let NEEDLES = [];
 function needlesKur() {
+  // FAVICON modunda ön-filtre = riskli TLD'ler (".top/.xyz/.sbs"…) → bu TLD'li cert'ler parse edilir,
+  // her domaini (kelime olmasa da) favicon-kontrolüne girer. Marka/bahis kelimeleri normal worker'da.
+  if (FAVICON_MODE) { NEEDLES = [...RISKLI_TLD_SET].map((t) => Buffer.from("." + t, "ascii")); return; }
   const kel = new Set([...SUPHELI_TOKENS, ...BAHIS_TOKENS]);
   for (const m of MARKALAR) if (m.anahtar && m.anahtar.length >= 4) kel.add(m.anahtar.toLowerCase());
   NEEDLES = [...kel].map((s) => Buffer.from(s, "ascii"));
@@ -184,11 +197,57 @@ async function markalariYukle() {
     console.log("[markalar] liste çekilemedi, yedek liste kullanılıyor");
   }
   needlesKur();
+  markaFaviconlariKur(); // FAVICON_MODE'da marka favicon parmak izlerini (yeniden) hesapla
 }
 
 // Yaygın 2-parçalı public-suffix'ler (tescilli alan = son 3 etiket).
 const IKI_PARCA_SONEK = new Set(["com.tr", "net.tr", "org.tr", "gov.tr", "edu.tr", "co.uk", "org.uk", "com.ph", "org.ph", "net.ph", "gov.ph", "com.au", "co.jp", "com.br", "co.za", "com.mx", "com.tw"]);
 const RISKLI_TLD_SET = new Set(["xyz", "top", "tk", "buzz", "icu", "cyou", "rest", "monster", "click", "shop", "live", "online", "site", "vip", "club", "fun", "website", "space", "info", "biz", "sbs", "cfd", "help", "wiki", "quest"]);
+
+// ── İSİMSİZ GÖRSEL KOPYA (favicon-avcı) ──────────────────────────────────────
+// Marka adını hiç taşımayan rastgele domain, markanın favicon'unu/logosunu kopyaladıysa → sahte.
+// Favicon fetch+hash YEREL yapılır (ucuz, Vercel'e gitmez); yalnız EŞLEŞEN domain favicon-tara'ya
+// gönderilip kaydedilir (Vercel yükü ~sıfır). Marka parmak izleri başlangıçta bir kez hesaplanır.
+let MARKA_FAVICON = new Map(); // "djb2hex_len" -> { anahtar }
+function riskliTldMi(dom) { return RISKLI_TLD_SET.has(kok(dom).split(".").pop() || ""); }
+async function faviconHashYerel(domain, ms = 5000) {
+  try {
+    const c = new AbortController(); const t = setTimeout(() => c.abort(), ms);
+    const r = await fetch(`https://${domain}/favicon.ico`, { signal: c.signal, redirect: "follow", headers: { "User-Agent": "Mozilla/5.0" } });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    const buf = new Uint8Array(await r.arrayBuffer());
+    if (buf.length < 16 || buf.length > 300000) return null;
+    let h = 5381; for (let i = 0; i < buf.length; i++) h = ((h << 5) + h + buf[i]) >>> 0;
+    return `${h.toString(16)}_${buf.length}`;
+  } catch { return null; }
+}
+async function markaFaviconlariKur() {
+  if (!FAVICON_MODE) return;
+  const yeni = new Map();
+  for (const m of MARKALAR) {
+    const resmi = (m.resmi && m.resmi[0]) || null;
+    if (!resmi) continue;
+    const h = await faviconHashYerel(resmi).catch(() => null);
+    if (h) yeni.set(h, { anahtar: m.anahtar });
+  }
+  if (yeni.size >= 3) { MARKA_FAVICON = yeni; console.log(`[favicon] ${MARKA_FAVICON.size} marka favicon parmak izi hazır`); }
+}
+let faviconAktif = 0;
+async function faviconKontrol(domain) {
+  const key = kok(domain);
+  if (gorulen.has(key) && Date.now() - gorulen.get(key) < DEDUP_TTL) return;
+  gorulen.set(key, Date.now());
+  while (faviconAktif >= FAVICON_ESZAMAN) await new Promise((r) => setTimeout(r, 40));
+  faviconAktif++;
+  try {
+    const h = await faviconHashYerel(key);
+    if (h && MARKA_FAVICON.has(h)) {
+      const j = await sitsGonder("/api/favicon-tara", { domain: key, secret: SECRET });
+      if (j && j.eslesme) { sayac.aday++; console.log(`FAVICON-KOPYA(isimsiz): ${key} → ${j.marka}`); }
+    }
+  } catch { gorulen.delete(key); } finally { faviconAktif--; }
+}
 
 // domaini tescilli-alan etiketine ayır: api.prod.vodafone.com → {label:"vodafone", altAlan:true, tld:"com"}
 function tescilliBilgi(host) {
@@ -330,13 +389,13 @@ async function sitsGonder(yol, govde) {
   } finally { _gonderBirak(); }
 }
 
-async function adayGonder(domain, marka, certAni) {
+async function adayGonder(domain, marka, certAni, kaynak) {
   const key = kok(domain);
   const now = Date.now();
   if (gorulen.has(key) && now - gorulen.get(key) < DEDUP_TTL) return;
   gorulen.set(key, now);
   try {
-    const j = await sitsGonder("/api/marka-aday", { domain: key, marka, secret: SECRET, ...(certAni ? { certAni } : {}) });
+    const j = await sitsGonder("/api/marka-aday", { domain: key, marka, secret: SECRET, ...(certAni ? { certAni } : {}), ...(kaynak ? { kaynak } : {}) });
     if (j.kaydedildi) { sayac.aday++; console.log(`ADAY: ${key}  (${marka})  skor ${j.skor}`); }
     else if (j.yazDurum === "zamanasimi") { sayac.kotaDolu = (sayac.kotaDolu || 0) + 1; console.log(`[KOTA DOLU] ${key} (${marka}) skor ${j.skor} — Firestore yazılamadı (kota); dedup TTL sonra yeniden denenir`); }
   } catch (e) {
@@ -374,6 +433,7 @@ function domainIsle(dom, certAni) {
   sayac.domain++;
   const marka = eslesenMarka(dom);
   if (marka) { sseYayin("catch", { domain: kok(dom), marka, t: Date.now() }); adayGonder(dom, marka, certAni); return; } // YAKALANDI → canlı akışa anında
+  if (FAVICON_MODE) { if (riskliTldMi(dom)) faviconKontrol(dom); return; } // isimsiz görsel kopya avı
   if (bahisEslesen(dom)) { if (BAHIS_AKTIF) bahisGonder(dom); return; } // yasa dışı bahis → kalıcı feed'e (yalnız bahis-worker'ı)
   if (SUPHELI.test(kok(dom))) faviconGonder(dom);
 }
@@ -443,6 +503,10 @@ async function aktifTaramaDongu() {
 // Böylece Asya worker'ı SADECE TrustAsia'yı, Frankfurt worker'ı TrustAsia HARİÇ dinler.
 const ONLY_OP = (process.env.CT_ONLY_OP || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
 const SKIP_OP = (process.env.CT_SKIP_OP || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
+// LOG-ADI filtresi — yüksek-hacimli bir operatörü LOG bazında worker'lara bölmek için
+// (ör. favicon: bir worker CT_ONLY_LOG=Argon, diğeri CT_ONLY_LOG=Xenon → Google yükü ikiye bölünür).
+const ONLY_LOG = (process.env.CT_ONLY_LOG || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
+const SKIP_LOG = (process.env.CT_SKIP_LOG || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
 
 async function kullanilabilirLoglar() {
   const j = await (await fetch(LOG_LIST_URL, { signal: AbortSignal.timeout(15000) })).json();
@@ -456,8 +520,17 @@ async function kullanilabilirLoglar() {
     for (const log of op.logs || []) {
       const st = log.state && Object.keys(log.state)[0];
       const ti = log.temporal_interval;
-      const kapsar = !ti || (Date.parse(ti.start_inclusive) <= now && now < Date.parse(ti.end_exclusive));
-      if ((st === "usable" || st === "qualified") && kapsar) grup.push({ ad: log.description || log.url, url: log.url.replace(/\/$/, ""), op: op.name });
+      // temporal_interval sertifika SON-KULLANMA yılına göredir. BUGÜN çıkan (ör. 90 günlük) sertifika
+      // ~1 yıl sonra biter → gelecek yılın shard'ına (Nimbus2027) yazılır. Bu yüzden "şu an AKTİF
+      // yazılan" shard = aralığı henüz BİTMEMİŞ ve başlangıcı en fazla ~400 gün ilerideki shard.
+      // (Eski kontrol NOW'u aralıkta arıyordu → gelecek-yıl shard'ını eliyor, ölmekte olanı seçiyordu.)
+      const MAXGECERLILIK = 400 * 86400000;
+      const kapsar = !ti || (Date.parse(ti.end_exclusive) > now && Date.parse(ti.start_inclusive) < now + MAXGECERLILIK);
+      if (!((st === "usable" || st === "qualified") && kapsar)) continue;
+      const logAd = (log.description || log.url).toLowerCase();
+      if (ONLY_LOG.length && !ONLY_LOG.some((o) => logAd.includes(o))) continue; // log yalnız-liste
+      if (SKIP_LOG.some((o) => logAd.includes(o))) continue;                      // log atla-liste
+      grup.push({ ad: log.description || log.url, url: log.url.replace(/\/$/, ""), op: op.name });
     }
     if (grup.length) perOp.push(grup);
   }
@@ -657,14 +730,105 @@ process.on("SIGINT", temizKapan);
 process.on("unhandledRejection", (e) => console.error("[unhandledRejection]", e && e.message));
 process.on("uncaughtException", (e) => console.error("[uncaughtException]", e && e.message));
 
+// ── ICANN CZDS ZONE TARAYICI (ZONE_MODE) ───────────────────────────────────────
+// Büyük gTLD zone dosyalarını (Vercel bellek sınırını aşanlar: .sbs/.xyz/.shop…) STREAM eder:
+// indir → gunzip → satır-satır → NS-sahip domain → eslesenMarka guardrail → adayGonder(kaynak:"zone").
+// Tam namespace (park/sertifikasız dahil) = CT/NRD'nin kaçırdığı taklitleri yakalar.
+const CZDS_AUTH = "https://account-api.icann.org/api/authenticate";
+const CZDS_LINKS = "https://czds-api.icann.org/czds/downloads/links";
+const ZONE_MIN_MB = Number(process.env.ZONE_MIN_MB) || 8; // Vercel bu boyutun ALTINI işliyor → Fly ÜSTÜNÜ (çakışma yok)
+const NS_RE = /^(\S+?)\.\s+(?:\d+\s+)?(?:in\s+)?ns\s+/i;
+// Öncelik: phishing'in yoğunlaştığı riskli/yaygın TLD'ler önce taransın (24s turunda değer önce gelsin).
+const ZONE_ONCELIK = ["sbs","cfd","xyz","shop","online","top","site","vip","live","click","buzz","icu","cyou","info","store","app","fun","space","website","rest","monster"];
+
+function zoneBekle(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+async function czdsToken() {
+  const username = process.env.ICANN_USER, password = process.env.ICANN_PASS;
+  if (!username || !password) return null;
+  try {
+    const r = await fetch(CZDS_AUTH, { method: "POST", headers: { "Content-Type": "application/json", accept: "application/json" }, body: JSON.stringify({ username, password }), signal: AbortSignal.timeout(20000) });
+    if (!r.ok) { console.error(`[zone] ICANN auth HTTP ${r.status}`); return null; }
+    const j = await r.json();
+    return j.accessToken || null;
+  } catch (e) { console.error("[zone] auth hata:", e.message); return null; }
+}
+
+async function czdsLinkler(token) {
+  try {
+    const r = await fetch(CZDS_LINKS, { headers: { Authorization: `Bearer ${token}`, accept: "application/json" }, signal: AbortSignal.timeout(20000) });
+    if (!r.ok) return [];
+    const links = await r.json();
+    return (links || []).map((url) => ({ url, tld: ((url.match(/\/([^/]+)\.zone$/i) || [])[1] || url.split("/").pop() || "").toLowerCase() }));
+  } catch { return []; }
+}
+
+// Tek zone'u STREAM işle (belleğe tüm dosyayı YÜKLEMEZ): gunzip akışı + readline.
+async function zoneIsle(link, token) {
+  const r = await fetch(link.url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30 * 60 * 1000) });
+  if (!r.ok || !r.body) { console.log(`[zone] ${link.tld} indirilemedi (${r.status})`); return; }
+  const rl = readline.createInterface({ input: Readable.fromWeb(r.body).pipe(zlib.createGunzip()), crlfDelay: Infinity });
+  let okunan = 0, eslesen = 0, sonDom = ""; // BELLEK: zone dev olabilir (.xyz ~5M) → Set tutma.
+  // Zone dosyasında bir domainin NS kayıtları ARDIŞIKtır → ardışık-tekille yeter; çapraz tekille
+  // global `gorulen` (adayGonder) hallediyor. Böylece milyonlarca domaini sabit bellekle tararız.
+  for await (const line of rl) {
+    const m = NS_RE.exec(line);
+    if (!m) continue;
+    const dom = m[1].toLowerCase();
+    if (!dom || dom === sonDom || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) continue;
+    sonDom = dom; okunan++;
+    const marka = eslesenMarka(dom);
+    if (marka) { eslesen++; await adayGonder(dom, marka, undefined, "zone"); }
+    // SAĞLIK: dev zone'da (milyonlarca satır) event-loop'u aç tut → /health + özet timer çalışsın,
+    // Fly makineyi "yanıt vermiyor" diye restart ETMESİN (yoksa büyük zone hiç bitmez).
+    if (okunan % 20000 === 0) await new Promise((r) => setImmediate(r));
+    if (okunan % 500000 === 0) console.log(`[zone] ${link.tld}: ${okunan} domain… (${eslesen} taklit)`);
+  }
+  console.log(`[zone] ${link.tld} BİTTİ: ${okunan} domain tarandı, ${eslesen} taklit → aday`);
+}
+
+async function zoneDongu() {
+  while (true) {
+    try {
+      const token = await czdsToken();
+      if (!token) { console.error("[zone] ICANN kimlik doğrulaması başarısız — ICANN_USER/ICANN_PASS kontrol et. 30dk sonra tekrar."); await zoneBekle(30 * 60 * 1000); continue; }
+      const linkler = await czdsLinkler(token);
+      // Önce öncelikli (riskli) TLD'ler, sonra diğerleri — değer 24s turunda önce gelsin.
+      linkler.sort((a, b) => (ZONE_ONCELIK.indexOf(a.tld) + 1 || 999) - (ZONE_ONCELIK.indexOf(b.tld) + 1 || 999));
+      console.log(`[zone] ${linkler.length} onaylı zone — BÜYÜK olanları (≥${ZONE_MIN_MB}MB) stream edeceğim (küçükleri Vercel yapıyor).`);
+      let islenen = 0, atlanan = 0;
+      for (const l of linkler) {
+        // Boyut kapısı: Content-Length'i ilk baytları çekmeden öğrenmek için Range ile küçük GET.
+        let mb = 0;
+        try {
+          const h = await fetch(l.url, { method: "GET", headers: { Authorization: `Bearer ${token}`, Range: "bytes=0-0" }, signal: AbortSignal.timeout(20000) });
+          mb = Number(h.headers.get("content-range")?.split("/")?.[1] || h.headers.get("content-length") || 0) / 1048576;
+          try { h.body?.cancel?.(); } catch {}
+        } catch {}
+        if (mb && mb < ZONE_MIN_MB) { atlanan++; continue; } // küçük → Vercel yapıyor
+        try { await zoneIsle(l, token); islenen++; } catch (e) { console.log(`[zone] ${l.tld} hata: ${e.message}`); }
+      }
+      console.log(`[zone] TAM TUR bitti — ${islenen} büyük zone işlendi, ${atlanan} küçük atlandı. 24s sonra tekrar.`);
+      await zoneBekle(24 * 3600 * 1000);
+    } catch (e) { console.error("[zone] döngü hatası:", e.message); await zoneBekle(10 * 60 * 1000); }
+  }
+}
+
 (async () => {
   if (!SECRET) {
     console.error("HATA: MARKA_ADAY_SECRET tanımlı değil. Çıkılıyor.");
     process.exit(1);
   }
-  console.log(`[başlıyor] SİTS = ${SITS}`);
+  console.log(`[başlıyor] SİTS = ${SITS}${ZONE_MODE ? "  · MOD: ZONE (CZDS)" : ""}`);
   await markalariYukle();
   setInterval(markalariYukle, 30 * 60 * 1000); // 30 dk — yeni eklenen markalar hızlı devreye girsin
+
+  // ZONE_MODE: CT okumaz, yalnız CZDS zone döngüsünü çalıştırır (büyük zone'lar). /health açık kalır.
+  if (ZONE_MODE) {
+    if (!process.env.ICANN_USER || !process.env.ICANN_PASS) { console.error("HATA: ZONE_MODE için ICANN_USER + ICANN_PASS gerekli. Çıkılıyor."); process.exit(1); }
+    zoneDongu();
+    return;
+  }
 
   let loglar = await kullanilabilirLoglar();
   if (!loglar.length) { console.error("HATA: kullanılabilir CT log bulunamadı."); process.exit(1); }

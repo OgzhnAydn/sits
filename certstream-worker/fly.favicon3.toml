@@ -1,0 +1,44 @@
+# SİTS FAVİCON-AVCI — isimsiz görsel kopya avcısı (Fly.io)
+# Marka adını HİÇ taşımayan, ama markanın favicon'unu/logosunu kopyalayan sahteleri yakalar.
+# Riskli-TLD'li HER yeni domainin favicon'una bakar (yerel hash), eşleşeni favicon-tara'ya bildirir.
+# Kurulum:
+#   cd certstream-worker
+#   flyctl apps create sits-favicon-avci
+#   cat secret.line | flyctl secrets import -a sits-favicon-avci     (MARKA_ADAY_SECRET — özel karakter → import)
+#   flyctl deploy -a sits-favicon-avci --config fly.favicon.toml --remote-only
+# v1: yalnız Cloudflare logu (en yüksek hacim — doğrulama). Tüm operatörler için → operatör-başı
+# favicon-worker ekle (aynı desen), maliyet ölçülünce.
+
+app = "sits-favicon-avci-3"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  SITS_URL = "https://siber-bildir-web.vercel.app"
+  FAVICON_MODE = "1"
+  FAVICON_ESZAMAN = "50"     # eşzamanlı favicon fetch
+  CT_ONLY_OP = "Google"
+  CT_ONLY_LOG = "Xenon"      # Google yükünü böl: bu worker yalnız Xenon loglarını favicon-tarar
+  BAHIS_AKTIF = "0"
+  AKTIF_TARAMA = "0"
+  PORT = "8080"
+  # MARKA_ADAY_SECRET → flyctl secrets import (gizli)
+
+[http_service]
+  internal_port = 8080
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "40s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "1024mb"

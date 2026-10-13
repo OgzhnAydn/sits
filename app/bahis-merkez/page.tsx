@@ -133,16 +133,17 @@ export default function BahisMerkez() {
           {/* KPI */}
           <Row gutter={[14, 14]}>
             {[
-              { t: "İzlenen Sertifika", v: toplamCT ? (toplamCT / 1e9).toFixed(2) + " Mr" : "…", i: <EyeOutlined />, c: "var(--c-4d9fe0)" },
-              { t: "Yakalanan Bahis", v: fmt(ist.toplam), i: <AimOutlined />, c: "var(--c-4d9fe0)" },
-              { t: "USOM'da yok · biz-önce", v: fmt(ist.bizOnce), i: <ThunderboltOutlined />, c: "var(--c-3ee08a)" },
-              { t: "Zaten engelli (BTK)", v: fmt(ist.engelliSayi), i: <SafetyCertificateOutlined />, c: "var(--c-8fb0d4)" },
-              { t: "Türkiye hedefli", v: fmt(ist.trSayi), i: <GlobalOutlined />, c: "var(--c-f5222d)" },
-              { t: "Bilinen marka", v: fmt(ist.markaVar), i: <SafetyCertificateOutlined />, c: "var(--c-faad14)" },
+              { t: "İzlenen Sertifika", v: toplamCT ? (toplamCT / 1e9).toFixed(2) + " Mr" : "…", i: <EyeOutlined />, c: "var(--c-4d9fe0)", not: "" },
+              { t: "Yakalanan Bahis", v: fmt(ist.toplam), i: <AimOutlined />, c: "var(--c-4d9fe0)", not: "dünya geneli, tüm güven" },
+              { t: "USOM'da yok · biz-önce", v: fmt(ist.bizOnce), i: <ThunderboltOutlined />, c: "var(--c-3ee08a)", not: "" },
+              { t: "Zaten engelli (BTK)", v: fmt(ist.engelliSayi), i: <SafetyCertificateOutlined />, c: "var(--c-8fb0d4)", not: "" },
+              { t: "Türkiye hedefli", v: fmt(ist.trSayi), i: <GlobalOutlined />, c: "var(--c-f5222d)", not: "resmî PDF/CSV listesi: güven ≥ 90" },
+              { t: "Bilinen marka", v: fmt(ist.markaVar), i: <SafetyCertificateOutlined />, c: "var(--c-faad14)", not: "" },
             ].map((k) => (
               <Col key={k.t} {...(screens.md ? { flex: "1" } : { xs: 12, sm: 8 })}>
                 <Card size="small" style={KART} styles={{ body: { padding: "12px 14px" } }}>
                   <Statistic title={<Text style={{ fontSize: 11, color: "var(--c-8fa6bd)" }}>{k.t}</Text>} value={k.v} prefix={<span style={{ color: k.c, marginRight: 4 }}>{k.i}</span>} valueStyle={{ color: k.c, fontSize: 20, fontWeight: 700 }} />
+                  {k.not ? <Text style={{ display: "block", fontSize: 10, color: "var(--c-8fa6bd)", marginTop: 2, lineHeight: 1.3 }}>{k.not}</Text> : null}
                 </Card>
               </Col>
             ))}

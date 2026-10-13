@@ -22,7 +22,12 @@ Font.registerHyphenationCallback((w) => (w.length > 16 && /[.-]/.test(w) ? w.spl
 export type RaporTespit = { domain: string; skor: number; durum?: string; seviye?: string; zaman: number; sinyaller?: string[]; screenshot?: string | null; usomda?: boolean | null; engelli?: boolean | null; etbis?: boolean | null; alanlar?: { ad: string; deger: string }[];
   // Hafif teknik envanter (canlilikProbe + ip-api) — tam liste tablosu için
   ip?: string; asn?: string; ulke?: string; ca?: string; altyapi?: string; canliDurum?: string; canliNeden?: string; sslBitis?: string | null; sslGuvenli?: boolean | null; kaynak?: string; sertBaslangic?: string | null;
-  aiTur?: string; aiKimlikAvi?: boolean; aiNot?: string; redirectHedef?: string | null; redirectZinciri?: string[]; cloaking?: boolean };
+  aiTur?: string; aiKimlikAvi?: boolean; aiNot?: string; redirectHedef?: string | null; redirectZinciri?: string[]; cloaking?: boolean; cloakingNot?: string; cloakingTur?: "yonlendirme" | "icerik"; vantajKor?: boolean;
+  // Altyapı ilişki analizi (passive DNS + reverse-IP) — "domainin ötesini gör"
+  gecmisIpler?: { ip: string; ilk?: string; son?: string }[]; kardesDomainler?: string[]; paylasimliAltyapi?: boolean; pivotSayisi?: number; altyapiNot?: string;
+  ekranKaynak?: "tr-vantage" | "urlscan" | null;
+  // Davranış / ağ analizi (initiator zinciri) — sitenin NE YAPTIĞI: exfil ucu, 3. parti host, script
+  disHostlar?: string[]; exfilHedef?: string | null; supheliScript?: string[]; clipboardHijack?: boolean; davranisKaynak?: "render" | "statik" | null };
 export type MarkaRaporVeri = {
   markaAd: string;
   markaResmi?: string;         // resmî unvan/domain (kapak alt satırı)
@@ -232,8 +237,8 @@ function TehditHarita({ v }: { v: MarkaRaporVeri }) {
         {nodes.map((n, i) => <Circle key={`c${i}`} cx={n.x} cy={n.y} r={n.r} fill={n.fill} />)}
         {nodes.map((n, i) => <SvgText key={`t${i}`} x={n.lx} y={n.ly} style={{ fontSize: 5.6 }} fill="#4a5670" textAnchor={n.anc}>{n.lbl}</SvgText>)}
       </Svg>
-      <View style={{ position: "absolute", left: cx - 23, top: cy - 23, width: 46, height: 46, borderRadius: 23, backgroundColor: "#fff", borderColor: TEAL, borderWidth: 1.4, alignItems: "center", justifyContent: "center", padding: 5 }}>
-        {v.logoDataUri ? <Image src={v.logoDataUri} style={{ width: 34, height: 34, objectFit: "contain" }} /> : <Text style={{ fontSize: 13, fontWeight: "bold", color: LACIVERT }}>{v.markaAd.slice(0, 2).toUpperCase()}</Text>}
+      <View style={{ position: "absolute", left: cx - 34, top: cy - 16, width: 68, height: 32, borderRadius: 7, backgroundColor: "#fff", borderColor: TEAL, borderWidth: 1.4, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, paddingVertical: 4 }}>
+        {v.logoDataUri ? <Image src={v.logoDataUri} style={{ width: 56, height: 22, objectFit: "contain" }} /> : <Text style={{ fontSize: 13, fontWeight: "bold", color: LACIVERT }}>{v.markaAd.slice(0, 2).toUpperCase()}</Text>}
       </View>
       <View style={{ position: "absolute", right: 8, top: 10, alignItems: "flex-end" }}>
         <Text style={{ fontSize: 13, fontWeight: "bold", color: LACIVERT }}>{v.ozet.toplam} alan adı</Text>
@@ -373,9 +378,68 @@ function Kunye({ t }: { t: RaporTespit }) {
           const park = /forsale|godaddy|sedo|dan\.com|afternic|parkingcrew|lander|bodis|hugedomains/i.test(son);
           return <KunyeSatir etiket="Yönlendirme" deger={`${kisa(son)}${park ? " · park/satılık" : ""}${n}`} renk={park ? "#33405c" : "#b25e09"} />;
         })()}
-        {t.cloaking ? <KunyeSatir etiket="Gizleme" deger="Cloaking — bota ve tarayıcıya FARKLI hedef gösteriyor" renk={KIRMIZI} /> : null}
+        {t.cloaking ? <KunyeSatir etiket="Gizleme" deger={t.cloakingNot || (t.cloakingTur === "icerik" ? "Cloaking — tarayıcıya içerik, bota engel gösteriyor" : "Cloaking — bota ve tarayıcıya FARKLI hedef gösteriyor")} renk={KIRMIZI} /> : null}
+        {!t.cloaking && t.vantajKor ? <KunyeSatir etiket="Gizleme" deger="Sunucu bizim bulut vantajımıza yanıt vermedi — içeriği yalnız Türk IP'sine gösteriyor olabilir (IP-coğrafi gizleme); TR vantaj noktasından doğrulanmalı." renk={TURUNCU} /> : null}
       </View>
       {t.canliNeden ? <Text style={{ fontSize: 8, color: "#4a5568", marginTop: 4, lineHeight: 1.4 }}><Text style={{ fontWeight: "bold", color: GRI }}>Durum açıklaması: </Text>{t.canliNeden}</Text> : null}
+    </View>
+  );
+}
+
+// ── ALTYAPI İLİŞKİ ANALİZİ (passive DNS + reverse-IP kardeş domainler) ────────────
+// "Domainin ötesini gör": geçmiş IP'ler + AYNI adanmış IP'yi paylaşan kardeş domainler = aynı
+// operasyon. Paylaşımlı/CDN IP'de korelasyon yapılmaz (yanlış-pozitif kapısı). Uydurma YOK.
+function AltyapiIliski({ t }: { t: RaporTespit }) {
+  const gecmis = t.gecmisIpler || [];
+  const kardes = t.kardesDomainler || [];
+  const varMi = gecmis.length > 0 || kardes.length > 0 || t.paylasimliAltyapi || t.altyapiNot;
+  if (!varMi) return null;
+  return (
+    <View style={{ marginTop: 6, backgroundColor: "#fbfcfe", borderColor: CIZGI, borderWidth: 1, borderLeftColor: "#5b7290", borderLeftWidth: 3, borderRadius: 4, padding: 8 }} wrap={false}>
+      <Text style={{ fontSize: 8.4, fontWeight: "bold", color: LACIVERT, marginBottom: 4 }}>Altyapı ve İlişki Analizi <Text style={{ fontWeight: "normal", color: GRI, fontSize: 7.4 }}>(Passive DNS · ortak altyapı)</Text></Text>
+      {kardes.length > 0 ? (
+        <View style={{ marginBottom: 3 }}>
+          <Text style={{ fontSize: 8, color: "#26324a", lineHeight: 1.4 }}>
+            <Text style={{ fontWeight: "bold" }}>Ortak altyapı — {kardes.length} kardeş adres: </Text>
+            Bu adres, {t.pivotSayisi || 1} adanmış IP&apos;yi aşağıdaki adres(ler)le paylaşıyor; aynı operasyona işaret eder.
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 3, marginTop: 3 }}>
+            {kardes.slice(0, 16).map((d, i) => <Text key={i} style={{ fontSize: 7.2, color: "#33405c", backgroundColor: "#eef2f7", borderRadius: 2, paddingHorizontal: 4, paddingVertical: 1 }}>{d}</Text>)}
+            {kardes.length > 16 ? <Text style={{ fontSize: 7.2, color: GRI, paddingVertical: 1 }}>+{kardes.length - 16} adres</Text> : null}
+          </View>
+        </View>
+      ) : t.paylasimliAltyapi ? (
+        <Text style={{ fontSize: 8, color: "#4a5568", lineHeight: 1.4, marginBottom: 3 }}>Adres, paylaşımlı altyapı / CDN (ör. Cloudflare, AWS) üzerinde barındırılıyor; aynı IP binlerce alakasız siteyi taşıdığından kardeş-adres çıkarımı yapılmamıştır (yanlış ilişkilendirmeden kaçınma).</Text>
+      ) : null}
+      {gecmis.length > 0 ? (
+        <View style={{ marginTop: 2 }}>
+          <Text style={{ fontSize: 7.8, color: GRI, fontWeight: "bold", marginBottom: 1 }}>Geçmiş IP kayıtları (passive DNS){gecmis.length > 1 ? " — IP değiştirmiş" : ""}:</Text>
+          {gecmis.slice(0, 5).map((g, i) => (
+            <Text key={i} style={{ fontSize: 7.4, color: "#33405c" }}>• {g.ip}{g.ilk || g.son ? `  (${g.ilk || "?"} → ${g.son || "?"})` : ""}</Text>
+          ))}
+        </View>
+      ) : null}
+      {kardes.length === 0 && !t.paylasimliAltyapi && t.altyapiNot ? <Text style={{ fontSize: 7.6, color: GRI, fontStyle: "italic", marginTop: 2 }}>{t.altyapiNot}</Text> : null}
+    </View>
+  );
+}
+
+// ── DAVRANIŞ / AĞ İLİŞKİSİ (initiator zinciri) — "sitenin NE YAPTIĞI" ────────────
+// Exfil ucu (hassas form → dış hedef), pano ele geçirme, şüpheli script, bağlandığı 3. parti host'lar.
+// render (Playwright canlı ağ) varsa ondan, yoksa statik HTML analizinden. Uydurma YOK.
+function DavranisAg({ t }: { t: RaporTespit }) {
+  const dis = t.disHostlar || [];
+  const sup = t.supheliScript || [];
+  const varMi = t.exfilHedef || t.clipboardHijack || sup.length > 0 || dis.length > 0;
+  if (!varMi) return null;
+  const kirmizi = !!t.exfilHedef || !!t.clipboardHijack;
+  return (
+    <View style={{ marginTop: 6, backgroundColor: kirmizi ? "#fdf4f3" : "#fbfcfe", borderColor: CIZGI, borderWidth: 1, borderLeftColor: kirmizi ? KIRMIZI : "#5b7290", borderLeftWidth: 3, borderRadius: 4, padding: 8 }} wrap={false}>
+      <Text style={{ fontSize: 8.4, fontWeight: "bold", color: LACIVERT, marginBottom: 4 }}>Davranış ve Ağ İlişkisi <Text style={{ fontWeight: "normal", color: GRI, fontSize: 7.4 }}>(sitenin ne yaptığı · {t.davranisKaynak === "render" ? "canlı ağ izleme" : "içerik analizi"})</Text></Text>
+      {t.exfilHedef ? <View style={{ flexDirection: "row", marginBottom: 2 }}><Text style={{ fontSize: 8, color: KIRMIZI, fontWeight: "bold", width: 96 }}>Veri sızdırma ucu</Text><Text style={{ fontSize: 8, color: "#26324a", flex: 1 }}>Hassas form (şifre/kart/kimlik) → dış hedefe gönderiyor: {t.exfilHedef.replace(/^https?:\/\//, "").slice(0, 70)}</Text></View> : null}
+      {t.clipboardHijack ? <View style={{ flexDirection: "row", marginBottom: 2 }}><Text style={{ fontSize: 8, color: KIRMIZI, fontWeight: "bold", width: 96 }}>Pano ele geçirme</Text><Text style={{ fontSize: 8, color: "#26324a", flex: 1 }}>Sayfa panoya (clipboard) yazan script içeriyor — adres/IBAN değiştirme tuzağı olabilir.</Text></View> : null}
+      {sup.length > 0 ? <View style={{ flexDirection: "row", marginBottom: 2 }}><Text style={{ fontSize: 8, color: TURUNCU, fontWeight: "bold", width: 96 }}>Şüpheli script</Text><Text style={{ fontSize: 8, color: "#26324a", flex: 1 }}>{sup.join(" · ")}</Text></View> : null}
+      {dis.length > 0 ? <View style={{ flexDirection: "row" }}><Text style={{ fontSize: 8, color: GRI, fontWeight: "bold", width: 96 }}>Bağlandığı 3. taraf</Text><Text style={{ fontSize: 8, color: "#33405c", flex: 1 }}>{dis.slice(0, 8).join(", ")}{dis.length > 8 ? ` +${dis.length - 8}` : ""}</Text></View> : null}
     </View>
   );
 }
@@ -458,7 +522,7 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
           </View>
           <View style={{ marginTop: 40 }}>
             {v.logoDataUri
-              ? <Image src={v.logoDataUri} style={{ height: 40, width: 150, objectFit: "contain", objectPosition: "left" }} />
+              ? <View style={{ backgroundColor: "#fff", borderRadius: 8, paddingVertical: 9, paddingHorizontal: 13, alignSelf: "flex-start" }}><Image src={v.logoDataUri} style={{ height: 36, width: 165, objectFit: "contain", objectPosition: "left" }} /></View>
               : <Text style={{ color: "#fff", fontSize: 30, fontWeight: "bold" }}>{v.markaAd}</Text>}
             <Text style={{ color: ALTIN, fontSize: 9.5, letterSpacing: 1.5, marginTop: 10 }}>{(v.markaResmi || v.markaAd).toUpperCase()} · {v.aralikEtiket.toUpperCase()}</Text>
             <Text style={{ color: "#fff", fontSize: 30, fontWeight: "bold", marginTop: 10 }}>Dijital Varlık Koruma Bülteni</Text>
@@ -606,14 +670,33 @@ export function MarkaRaporPdf({ v }: { v: MarkaRaporVeri }) {
             </View>
             <Baslik metin="Detaylı Bulgular" ikon="▤" />
             {v.oneCikan.map((t, i) => (
-              <View key={i} wrap={false} style={{ marginBottom: 9 }}>
-                <Text style={{ fontSize: 11, fontWeight: "bold", color: LACIVERT, marginBottom: 2 }}>
+              <View key={i} style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 11, fontWeight: "bold", color: LACIVERT, marginBottom: 2 }} wrap={false}>
                   <Text style={{ color: TEAL }}>{`4.${i + 1}`}</Text>{`  ${t.domain}`}  <Text style={{ fontSize: 9, fontWeight: "normal", color: SEV(etkinDurum(t)) }}>({DURUM_AD[etkinDurum(t)] || "İnceleniyor"} · %{t.skor})</Text>
                 </Text>
-                {detayMetin(t, v.markaAd, v.markaResmi).split("\n\n").map((par, pi) => (
-                  <Text key={pi} style={{ fontSize: 12, lineHeight: 1.5, color: "#26324a", textAlign: "justify", marginTop: pi ? 5 : 0 }}>{par}</Text>
+                {/* GERÇEK EKRAN GÖRÜNTÜSÜ — kanıt (öne çıkan kartı) */}
+                <View style={{ flexDirection: "row", gap: 11, marginTop: 3, marginBottom: 4 }} wrap={false}>
+                  {t.screenshot
+                    ? <View style={{ alignItems: "center" }}>
+                        <Image src={t.screenshot} style={st.ss} />
+                        <Text style={st.sekilAlt}>{t.ekranKaynak === "tr-vantage" ? "TR vantaj noktası görünümü" : "urlscan görünümü"}</Text>
+                      </View>
+                    : <View style={{ alignItems: "center" }}>
+                        <View style={st.ssYok}><Text style={{ fontSize: 8, color: GRI, textAlign: "center", paddingHorizontal: 8 }}>Ekran görüntüsü alınamadı{t.vantajKor ? " — site bulut vantajımıza yanıt vermiyor (olası IP-coğrafi gizleme)" : ""}</Text></View>
+                        <Text style={st.sekilAlt}>Görüntü yok</Text>
+                      </View>}
+                  <View style={{ flex: 1 }}>
+                    {detayMetin(t, v.markaAd, v.markaResmi).split("\n\n").slice(0, 2).map((par, pi) => (
+                      <Text key={pi} style={{ fontSize: 9.5, lineHeight: 1.45, color: "#26324a", textAlign: "justify", marginTop: pi ? 4 : 0 }}>{par}</Text>
+                    ))}
+                  </View>
+                </View>
+                {detayMetin(t, v.markaAd, v.markaResmi).split("\n\n").slice(2).map((par, pi) => (
+                  <Text key={pi} style={{ fontSize: 11, lineHeight: 1.5, color: "#26324a", textAlign: "justify", marginTop: 5 }}>{par}</Text>
                 ))}
                 <Kunye t={t} />
+                <AltyapiIliski t={t} />
+                <DavranisAg t={t} />
               </View>
             ))}
           </View>

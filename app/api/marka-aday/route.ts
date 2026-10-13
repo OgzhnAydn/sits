@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   const sir = process.env.MARKA_ADAY_SECRET;
   if (!sir) return NextResponse.json({ hata: "Servis kapalı (secret tanımlı değil)." }, { status: 503 });
 
-  let body: { domain?: string; marka?: string; secret?: string };
+  let body: { domain?: string; marka?: string; secret?: string; kaynak?: string };
   try {
     body = await req.json();
   } catch {
@@ -90,7 +90,8 @@ export async function POST(req: NextRequest) {
     skor,
     seviye: seviye(skor),
     sinyaller: sinyaller.length ? sinyaller : ["Marka adını içeren, resmî olmayan yeni domain."],
-    kaynak: "certstream",
+    // Kaynak worker'dan gelebilir (ör. "zone" = CZDS zone taraması); yoksa CT firehose varsayılan.
+    kaynak: (body.kaynak === "zone" ? "zone" : "certstream"),
     durum, // AKTİF tuzak mı yoksa PARK/izleme adayı mı — ayrı takip için
     zaman: now,
     ...(certAni ? { certAni } : {}),

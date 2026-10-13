@@ -100,6 +100,60 @@ async function render(url) {
   return { status, finalUrl, title, html, shotB64, proxy: !!TR_PROXY, chain: chain.slice(0, 12), network, clipboard, scripts };
 }
 
+// ── ANLIK RENDER WORKER ── Vercel kuyruğunu sürekli çeker, yakalanan her adayı kısa sürede
+// gerçek tarayıcıda açar, sinyalleri geri yazar (Vercel cron timeout'u yok). SITS_API+secret ile açılır.
+const SITS_API = (process.env.SITS_API || "").replace(/\/$/, "");
+const WSECRET = process.env.RENDER_WORKER_SECRET || process.env.MARKA_ADAY_SECRET || "";
+const WARALIK = Number(process.env.WORKER_ARALIK || 45000);
+const WAKTIF = process.env.WORKER_AKTIF !== "0" && !!SITS_API && !!WSECRET;
+
+function baslikFarkli(a, b) {
+  const n = (s) => (s || "").toLowerCase().replace(/[^a-z0-9ğüşıöç]/gi, "").slice(0, 50);
+  const x = n(a), y = n(b);
+  if (!x || !y || x === y) return false;
+  return !(x.includes(y.slice(0, 14)) || y.includes(x.slice(0, 14)));
+}
+async function botBaslik(url) {
+  // BOT görünümü: googlebot UA + düz fetch (JS yok). Render'ın (kurban görünümü) başlığından
+  // belirgin farklıysa → cloaking (bot'a temiz, kurbana tuzak).
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" }, signal: AbortSignal.timeout(8000) });
+    const h = await r.text();
+    const m = h.match(/<title[^>]*>([^<]{1,200})<\/title>/i);
+    return m ? m[1].trim() : "";
+  } catch { return ""; }
+}
+async function workerTur() {
+  try {
+    const q = await fetch(`${SITS_API}/api/render-kuyruk?secret=${encodeURIComponent(WSECRET)}&n=6`, { signal: AbortSignal.timeout(15000) });
+    if (!q.ok) { console.log(`[render-worker] kuyruk HTTP ${q.status}`); return 0; }
+    const j = await q.json();
+    const adaylar = j.adaylar || [];
+    console.log(`[render-worker] kuyruk: ${adaylar.length} aday · tani ${JSON.stringify(j._tani || {})}`);
+    let n = 0;
+    for (const a of adaylar) {
+      const url = "https://" + a.domain;
+      const bt = await botBaslik(url);
+      let r; try { r = await render(url); } catch { continue; }
+      const host = a.domain.replace(/^www\./, "");
+      const disHost = new Set((r.network || []).map((x) => { try { return new URL(x.u).hostname.replace(/^www\./, ""); } catch { return ""; } })
+        .filter((h) => h && h !== host && !h.endsWith("." + host))).size;
+      const sinyal = { zaman: Date.now(), finalUrl: r.finalUrl, yonlendirme: (r.chain || []).length,
+        cloaking: !!bt && baslikFarkli(r.title || "", bt), clipboard: (r.clipboard || []).length > 0,
+        supheliScript: r.scripts?.supheli || [], agHost: disHost };
+      const pr = await fetch(`${SITS_API}/api/render-sonuc`, { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ secret: WSECRET, domain: a.domain, marka: a.marka, render: sinyal }), signal: AbortSignal.timeout(15000) }).catch(() => null);
+      console.log(`[render-worker] ${a.domain} → sonuc HTTP ${pr ? pr.status : "yok"} · cloaking=${sinyal.cloaking} clip=${sinyal.clipboard} supheli=${sinyal.supheliScript.length}`);
+      n++;
+    }
+    return n;
+  } catch { return 0; }
+}
+if (WAKTIF) {
+  console.log(`[render-worker] aktif — kuyruk: ${SITS_API}/api/render-kuyruk, aralık ${WARALIK}ms`);
+  (async function dongu() { for (;;) { const n = await workerTur().catch(() => 0); await new Promise((r) => setTimeout(r, n > 0 ? 3000 : WARALIK)); } })();
+}
+
 http.createServer(async (req, res) => {
   const cevap = (kod, obj) => { res.writeHead(kod, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
   if (req.method === "GET" && req.url === "/health") return cevap(200, { ok: true, proxy: !!TR_PROXY });

@@ -4,6 +4,10 @@ import { kullaniciMarkalariGetir } from "@/lib/store";
 
 export const runtime = "nodejs";
 
+// Müşteri paneli (ayrı origin) marka listesini okur → CORS açık.
+const CORS: Record<string, string> = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS" };
+export async function OPTIONS() { return new NextResponse(null, { headers: CORS }); }
+
 // Hardcoded markalar + KULLANICI'nın kendi kaydettiği markalar birleşik döner.
 // VARSAYILAN: anahtar-taraması güvenli olanlar (>=4 harf) — worker/hunt kısa
 // anahtarlarda ("ern" → "modern", "intern") gürültü yapmasın.
@@ -17,5 +21,5 @@ export async function GET(req: Request) {
     .map((m) => ({ anahtar: m.anahtar, ad: m.ad, resmi: m.resmi }));
   return NextResponse.json({
     markalar: [...temel.map((m) => ({ anahtar: m.anahtar, ad: m.ad, resmi: m.resmi, kaliplari: m.kaliplari || [], yaygin: !!m.yaygin })), ...ozel],
-  });
+  }, { headers: CORS });
 }

@@ -46,7 +46,7 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "trendyol", ad: "Trendyol", resmi: ["trendyol.com", "trendyolmilla.com"] },
   { anahtar: "hepsiburada", ad: "Hepsiburada", resmi: ["hepsiburada.com"] },
   { anahtar: "sahibinden", ad: "Sahibinden", resmi: ["sahibinden.com"] },
-  { anahtar: "turkcell", ad: "Turkcell", resmi: ["turkcell.com.tr"] },
+  { anahtar: "turkcell", ad: "Turkcell", resmi: ["turkcell.com.tr"], logo: "/turkcell-logo.png" },
   { anahtar: "vodafone", ad: "Vodafone", resmi: ["vodafone.com.tr"] },
   { anahtar: "turktelekom", ad: "Türk Telekom", resmi: ["turktelekom.com.tr"] },
   { anahtar: "telefonica", ad: "Telefónica", resmi: ["telefonica.com", "telefonica.es"], yaygin: true },
@@ -188,6 +188,10 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   // (astoras-giris, astoras.online) yakalanır; bitişik farklı-firma (astorassociates) elenir. Ayrıca
   // ayırt edici isim varyantları kalıp olarak eklendi.
   { anahtar: "astoras", ad: "Astor Enerji", resmi: ["astoras.com.tr"], kaliplari: ["astorenerji", "astorasenerji", "astorastransformator"], resmiVarliklar: ["astoras.com.tr"] },
+  // Gediz Elektrik Dağıtım (gdzelektrik.com.tr — Ege bölgesi elektrik dağıtım). Fatura/borç ödemesi
+  // yüzünden sahte "fatura/borç/ödeme" siteleriyle sık taklit edilir. "gediz" tek başına yaygın (nehir/
+  // ilçe adı) → kullanılmaz; yalnız ayırt edici "gdzelektrik" + "gedizelektrik" varyantları.
+  { anahtar: "gdzelektrik", ad: "Gediz Elektrik", resmi: ["gdzelektrik.com.tr"], kaliplari: ["gedizelektrik", "gedizelektrikfatura", "gdzelektrikfatura", "gedizelektrikborc", "gdzelektrikborc", "gedizelektrikodeme", "gdzelektrikonline", "gedizelektrikonline", "gedizenerji"], resmiVarliklar: ["gdzelektrik.com.tr"] },
   // ── Milli Piyango (sahte çekiliş/piyango dolandırıcılığında sık taklit edilir) ──
   // logo: KARE ikon (yatay logo dairesel node'da eziliyordu). millipiyangoonline.com resmî faviconu.
   { anahtar: "millipiyango", ad: "Milli Piyango", resmi: ["mpi.gov.tr", "millipiyango.gov.tr", "millipiyangoonline.com"], logo: "https://icons.duckduckgo.com/ip3/millipiyangoonline.com.ico" },

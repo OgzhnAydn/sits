@@ -5,7 +5,7 @@ import { kullaniciMarkalariGetir } from "@/lib/store";
 import { limitAsildi } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 45;
 export const dynamic = "force-dynamic";
 
 // TEK MARKAYI anlık aktif tara (operatör "Tara" butonu). Secret gerekmez çünkü yalnız
