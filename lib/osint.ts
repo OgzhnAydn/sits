@@ -151,6 +151,14 @@ async function rdapCek(domain: string): Promise<{ rd?: Record<string, unknown>; 
   return { rd: rd || undefined };
 }
 
+// RDAP entity vCard'ından (jCard: ["vcard",[["email",{},"text","a@b"],...]]) bir alanın değerini al.
+function vcardAl(e: { vcardArray?: unknown[] } | undefined, ad: string): string | undefined {
+  const v = e?.vcardArray?.[1] as unknown[][] | undefined;
+  const p = v?.find((x) => Array.isArray(x) && x[0] === ad);
+  const d = p?.[3];
+  return typeof d === "string" ? d : undefined;
+}
+
 // Bir domainin ilk A kaydını (IP) DoH ile çöz.
 async function ilkA(domain: string): Promise<string | null> {
   const j = await json(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`, 4000);
@@ -1033,11 +1041,23 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
       else if (yasGun < 30) { r.risk += 25; r.bulgular.push("Domain 1 aydan yeni — temkinli ol."); }
       else if (yasGun < 90) { r.risk += 10; r.bulgular.push("Domain nispeten yeni (90 günden az)."); }
     }
-    const entities = (rd.entities as { roles?: string[]; vcardArray?: unknown[] }[]) || [];
+    type RdEnt = { roles?: string[]; vcardArray?: unknown[]; entities?: RdEnt[] };
+    const entities = (rd.entities as RdEnt[]) || [];
     const reg = entities.find((e) => (e.roles || []).includes("registrar"));
-    const vcard = reg?.vcardArray?.[1] as unknown[][] | undefined;
-    const fn = vcard?.find((x) => x[0] === "fn")?.[3] as string | undefined;
+    const fn = vcardAl(reg, "fn");
     if (fn) r.alanlar.push({ ad: "Kayıt firması", deger: fn });
+    // ŞİKAYET (ABUSE) İLETİŞİMİ — RFC 7483: abuse iletişimi genelde registrar entity'sinin
+    // içinde roles:["abuse"] olan ALT entity'dedir; vCard email/tel alanında bulunur. Bu bilgi
+    // ④ Müdahale adımını besler: "bu adrese şu metinle başvur". Yoksa (redakte/privacy) gösterilmez.
+    const tumEnt: RdEnt[] = [];
+    const gezEnt = (list?: RdEnt[]) => { for (const e of list || []) { tumEnt.push(e); gezEnt(e.entities); } };
+    gezEnt(entities);
+    const abuseEnt = tumEnt.find((e) => (e.roles || []).includes("abuse"));
+    const abuseMail = vcardAl(abuseEnt, "email") || vcardAl(reg, "email");
+    const abuseTel = (vcardAl(abuseEnt, "tel") || "").replace(/^tel:/i, "");
+    if (abuseMail) {
+      r.alanlar.push({ ad: "Şikayet adresi (abuse)", deger: abuseTel ? `${abuseMail} · ${abuseTel}` : abuseMail });
+    }
     // REGISTRAR DURUMU: domain askıya alınmış/kaldırılıyor mu? (clientHold/serverHold =
     // kötüye kullanım nedeniyle dondurulmuş; pendingDelete/redemption = siliniyor.)
     const rdurum = (rd.status as string[]) || [];

@@ -5,6 +5,11 @@ import { AVCI_MARKALAR, gercekTaklit } from "@/lib/korunanMarkalar";
 import { db, firebaseHazir } from "@/lib/firebase";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic"; // her istek TAZE — cache yok (canlı akış tekrar etmesin)
+
+// CT'yi dolduran izleme/canary GÜRÜLTÜSÜ (AWS/DigiCert/Salesforce iç sertifikaları) — akışta GÖSTERME,
+// gerçek site değiller; sürekli benzer isimle tekrar edip "hep aynı veri" hissi veriyorlardı.
+const GURULTU = /(\.aws\.dev$|urawatchdog|ops\.prod\.aura|\.acm\.aws|\.sfdc\.net$|acm-validations|\.amazonaws\.com$|\.cloudfront\.net$)/i;
 
 // ── KARARLI "İZLENEN SERTİFİKA" SAYACI ───────────────────────────────────────
 // SORUN: sayı her istekte 32k↔49 milyar zıplıyordu. Neden: toplam = 6 CT logunun canlı
@@ -111,10 +116,19 @@ function eslesenMarka(domain: string): string | null {
   return null;
 }
 
+const CORS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+export async function OPTIONS() {
+  return new NextResponse(null, { headers: CORS });
+}
+
 export async function GET() {
   await seedYukle();
   const loglar = await loglariSec();
-  if (!loglar.length) return NextResponse.json({ ok: false, loglar: [], akis: [] });
+  if (!loglar.length) return NextResponse.json({ ok: false, loglar: [], akis: [] }, { headers: CORS });
 
   // Tüm logların canlı boyutu (get-sth ucuz). get-entries yalnız DÖNEN çift log (429 koruması).
   const grup = Math.floor(Date.now() / 3000) % Math.ceil(loglar.length / 2);
@@ -133,7 +147,7 @@ export async function GET() {
       const akis: { i: number; kisa: string; domain: string; ca: string; marka: string | null }[] = [];
       if (orneklenecek.has(idx) && boyut > 20) {
         try {
-          const start = boyut - 9, end = boyut - 1;
+          const start = boyut - 25, end = boyut - 1; // daha geniş pencere → gürültü elenince de yeterli gerçek kayıt kalsın
           const ent = (await (await fetch(`${log.url}/ct/v1/get-entries?start=${start}&end=${end}`, { signal: AbortSignal.timeout(9000) })).json()) as { entries?: { leaf_input: string; extra_data?: string }[] };
           for (let k = 0; k < (ent.entries || []).length; k++) {
             const b = entryBilgi(ent.entries![k].leaf_input, ent.entries![k].extra_data);
@@ -143,7 +157,7 @@ export async function GET() {
             if (of) onFiltre++;
             const marka = of ? eslesenMarka(b.domain) : null;
             if (marka) eslesme++;
-            akis.push({ i: start + k, kisa: log.kisa, domain: b.domain, ca: b.ca, marka });
+            if (!GURULTU.test(b.domain)) akis.push({ i: start + k, kisa: log.kisa, domain: b.domain, ca: b.ca, marka });
           }
         } catch { /* get-entries başarısız (429?) — bu tur atla */ }
       }
@@ -159,5 +173,5 @@ export async function GET() {
   SON_TOPLAM = toplam;
   toplamYaz(toplam).catch(() => {}); // fire-and-forget, 60sn throttle
 
-  return NextResponse.json({ ok: true, toplam, loglar: loglarOut, akis });
+  return NextResponse.json({ ok: true, toplam, loglar: loglarOut, akis }, { headers: { ...CORS, "Cache-Control": "no-store" } });
 }

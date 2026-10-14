@@ -168,6 +168,17 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   // Göç İdaresi Başkanlığı — anahtar "goc" DEĞİL (3 harf, gürültü); e-ikamet (oturma izni
   // başvurusu) yabancıları hedefleyen phishing'in ana yemi → ikamet/randevu kalıpları.
   { anahtar: "gocidaresi", ad: "Göç İdaresi Başkanlığı", resmi: ["goc.gov.tr"], kaliplari: ["goc-idaresi", "goç-idaresi", "e-ikamet", "eikamet", "ikamet-randevu", "ikamet-basvuru", "ikametbasvuru", "oturma-izni", "oturmaizni"], resmiVarliklar: ["goc.gov.tr", "e-ikamet.goc.gov.tr"] },
+  // ── Emniyet / Kolluk (sahte ceza/trafik cezası/"hakkınızda işlem var" + dolandırıcılık uyarısı taklidi) ──
+  // "egm" 3 harf (gürültü, taranamaz); "emniyet" ayırt edici ama YAYGIN kelime (iş emniyeti, emniyet kemeri)
+  // → yaygin: sıkı-bağlam (riskli TLD veya ceza/sorgu/resmî bağlam) şart. Resmî: egm.gov.tr.
+  { anahtar: "emniyet", ad: "Emniyet Genel Müdürlüğü (EGM)", resmi: ["egm.gov.tr"], yaygin: true,
+    kaliplari: ["emniyetgenelmudurlugu", "emniyetmudurlugu", "egmgovtr", "egmceza", "polisceza", "turkpolis"],
+    resmiVarliklar: ["egm.gov.tr"] },
+  // Siber Suçlarla Mücadele (EGM bünyesinde; siber@egm.gov.tr). "siber" TEK BAŞINA çok yaygın
+  // (cyber-her şey) → kullanılmaz; ayırt edici "sibersuc*" kalıpları. Resmî: egm.gov.tr.
+  { anahtar: "sibersuclar", ad: "Siber Suçlarla Mücadele (EGM)", resmi: ["egm.gov.tr"],
+    kaliplari: ["sibersuc", "sibersuclarlamucadele"],
+    resmiVarliklar: ["egm.gov.tr"] },
   // ── Enerji ──
   // logo: favicon.ico BOŞ → Google favicon servisi küre döndürüyor; gerçek PNG favicon açıkça verilir.
   { anahtar: "enerjisa", ad: "Enerjisa", resmi: ["enerjisa.com.tr", "enerjisauretim.com.tr"], logo: "https://www.enerjisa.com.tr/assets/favicon/favicon_512x512.png" },

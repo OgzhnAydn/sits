@@ -1,6 +1,6 @@
 // Bilinen-kötü listeleri — bir domain'i "sıfırdan" analiz etmeden önce,
 // dünyanın (ve Türkiye'nin resmi kurumunun) zaten kötü bildiği listelerde ara.
-// Hepsi ücretsiz; USOM ve OpenPhish anahtarsız, Google Safe Browsing opsiyonel.
+// Hepsi ücretsiz; USOM, OpenPhish, Phishing.Army, PhishStats, Cloudflare anahtarsız, GSB/abuse.ch opsiyonel.
 
 import { itibarliMi } from "./itibarli";
 
@@ -216,9 +216,12 @@ export type TehditSonuc = { kaynaklar: string[]; usom: boolean; usomTur?: string
 // Bir domain'i tüm bilinen-kötü kaynaklarda ara. Hangi kaynakların işaretlediğini döndür.
 export async function tehditKontrol(domain: string): Promise<TehditSonuc> {
   const itibarli = itibarliMi(domain);
-  const [usomKayit, openphishSet, gsb, cf, abch, phst] = await Promise.all([
+  const [usomKayit, openphishSet, phisharmySet, gsb, cf, abch, phst] = await Promise.all([
     usomLookup(domain),
     listeGetir("openphish", "https://openphish.com/feed.txt"),
+    // Phishing.Army — anahtarsız, ~150k domainlik GENİŞ topluluk kara listesi (OpenPhish'in
+    // tazeliğini kapsamla tamamlar). Bare-domain satırları; itibarlı site listedeMi'de korunur.
+    listeGetir("phisharmy", "https://phishing.army/download/phishing_army_blocklist.txt"),
     safeBrowsing(domain),
     itibarli ? Promise.resolve(false) : cloudflareGuvenlikDns(domain),
     itibarli ? Promise.resolve([] as string[]) : abuseCh(domain),
@@ -228,6 +231,7 @@ export async function tehditKontrol(domain: string): Promise<TehditSonuc> {
   const kaynaklar: string[] = [];
   if (usomKayit.listede) kaynaklar.push("USOM (resmi)");
   if (listedeMi(openphishSet, domain)) kaynaklar.push("OpenPhish");
+  if (listedeMi(phisharmySet, domain)) kaynaklar.push("Phishing.Army");
   if (gsb) kaynaklar.push("Google Safe Browsing");
   if (cf) kaynaklar.push("Cloudflare");
   if (phst) kaynaklar.push("PhishStats");
