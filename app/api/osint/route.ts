@@ -4,7 +4,7 @@ import { normalize } from "@/lib/demoVeri";
 import { domainOsint, telefonOsint, ibanOsint, typosquatDurustlukCap, kategoriKarti, kSeviye, domainDurumu, saldiriAsamasi, SALDIRI_ASAMALARI, altyapiDna, takipIdBirincil, type OsintRapor } from "@/lib/osint";
 import { kriptoOsint } from "@/lib/kripto";
 import { itibarliMi } from "@/lib/itibarli";
-import { gostergeSorgula, baglantilariGetir, analizKaydet, delilCikar, riskGecmisiEkle, riskGecmisiGetir, dnaEslesenler, takipEslesenler, telegramEslesenler, markaAdayKaydet, apkTriageKaydet, apkTriageGetir } from "@/lib/store";
+import { gostergeSorgula, baglantilariGetir, analizKaydet, delilCikar, riskGecmisiEkle, riskGecmisiGetir, dnaEslesenler, takipEslesenler, telegramEslesenler, exfilEslesenler, markaAdayKaydet, apkTriageKaydet, apkTriageGetir } from "@/lib/store";
 import { triageGonder, triageYapilandi } from "@/lib/triage";
 import { cacheOku, cacheYaz } from "@/lib/osintCache";
 import { baslikFarkli } from "@/lib/trVantage";
@@ -348,14 +348,16 @@ export async function POST(req: NextRequest) {
     const d = altyapiDna(rapor);
     const takipId = takipIdBirincil(rapor);
     const tgImza = rapor.telegramImza; // çalınan verinin gittiği Telegram → en güçlü operatör pivotu
-    await riskGecmisiEkle(deger, rapor.risk, asama, d?.imza, takipId, tgImza).catch(() => {});
+    const xfImza = rapor.exfilImza; // çalınan verinin POST edildiği DIŞ sunucu → operatör pivotu
+    await riskGecmisiEkle(deger, rapor.risk, asama, d?.imza, takipId, tgImza, xfImza).catch(() => {});
     gecmis = await riskGecmisiGetir(deger).catch(() => []);
-    // GÜÇLÜ operatör pivotları (altyapıdan bağımsız): aynı analytics hesabı VEYA aynı
-    // Telegram exfil hedefi → altyapı (IP/NS/CDN) tamamen farklı olsa bile AYNI saldırgan.
+    // GÜÇLÜ operatör pivotları (altyapıdan bağımsız): aynı analytics hesabı VEYA aynı Telegram/dış
+    // exfil hedefi → altyapı (IP/NS/CDN) tamamen farklı olsa bile AYNI saldırgan.
     const takipEs = takipId ? await takipEslesenler(takipId, deger).catch(() => []) : [];
     const tgEs = tgImza ? await telegramEslesenler(tgImza, deger).catch(() => []) : [];
+    const xfEs = xfImza ? await exfilEslesenler(xfImza, deger).catch(() => []) : [];
     if (takipId && takipEs.length) takip = { id: takipId, eslesenler: takipEs };
-    const gucluEs = [...new Set([...takipEs, ...tgEs])];
+    const gucluEs = [...new Set([...takipEs, ...tgEs, ...xfEs])];
     if (d) {
       const infraEs = await dnaEslesenler(d.imza, deger).catch(() => []);
       // Birleşik ilişki kümesi: ayırt edici altyapı VEYA takip/Telegram pivotu eşleşen domainler.

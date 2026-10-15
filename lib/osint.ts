@@ -15,6 +15,7 @@ export type OsintRapor = {
   cikisAni?: number; // sahte adresin DOĞUŞ anı (ms) — en eski sertifika notBefore'u (tespit hızı için)
   sayfa?: SayfaBilgi; // paylaşılan sayfanın içerik özeti (başlık/tür/açıklama)
   telegramImza?: string; // çalınan verinin gittiği Telegram bot/kanal — operatör parmak izi (kampanya bağı)
+  exfilImza?: string; // çalınan verinin POST edildiği DIŞ sunucu (Telegram değil) — operatör parmak izi (kampanya bağı)
   logoMarka?: { anahtar: string; ad: string; isimsiz: boolean }; // sayfada GÖRSEL logosu tespit edilen korunan marka (isimsiz=domain adında marka YOK → salt-logo taklidi)
   apkDagitimi?: { url: string; dosya?: string; markali: boolean }; // sayfa doğrudan Android .apk indirtiyor (mağaza-dışı sideload) → bankacılık trojanı dağıtım işareti
 };
@@ -1526,6 +1527,31 @@ export async function domainOsint(domain: string, tamUrl?: string, etbisSorgusu 
             r.telegramImza = "tg:" + tg;
             r.alanlar.push({ ad: "Veri hedefi (Telegram)", deger: tg.startsWith("bot") ? `Telegram botu (${tg.replace(/^bot/, "bot ")})` : `t.me/${tg}` });
             r.bulgular.push(`Sayfanın topladığı bilgi bir Telegram hedefine (${tg.startsWith("bot") ? "bot" : "t.me/" + tg}) gönderiliyor — çalınan veri buraya akıyor; aynı hedefi kullanan diğer sahte siteler AYNI operatöre ait.`);
+          }
+          // DIŞ VERİ-GÖNDERİM (exfil) HEDEFİ — sayfa KENDİ adresi DIŞINDA bir sunucuya POST/PUT ile
+          // veri yolluyorsa (ve bu bilinen altyapı/analytics/CDN DEĞİLSE), form/giriş verisi oraya akıyor
+          // olabilir. Telegram'dan sonra en güçlü phishing kanıtı + kampanya pivotu. YANLIŞ-POZİTİF kalkanı:
+          // yalnız POST/PUT + kendi domaini hariç + bilinen meşru servisler hariç (GET'ler/CDN sayılmaz).
+          const BENIGN_EXFIL = /google|gstatic|googleapis|gtag|analytics|doubleclick|facebook|fbcdn|cloudflare|cloudfront|akamai|fastly|jsdelivr|unpkg|cdnjs|bootstrapcdn|fontawesome|jquery|recaptcha|hcaptcha|cookiebot|hotjar|sentry|segment|yandex|bing|microsoft|office|azureedge|amazonaws|gravatar|wp\.com|wordpress|youtube|vimeo|twitter|tiktok|linkedin|instagram|pinterest|stripe|paypalobjects|cloudinary|clarity\.ms/i;
+          const exfil = new Set<string>();
+          for (const q of fdata?.requests || []) {
+            const rq = q?.request?.request as { url?: string; method?: string } | undefined;
+            const m = (rq?.method || "").toUpperCase();
+            if (m !== "POST" && m !== "PUT") continue;
+            let host = "";
+            try { host = new URL(rq?.url || "").hostname.toLowerCase().replace(/^www\./, ""); } catch { continue; }
+            if (!host) continue;
+            const t = tescilliBilgi(host);
+            const reg = t.tld ? `${t.label}.${t.tld}` : t.label;
+            if (host === domain || host.endsWith("." + domain) || reg === domain) continue; // kendi domaini
+            if (BENIGN_EXFIL.test(host)) continue; // meşru altyapı
+            exfil.add(host);
+          }
+          if (exfil.size) {
+            const liste = [...exfil].slice(0, 5);
+            r.alanlar.push({ ad: "Veri gönderim hedefi (dış)", deger: liste.join(", ") });
+            r.bulgular.push(`Sayfa, kendi adresinin DIŞINDAKİ bir sunucuya veri gönderiyor (${liste[0]}${liste.length > 1 ? ` ve ${liste.length - 1} tane daha` : ""}) — form/giriş verisi buraya akıyor olabilir; aynı hedefe gönderen diğer sahteler AYNI saldırgana işaret eder.`);
+            r.exfilImza = "xf:" + liste[0]; // birincil dış exfil hedefi (kampanya pivotu için)
           }
         }
       }
