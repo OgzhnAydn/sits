@@ -690,7 +690,10 @@ http.createServer((req, res) => {
 }).listen(PORT, () => console.log(`[sağlık] http :${PORT}/health · [akış] :${PORT}/stream`));
 
 setInterval(() => {
-  if (Date.now() - sonAktivite > STALL_MS) {
+  // ZONE modunda CT OKUNMAZ → sonAktivite (son CT yanıtı) hiç güncellenmez; bu watchdog her 5dk
+  // süreci boşuna öldürüp zone taramasını kesiyordu. Watchdog yalnız CT modunda geçerli; ZONE'da
+  // sağlığı Fly'ın /health kontrolü + zone döngüsünün kendi 30dk cadence'i korur.
+  if (!ZONE_MODE && Date.now() - sonAktivite > STALL_MS) {
     console.error(`[watchdog] ${Math.round((Date.now() - sonAktivite) / 1000)}sn'dir CT yanıtı yok — süreç bitiriliyor (Fly yeniden başlatır).`);
     process.exit(1);
   }
