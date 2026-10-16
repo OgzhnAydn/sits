@@ -232,6 +232,33 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "basil", ad: "Basil (Sağlıklı Yemek)", resmi: ["basil.com.tr"], yaygin: true },
   { anahtar: "losev", ad: "LÖSEV (Lösemili Çocuklar Vakfı)", resmi: ["losev.org.tr"] },
   { anahtar: "diyanet", ad: "Diyanet İşleri Başkanlığı", resmi: ["diyanet.gov.tr"] },
+  // ── Kamu kurumları (vatandaş hizmeti/randevu/ceza/ödeme dolandırıcılığının en çok taklit ettikleri) ──
+  // Gerçek .gov.tr siteleri zaten otomatik korunur; bunlar DOMAIN taklidini yakalamak için. 3-harf
+  // kısaltmalar (sgk/meb/nvi…) gürültü yapar → uzun ayırt edici ad + kalıplarla taranır.
+  { anahtar: "sosyalguvenlik", ad: "Sosyal Güvenlik Kurumu (SGK)", resmi: ["sgk.gov.tr"], kaliplari: ["sgkmobil", "sgktescil", "sgkrapor", "sgksorgu", "sgkprim"] },
+  { anahtar: "nufusvatandaslik", ad: "Nüfus ve Vatandaşlık İşleri (NVİ)", resmi: ["nvi.gov.tr"], kaliplari: ["nufusmudurlugu", "enufus", "nvimobil", "kimlikrandevu"] },
+  { anahtar: "milliegitim", ad: "Millî Eğitim Bakanlığı (MEB)", resmi: ["meb.gov.tr"], kaliplari: ["eokul", "mebbis", "mebgiris", "milliegitimbakanligi"] },
+  { anahtar: "saglik", ad: "Sağlık Bakanlığı", resmi: ["saglik.gov.tr", "enabiz.gov.tr", "mhrs.gov.tr"], yaygin: true, kaliplari: ["enabiz", "mhrsrandevu", "saglikbakanligi"] },
+  { anahtar: "iskur", ad: "İŞKUR (Türkiye İş Kurumu)", resmi: ["iskur.gov.tr"] },
+  { anahtar: "tkgm", ad: "Tapu ve Kadastro (TKGM)", resmi: ["tkgm.gov.tr"], kaliplari: ["tapukadastro", "webtapu", "tapurandevu", "tapumudurlugu"] },
+  { anahtar: "osym", ad: "ÖSYM", resmi: ["osym.gov.tr"], kaliplari: ["osymsonuc", "osymaday", "osymsinav"] },
+  { anahtar: "turkpatent", ad: "Türk Patent ve Marka Kurumu", resmi: ["turkpatent.gov.tr"] },
+  { anahtar: "tubitak", ad: "TÜBİTAK", resmi: ["tubitak.gov.tr"] },
+  { anahtar: "tuik", ad: "TÜİK (İstatistik Kurumu)", resmi: ["tuik.gov.tr"] },
+  { anahtar: "kvkk", ad: "Kişisel Verileri Koruma Kurumu (KVKK)", resmi: ["kvkk.gov.tr"] },
+  { anahtar: "bddk", ad: "BDDK (Bankacılık Düzenleme)", resmi: ["bddk.gov.tr"] },
+  { anahtar: "jandarma", ad: "Jandarma Genel Komutanlığı", resmi: ["jandarma.gov.tr"] },
+  { anahtar: "icisleri", ad: "İçişleri Bakanlığı", resmi: ["icisleri.gov.tr"] },
+  { anahtar: "disisleri", ad: "Dışişleri Bakanlığı", resmi: ["mfa.gov.tr"], kaliplari: ["disisleribakanligi"] },
+  { anahtar: "dask", ad: "DASK (Zorunlu Deprem Sigortası)", resmi: ["dask.gov.tr"] },
+  { anahtar: "kizilay", ad: "Türk Kızılay", resmi: ["kizilay.org.tr"] },
+  { anahtar: "siberguvenlik", ad: "Cumhurbaşkanlığı Siber Güvenlik Başkanlığı", resmi: ["siberguvenlik.gov.tr"] },
+  { anahtar: "cumhurbaskanligi", ad: "Cumhurbaşkanlığı", resmi: ["tccb.gov.tr"], kaliplari: ["cimerbasvuru"] },
+  { anahtar: "hazinemaliye", ad: "Hazine ve Maliye Bakanlığı", resmi: ["hmb.gov.tr"], kaliplari: ["hazinebakanligi", "maliyebakanligi"] },
+  { anahtar: "tarimorman", ad: "Tarım ve Orman Bakanlığı", resmi: ["tarimorman.gov.tr"] },
+  { anahtar: "calismabakanligi", ad: "Çalışma ve Sosyal Güvenlik Bakanlığı", resmi: ["csgb.gov.tr"], kaliplari: ["calismabakanligi"] },
+  { anahtar: "sanayiteknoloji", ad: "Sanayi ve Teknoloji Bakanlığı", resmi: ["sanayi.gov.tr"] },
+  { anahtar: "pttkargo", ad: "PTT Kargo", resmi: ["ptt.gov.tr", "pttkargom.com"], kaliplari: ["ptt-kargo", "pttgonderi", "pttkargotakip"] },
   // Kültür ve Turizm Bakanlığı — anahtar "ktb" DEĞİL (3 harf → taranamaz/gürültü); ayırt edici
   // "kulturturizm" kalıbı. Resmî domainler doğrulandı: ktb.gov.tr + kulturturizm.gov.tr (ikincisi
   // ktb.gov.tr'ye yönleniyor). Müze bileti / turizm başvurusu dolandırıcılıkları bu bakanlığı taklit eder.
