@@ -20,7 +20,7 @@ export type KorunanMarka = { anahtar: string; ad: string; resmi: string[]; kalip
 export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "garanti", ad: "Garanti BBVA", resmi: ["garanti.com.tr", "garantibbva.com.tr"], yaygin: true },
   { anahtar: "ziraat", ad: "Ziraat Bankası", resmi: ["ziraatbank.com.tr", "ziraat.com.tr"] },
-  { anahtar: "akbank", ad: "Akbank", resmi: ["akbank.com"] },
+  { anahtar: "akbank", ad: "Akbank", resmi: ["akbank.com.tr", "akbank.com"] },
   { anahtar: "isbank", ad: "İş Bankası", resmi: ["isbank.com.tr", "isbankasi.com.tr"] },
   { anahtar: "yapikredi", ad: "Yapı Kredi", resmi: ["yapikredi.com.tr", "ykb.com.tr"] },
   { anahtar: "vakifbank", ad: "Vakıfbank", resmi: ["vakifbank.com.tr"] },
