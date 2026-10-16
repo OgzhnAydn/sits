@@ -259,6 +259,13 @@ export const KORUNAN_MARKALAR: KorunanMarka[] = [
   { anahtar: "calismabakanligi", ad: "Çalışma ve Sosyal Güvenlik Bakanlığı", resmi: ["csgb.gov.tr"], kaliplari: ["calismabakanligi"] },
   { anahtar: "sanayiteknoloji", ad: "Sanayi ve Teknoloji Bakanlığı", resmi: ["sanayi.gov.tr"] },
   { anahtar: "pttkargo", ad: "PTT Kargo", resmi: ["ptt.gov.tr", "pttkargom.com"], kaliplari: ["ptt-kargo", "pttgonderi", "pttkargotakip"] },
+  // ── Kamu işletmeleri / KİT (gerçekten taklit edilenler: yatırım, fatura, banka, telekom) ──
+  { anahtar: "borsaistanbul", ad: "Borsa İstanbul (BİST)", resmi: ["borsaistanbul.com"], kaliplari: ["bistyatirim", "borsa-istanbul"] },
+  { anahtar: "turksat", ad: "TÜRKSAT", resmi: ["turksat.com.tr"] },
+  { anahtar: "tedas", ad: "TEDAŞ (Elektrik Dağıtım)", resmi: ["tedas.gov.tr"], kaliplari: ["tedasfatura", "tedasborc", "tedasodeme", "tedaselektrik"] },
+  { anahtar: "kalkinmabankasi", ad: "Türkiye Kalkınma ve Yatırım Bankası", resmi: ["kalkinma.com.tr"] },
+  { anahtar: "eximbank", ad: "Türkiye İhracat Kredi Bankası (Eximbank)", resmi: ["eximbank.gov.tr"] },
+  { anahtar: "tcdd", ad: "TCDD (Devlet Demiryolları)", resmi: ["tcdd.gov.tr", "tcddtasimacilik.gov.tr"], kaliplari: ["tcddbilet", "tcdd-bilet"] },
   // Kültür ve Turizm Bakanlığı — anahtar "ktb" DEĞİL (3 harf → taranamaz/gürültü); ayırt edici
   // "kulturturizm" kalıbı. Resmî domainler doğrulandı: ktb.gov.tr + kulturturizm.gov.tr (ikincisi
   // ktb.gov.tr'ye yönleniyor). Müze bileti / turizm başvurusu dolandırıcılıkları bu bakanlığı taklit eder.
