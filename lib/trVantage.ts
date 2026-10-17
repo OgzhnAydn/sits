@@ -30,6 +30,32 @@ export async function trVantageRender(domain: string): Promise<TrVantage | null>
   }
 }
 
+// ÇOK-PROFİLLİ CLOAKING — siteyi MASAÜSTÜ + MOBİL (+bot) açıp karşılaştıran render /cloaking ucu.
+// "Mobilde phishing, masaüstünde temiz" (banka/SMS dolandırıcılığı #1 kaçınma) yakalar.
+export type CloakingProfil = { title: string; finalUrl: string; shotB64: string; status: number | null; len: number };
+export type CloakingSonuc = {
+  cloaking: boolean; mobilFarkli: boolean; sebepler: string[];
+  masa: CloakingProfil; mobil: CloakingProfil; bot: { title: string };
+  supheliScript?: string[]; clipboard?: string[];
+};
+export async function cloakingKontrol(domain: string): Promise<CloakingSonuc | null> {
+  const base = process.env.RENDER_URL;
+  const secret = process.env.RENDER_SECRET;
+  if (!base) return null;
+  try {
+    const r = await fetch(base.replace(/\/$/, "") + "/cloaking", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(secret ? { Authorization: "Bearer " + secret } : {}) },
+      body: JSON.stringify({ url: domain }),
+      signal: AbortSignal.timeout(50000),
+    });
+    if (!r.ok) return null;
+    return (await r.json()) as CloakingSonuc;
+  } catch {
+    return null;
+  }
+}
+
 // İki başlığın "belirgin farklı" olup olmadığı — cloaking ipucu (urlscan görünümü vs TR görünümü).
 export function baslikFarkli(a: string, b: string): boolean {
   const n = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9ğüşıöç]/gi, "").slice(0, 50);

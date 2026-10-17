@@ -25,12 +25,20 @@ async function tarayici() {
   return browser;
 }
 
-async function render(url) {
+// CİHAZ PROFİLLERİ — cloaking tespiti için siteyi FARKLI kimliklerle açarız. Mobil-only phishing
+// (mobilde banka giriş ekranı, masaüstünde temiz) en yaygın kaçınma; bunu ancak iki profille görürüz.
+const PROFILLER = {
+  desktop: { userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36", viewport: { width: 1280, height: 820 }, isMobile: false, hasTouch: false, deviceScaleFactor: 1 },
+  mobile: { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 },
+};
+
+async function render(url, profilAd = "desktop") {
   const b = await tarayici();
+  const p = PROFILLER[profilAd] || PROFILLER.desktop;
   const opts = {
     locale: "tr-TR", timezoneId: "Europe/Istanbul",
-    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
-    viewport: { width: 1280, height: 820 }, deviceScaleFactor: 1, ignoreHTTPSErrors: true,
+    userAgent: p.userAgent,
+    viewport: p.viewport, isMobile: p.isMobile, hasTouch: p.hasTouch, deviceScaleFactor: p.deviceScaleFactor, ignoreHTTPSErrors: true,
     extraHTTPHeaders: { "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.5" },
   };
   if (TR_PROXY) { try { const u = new URL(TR_PROXY); opts.proxy = { server: `${u.protocol}//${u.host}`, username: u.username ? decodeURIComponent(u.username) : undefined, password: u.password ? decodeURIComponent(u.password) : undefined }; } catch { /* geçersiz proxy → proxysiz */ } }
@@ -97,7 +105,7 @@ async function render(url) {
   let shotB64 = "";
   try { const buf = await page.screenshot({ type: "jpeg", quality: 68, fullPage: false }); shotB64 = buf.toString("base64"); } catch { /* */ }
   await ctx.close().catch(() => {});
-  return { status, finalUrl, title, html, shotB64, proxy: !!TR_PROXY, chain: chain.slice(0, 12), network, clipboard, scripts };
+  return { profil: profilAd, status, finalUrl, title, html, shotB64, proxy: !!TR_PROXY, chain: chain.slice(0, 12), network, clipboard, scripts };
 }
 
 // ── ANLIK RENDER WORKER ── Vercel kuyruğunu sürekli çeker, yakalanan her adayı kısa sürede
@@ -123,6 +131,36 @@ async function botBaslik(url) {
     return m ? m[1].trim() : "";
   } catch { return ""; }
 }
+// ── ÇOK-PROFİLLİ CLOAKING TESPİTİ ── Siteyi MASAÜSTÜ + MOBİL (+ bot) açar, içerikleri karşılaştırır.
+// Fark varsa cloaking: "mobilde phishing, masaüstünde temiz" en yaygın banka/SMS dolandırıcılığı kalıbı.
+function host0(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } }
+async function cokProfil(url) {
+  const [masa, mobil] = await Promise.all([render(url, "desktop"), render(url, "mobile")]);
+  const bt = await botBaslik(url);
+  const mobilHost = host0(mobil.finalUrl), masaHost = host0(masa.finalUrl);
+  const baslikFark = baslikFarkli(masa.title || "", mobil.title || "");
+  const hostFark = !!mobilHost && !!masaHost && mobilHost !== masaHost;
+  const uzMasa = (masa.html || "").length, uzMobil = (mobil.html || "").length;
+  // İçerik hacmi belirgin farklı (biri form/tuzak dolu, diğeri boş/temiz) — ikisi de anlamlı boyutta değilse sayma.
+  const uzunlukFark = Math.max(uzMasa, uzMobil) > 2500 && Math.min(uzMasa, uzMobil) / Math.max(uzMasa, uzMobil) < 0.45;
+  const botFark = !!bt && baslikFarkli(masa.title || "", bt) && baslikFarkli(mobil.title || "", bt);
+  const sebepler = [];
+  if (hostFark) sebepler.push(`Mobil FARKLI adrese yönlendiriyor (${mobilHost}) — masaüstü: ${masaHost}`);
+  if (baslikFark) sebepler.push(`Mobil başlık "${(mobil.title || "").slice(0, 50)}" ≠ masaüstü "${(masa.title || "").slice(0, 50)}"`);
+  if (uzunlukFark) sebepler.push(`İçerik hacmi çok farklı (mobil ${uzMobil} karakter / masaüstü ${uzMasa})`);
+  if (botFark) sebepler.push(`Bota temiz, gerçek kullanıcıya farklı içerik gösteriyor`);
+  return {
+    cloaking: hostFark || baslikFark || uzunlukFark || botFark,
+    mobilFarkli: hostFark || baslikFark || uzunlukFark,
+    sebepler,
+    masa: { title: masa.title, finalUrl: masa.finalUrl, shotB64: masa.shotB64, status: masa.status, len: uzMasa },
+    mobil: { title: mobil.title, finalUrl: mobil.finalUrl, shotB64: mobil.shotB64, status: mobil.status, len: uzMobil },
+    bot: { title: bt },
+    supheliScript: [...new Set([...(masa.scripts?.supheli || []), ...(mobil.scripts?.supheli || [])])],
+    clipboard: [...(masa.clipboard || []), ...(mobil.clipboard || [])].slice(0, 10),
+  };
+}
+
 async function workerTur() {
   try {
     const q = await fetch(`${SITS_API}/api/render-kuyruk?secret=${encodeURIComponent(WSECRET)}&n=6`, { signal: AbortSignal.timeout(15000) });
@@ -157,7 +195,8 @@ if (WAKTIF) {
 http.createServer(async (req, res) => {
   const cevap = (kod, obj) => { res.writeHead(kod, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
   if (req.method === "GET" && req.url === "/health") return cevap(200, { ok: true, proxy: !!TR_PROXY });
-  if (req.method !== "POST" || !req.url.startsWith("/render")) { res.writeHead(404); res.end("x"); return; }
+  const cloakingYolu = req.method === "POST" && req.url.startsWith("/cloaking");
+  if (req.method !== "POST" || !(req.url.startsWith("/render") || cloakingYolu)) { res.writeHead(404); res.end("x"); return; }
   if (SECRET && req.headers.authorization !== "Bearer " + SECRET) return cevap(401, { hata: "Yetkisiz." });
   let body = ""; req.on("data", (d) => { body += d; if (body.length > 4000) req.destroy(); });
   req.on("end", async () => {
@@ -165,7 +204,7 @@ http.createServer(async (req, res) => {
     url = url.replace(/^https?:\/\//i, ""); url = "https://" + url.replace(/^\/+/, "");
     let host = ""; try { host = new URL(url).hostname; } catch { return cevap(400, { hata: "Geçersiz URL." }); }
     if (!host || ozelHost(host)) return cevap(400, { hata: "İzin verilmeyen host." });
-    try { cevap(200, await render(url)); }
+    try { cevap(200, cloakingYolu ? await cokProfil(url) : await render(url)); }
     catch (e) { cevap(500, { hata: String(e?.message || e) }); }
   });
 }).listen(PORT, () => console.log(`[render] :${PORT} ${TR_PROXY ? "(TR proxy AKTİF)" : "(proxy yok — sunucu IP'si)"}`));
